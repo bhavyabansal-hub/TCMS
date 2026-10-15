@@ -248,13 +248,15 @@ export async function upsertTaskReport(
 /** PUT ?id=... — update an OWN report (legacy has no admin override here).
  *  Omitted tasks keep the stored ones; notes fall back to the stored value;
  *  a reportDate in the body is accepted but ignored (legacy behavior).
- *  totalMinutes is always recalculated from the resulting task list. */
+ *  totalMinutes is always recalculated from the resulting task list.
+ *  Requires create_task_report (same gate as POST), checked before the lookup so a missing id does not reveal existence. */
 export async function updateTaskReportFields(
   me: SessionUser,
   taskReportId: string,
   input: UpdateTaskReportInput,
   meta: RequestMeta
 ): Promise<SerializedTaskReport> {
+  ensurePermission(me, 'create_task_report', 'Insufficient role')
   const existing = await findTaskReportById(taskReportId)
   if (!existing) throw ApiError.notFound('Report not found')
   if (existing.reported_by_id !== me.userId) {
