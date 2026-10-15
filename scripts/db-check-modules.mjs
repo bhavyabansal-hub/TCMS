@@ -1,0 +1,10 @@
+import { PrismaClient } from '@prisma/client'
+const p = new PrismaClient()
+const mods = await p.module.findMany({ select: { moduleId: true, name: true, parentId: true, depth: true, _count: { select: { testCases: true, children: true } } }, orderBy: { createdAt: 'asc' } })
+console.log('MODULES:')
+for (const m of mods) console.log(` - ${m.name} | id=${m.moduleId} | parent=${m.parentId ?? '(root)'} | testCases=${m._count.testCases} | children=${m._count.children}`)
+const total = await p.testCase.count()
+console.log('TOTAL TEST CASES:', total)
+const byStatus = await p.testCase.groupBy({ by: ['status'], _count: { _all: true } })
+console.log('BY STATUS:', JSON.stringify(byStatus))
+await p.$disconnect()

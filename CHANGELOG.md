@@ -1,0 +1,63 @@
+# Changelog
+
+## 2026-10-14 — Owner 8-step plan (steps 1–3) + Phase 2 hardening (post-migration)
+
+- **Step 1:** Crew Desk testing normalized to designated ticket **1355-only** —
+  fixed 6 stale `4190` remnants including the functional default in
+  `src/lib/server/config.ts`; `rg 4190` over the repo = 0. Ticket 4191 survives
+  only as the guard-refusal probe (asserted refused, never written to).
+- **Step 2:** The two battery checks rewritten during the migration were
+  independently audited with evidence (`git show` archaeology + live MySQL
+  probes) — both old versions were stale on ANY database (CSRF
+  marker-allows-Origin is the guard's documented design; the bare `steps` field
+  no longer exists in the product). Battery 63/63 is honest.
+- **Step 3:** IT request for the real production MySQL server drafted →
+  `download/it-request-mysql.md` (server/port, TEST schema + limited user with
+  grant list, TLS/sql_mode/charset/timezone, backup ownership, Workbench access,
+  where real data lives).
+- **Phase 2 hardening (5 groups, suites green after each):**
+  1. `scripts/mysql-env.sh` = single source of DB wiring (safe env parser immune
+     to the `source .env` `&`-truncation bug); repair-only `.env` self-heal;
+     unquoted-`.env` standard; battery self-boots.
+  2. Unknown `moduleId`/`assignee` on test-case/bug create/update → proper
+     404s (was raw FK 500). 22-probe sweep: zero 500s.
+  3. Backup scheduler wired into autostart (pgrep-guarded, idempotent);
+     backup log lines; CSV import completion log line.
+  4. Twelve stale docs updated for MySQL 8.4 (schema, API reference + new
+     endpoint sections, runbook rewritten to mysqldump drills, file index,
+     deployment/scaling/realtime banners; Vercel-era guides marked HISTORICAL).
+  5. `src/lib/auth.ts` SQL moved to the user repository (no import cycle);
+     SMTP lazy singleton; eslint ignores vendored code (490 errors → 0);
+     stale `scripts/tcms-package/` removed (zip 759 → 443 files);
+     Crew Desk identity cache invalidation on user changes.
+
+## 2026-10-14 — PostgreSQL → MySQL 8.4 migration (MySQL-only)
+
+- Adopted TCMS-complete-2026-10-14.zip as the baseline (settings reorg, cookie
+  auth, wiki, search, backup scheduler, Crew Desk v2, Register kept).
+- Prisma schema converted to MySQL 8.4 (provider swap; explicit native types
+  on every String — CHAR(36) uuids, VARCHAR sized per validation caps,
+  TEXT/MEDIUMTEXT long text; DATETIME(3) everywhere; JSON expression defaults;
+  case-sensitive collations for password_hash + refresh token).
+- All raw SQL rewritten for MySQL across 20 repositories (RETURNING →
+  insert+read-back with app-side uuids, ILIKE → LIKE, ON CONFLICT →
+  ON DUPLICATE KEY, interval/cast/JSONB fixes, Number() coercions, boolean
+  normalization). No raw SQL outside repositories (unchanged rule).
+- keep-alive route removed (Supabase/PG pool leftover); its cron removed;
+  scripts updated to use /api health.
+- Backup scheduler: mysqldump-based (scripts/backup-db-mysql.sh, same
+  14-retention policy) + restore drill (scripts/restore-mysql.sh, scratch
+  schema, verified 17 tables).
+- One-time data migration script (scripts/migration/migrate-pg-to-mysql.mjs):
+  batched, dependency-ordered, idempotent, dry-run mode, FK-orphan audit,
+  utf8mb4 + strict-mode probes. PG source stays READ-ONLY.
+- Verification: battery 63/63, Crew Desk mock suite 5/5, import suite 33/33,
+  250-row import probe PASS (cap enforced), 200-VU load test 0 errors.
+  Full numbers: docs/migration/03-verification.md.
+- Cutover + rollback plan: docs/migration/04-cutover-rollback.md.
+
+## 2026-10-08 — Adopted baseline (zip lineage)
+
+- Crew Desk integration (shared account, mock-only in sandbox, email check,
+  1355-designated-ticket rule), settings reorg, cookie sessions, wiki, search,
+  backup scheduler, self-signup Register tab.

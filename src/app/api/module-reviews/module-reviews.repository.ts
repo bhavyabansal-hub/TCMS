@@ -1,0 +1,208 @@
+// Module-review repository — raw SQL access to module_review_requests plus
+// the module-review side of review_requests ("case reviews").
+//
+// Shared resource boundary: the modules resource legitimately needs to CREATE
+// a module review (submit-review action) and the module-reviews resource
+// reads/completes them, so all module_review_requests access lives here.
+// Business rules (cycle numbering, verdicts, state machine) live in services;
+// this file contains ONLY data access.
+
+import { Prisma } from '@prisma/client'
+import { db } from '@/lib/db'
+import { newId } from '@/lib/server/id'
+import type { ModuleReviewRequestSqlRow, ReviewRequestSqlRow } from '@/types/sql-rows'
+import type { SqlExecutor } from '../test-cases/test-cases.repository'
+
+/** Module-review row plus the number of case reviews attached to it. */
+export type ModuleReviewRequestWithCountSqlRow = ModuleReviewRequestSqlRow & {
+  case_review_count: number
+}
+
+/** Raw pre-normalization shape: MySQL COUNT() may arrive as bigint. */
+type ModuleReviewRequestWithCountRaw = ModuleReviewRequestSqlRow & {
+  case_review_count: number | bigint
+}
+
+/** Normalizes the COUNT() subselect to a plain number (R: MySQL aggregates). */
+function withNumberCaseReviewCount(rows: ModuleReviewRequestWithCountRaw[]): ModuleReviewRequestWithCountSqlRow[] {
+  return rows.map((r) => ({ ...r, case_review_count: Number(r.case_review_count) }))
+}
+
+/** Standard JOIN select — module review plus module/reviewer/requester refs. */
+const MODULE_REVIEW_SELECT = Prisma.sql`
+  SELECT mrr.*,
+    m.module_id AS module_module_id, m.name AS module_name, m.parent_id AS module_parent_id,
+    ru.user_id AS reviewer_user_id, ru.full_name AS reviewer_full_name, ru.email AS reviewer_email, ru.avatar_url AS reviewer_avatar_url,
+    qu.user_id AS requester_user_id, qu.full_name AS requester_full_name, qu.avatar_url AS requester_avatar_url
+  FROM module_review_requests mrr
+  LEFT JOIN modules m ON m.module_id = mrr.module_id
+  LEFT JOIN users ru ON ru.user_id = mrr.reviewer_id
+  LEFT JOIN users qu ON qu.user_id = mrr.requester_id`
+
+/** JOIN select that additionally counts the attached case reviews. */
+const MODULE_REVIEW_WITH_COUNT_SELECT = Prisma.sql`
+  SELECT mrr.*,
+    m.module_id AS module_module_id, m.name AS module_name, m.parent_id AS module_parent_id,
+    ru.user_id AS reviewer_user_id, ru.full_name AS reviewer_full_name, ru.email AS reviewer_email, ru.avatar_url AS reviewer_avatar_url,
+    qu.user_id AS requester_user_id, qu.full_name AS requester_full_name, qu.avatar_url AS requester_avatar_url,
+    (SELECT COUNT(*) FROM review_requests cr
+      WHERE cr.module_review_id = mrr.module_review_request_id) AS case_review_count
+  FROM module_review_requests mrr
+  LEFT JOIN modules m ON m.module_id = mrr.module_id
+  LEFT JOIN users ru ON ru.user_id = mrr.reviewer_id
+  LEFT JOIN users qu ON qu.user_id = mrr.requester_id`
+
+/** Standard JOIN select for case reviews (reviewer + requester refs). */
+const CASE_REVIEW_SELECT = Prisma.sql`
+  SELECT r.*,
+    ru.user_id AS reviewer_user_id, ru.full_name AS reviewer_full_name, ru.email AS reviewer_email, ru.avatar_url AS reviewer_avatar_url,
+    qu.user_id AS requester_user_id, qu.full_name AS requester_full_name, qu.avatar_url AS requester_avatar_url
+  FROM review_requests r
+  LEFT JOIN users ru ON ru.user_id = r.reviewer_id
+  LEFT JOIN users qu ON qu.user_id = r.requester_id`
+
+function caseReviewFilter(moduleReviewId: string, statuses?: string[]): Prisma.Sql {
+  const base = Prisma.sql`WHERE r.module_review_id = ${moduleReviewId}`
+  if (!statuses || statuses.length === 0) return base
+  return Prisma.sql`${base} AND r.status IN (${Prisma.join(statuses)})`
+}
+
+// ---------- Inserts ----------
+
+export interface ModuleReviewRequestInsert {
+  moduleId: string
+  reviewerId: string
+  requesterId: string
+  dueDate: Date | null
+  cycle: number
+}
+
+/** Creates a pending module review request. The PK is generated app-side
+ *  (MySQL: no RETURNING — insert, then read back).
+ *  created_at/updated_at are set explicitly: updated_at has no DB default
+ *  and raw SQL bypasses Prisma's @updatedAt. */
+export async function insertModuleReviewRequest(
+  input: ModuleReviewRequestInsert
+): Promise<ModuleReviewRequestSqlRow> {
+  const moduleReviewRequestId = newId()
+  await db.$executeRaw`
+    INSERT INTO module_review_requests
+      (module_review_request_id, module_id, reviewer_id, requester_id, status, due_date, cycle, created_at, updated_at)
+    VALUES
+      (${moduleReviewRequestId}, ${input.moduleId}, ${input.reviewerId}, ${input.requesterId}, 'pending',
+       ${input.dueDate}, ${input.cycle}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+  const rows = await db.$queryRaw<ModuleReviewRequestSqlRow[]>`
+    SELECT * FROM module_review_requests WHERE module_review_request_id = ${moduleReviewRequestId} LIMIT 1`
+  if (!rows[0]) throw new Error('Inserted module review request could not be read back')
+  return rows[0]
+}
+
+// ---------- Reads ----------
+
+export async function findModuleReviewRequestById(
+  moduleReviewRequestId: string
+): Promise<ModuleReviewRequestSqlRow | null> {
+  const rows = await db.$queryRaw<ModuleReviewRequestSqlRow[]>`
+    ${MODULE_REVIEW_SELECT} WHERE mrr.module_review_request_id = ${moduleReviewRequestId} LIMIT 1`
+  return rows[0] ?? null
+}
+
+/** Highest review cycle number used for a module (module-review cycles are
+ *  per MODULE, not per test case — legacy semantics). */
+export async function findLatestModuleReviewCycle(moduleId: string): Promise<number> {
+  const rows = await db.$queryRaw<{ cycle: number | bigint }[]>`
+    SELECT COALESCE(MAX(cycle), 0) AS cycle
+    FROM module_review_requests WHERE module_id = ${moduleId}`
+  return Number(rows[0]?.cycle ?? 0)
+}
+
+/** A reviewer's queue (given statuses), newest first, with case counts. */
+export async function listModuleReviewRequestsByReviewer(
+  reviewerId: string,
+  statuses: string[]
+): Promise<ModuleReviewRequestWithCountSqlRow[]> {
+  return withNumberCaseReviewCount(await db.$queryRaw<ModuleReviewRequestWithCountRaw[]>(Prisma.sql`
+    ${MODULE_REVIEW_WITH_COUNT_SELECT}
+    WHERE mrr.reviewer_id = ${reviewerId}
+      AND mrr.status IN (${Prisma.join(statuses)})
+    ORDER BY mrr.created_at DESC`))
+}
+
+/** All module reviews, newest first (optionally status-filtered).
+ *  With participantId set, visibility is ownership-scoped: only rows where
+ *  the user is the assigned reviewer or the requester. */
+export async function listModuleReviewRequests(
+  statuses: string[] | null,
+  limit: number,
+  participantId?: string
+): Promise<ModuleReviewRequestWithCountSqlRow[]> {
+  const parts: Prisma.Sql[] = []
+  if (statuses && statuses.length > 0) {
+    parts.push(Prisma.sql`mrr.status IN (${Prisma.join(statuses)})`)
+  }
+  if (participantId) {
+    parts.push(Prisma.sql`(mrr.reviewer_id = ${participantId} OR mrr.requester_id = ${participantId})`)
+  }
+  const where = parts.length ? Prisma.sql`WHERE ${Prisma.join(parts, ' AND ')}` : Prisma.empty
+  return withNumberCaseReviewCount(await db.$queryRaw<ModuleReviewRequestWithCountRaw[]>(Prisma.sql`
+    ${MODULE_REVIEW_WITH_COUNT_SELECT} ${where}
+    ORDER BY mrr.created_at DESC
+    LIMIT ${limit}`))
+}
+
+/** All module reviews raised for one module, newest first. */
+export async function listModuleReviewRequestsByModule(
+  moduleId: string
+): Promise<ModuleReviewRequestWithCountSqlRow[]> {
+  return withNumberCaseReviewCount(await db.$queryRaw<ModuleReviewRequestWithCountRaw[]>(Prisma.sql`
+    ${MODULE_REVIEW_WITH_COUNT_SELECT}
+    WHERE mrr.module_id = ${moduleId}
+    ORDER BY mrr.created_at DESC`))
+}
+
+/** Case reviews belonging to one module review, oldest first. */
+export async function listCaseReviewsByModuleReview(
+  moduleReviewId: string,
+  statuses?: string[]
+): Promise<ReviewRequestSqlRow[]> {
+  return db.$queryRaw<ReviewRequestSqlRow[]>(Prisma.sql`
+    ${CASE_REVIEW_SELECT} ${caseReviewFilter(moduleReviewId, statuses)}
+    ORDER BY r.created_at ASC`)
+}
+
+/** Number of case reviews of one module review (optionally by status). */
+export async function countCaseReviews(
+  moduleReviewId: string,
+  statuses?: string[]
+): Promise<number> {
+  const rows = await db.$queryRaw<{ total: number | bigint }[]>(Prisma.sql`
+    SELECT COUNT(*) AS total FROM review_requests r ${caseReviewFilter(moduleReviewId, statuses)}`)
+  return Number(rows[0]?.total ?? 0)
+}
+
+// ---------- Updates ----------
+
+/** Marks a module review's status + bumps updated_at (part of verdict flow). */
+export async function updateModuleReviewRequestStatus(
+  moduleReviewRequestId: string,
+  status: string,
+  tx: SqlExecutor = db
+): Promise<void> {
+  await tx.$executeRaw`
+    UPDATE module_review_requests SET status = ${status}, updated_at = UTC_TIMESTAMP(3)
+    WHERE module_review_request_id = ${moduleReviewRequestId}`
+}
+
+/** Re-assigns the reviewer of an OPEN module review (change-reviewer flow).
+ *  Guarded against completed rows for the same double-action safety as the
+ *  status write. Returns rows changed (0 = completed in the meantime). */
+export async function updateModuleReviewRequestReviewerIfOpen(
+  moduleReviewRequestId: string,
+  reviewerId: string,
+  tx: SqlExecutor = db
+): Promise<number> {
+  const affected = await tx.$executeRaw`
+    UPDATE module_review_requests SET reviewer_id = ${reviewerId}, updated_at = UTC_TIMESTAMP(3)
+    WHERE module_review_request_id = ${moduleReviewRequestId} AND status <> 'completed'`
+  return Number(affected)
+}

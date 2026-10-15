@@ -1,0 +1,419 @@
+// TCMS — Test Case Management System
+// MySQL 8.4 schema (utf8mb4). Migrated from PostgreSQL — see docs/migration/.
+//
+// DATABASE NAMING CONVENTION (strict):
+//   - Tables  : snake_case, plural        (users, test_cases, review_requests ...)
+//   - Columns : snake_case                (full_name, password_hash, created_at ...)
+//   - Primary keys are named after the entity, NEVER a generic "id":
+//       users.user_id, modules.module_id, test_cases.test_case_id, ...
+//   - Foreign keys reuse the referenced primary-key name
+//       (test_cases.module_id -> modules.module_id, modules.parent_id -> modules.module_id).
+//   - JSON data uses native JSON columns (Prisma `Json` + @map).
+//
+// The TypeScript/Prisma field names stay camelCase (application convention);
+// @map/@@map translate them to the snake_case SQL names above.
+//
+// Every string column carries an EXPLICIT native type (VARCHAR(n)/TEXT/...)
+// sized to the validation caps — never rely on Prisma's default VARCHAR(191).
+// Ids are CHAR(36) with a (uuid()) DB default; the repositories normally
+// supply app-generated UUIDs (src/lib/server/id.ts) so INSERT-then-SELECT
+// read-backs never depend on the default.
+//
+// DIRECT_URL is the SCHEMA-MIGRATION wiring (prisma migrate deploy runs as the
+// DDL-only migrate user tcms_migrate — never the app user; two-user model,
+// scripts/migration/mysql84-boot.sh). The app runtime uses DATABASE_URL only.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------- Users & Auth ----------
+
+model User {
+  userId         String @db.Char(36)   @id @default(dbgenerated("(uuid())")) @map("user_id")
+  email          String @db.VarChar(254)   @unique
+  fullName       String @db.VarChar(120)   @map("full_name")
+  passwordHash   String @db.VarChar(255)   @map("password_hash")
+  role           String @db.VarChar(32)   @default("qa_engineer") // vp | manager | product | developer | qa_engineer | viewer
+  telegramChatId String? @db.VarChar(32)  @map("telegram_chat_id")
+  avatarUrl      String? @db.VarChar(500)  @map("avatar_url")
+  crewdeskUserId String? @db.VarChar(64)  @map("crewdesk_user_id") // matched Crew Desk user id from the verification-only email check
+  crewdeskCheckedAt DateTime? @map("crewdesk_checked_at") // last successful verification time (24h re-check cadence)
+  isActive       Boolean  @default(true) @map("is_active")
+  notifyEmail    Boolean  @default(true) @map("notify_email")
+  notifyTelegram Boolean  @default(true) @map("notify_telegram")
+  notifyInapp    Boolean  @default(true) @map("notify_inapp")
+  createdAt      DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt      DateTime @db.DateTime(3) @updatedAt @map("updated_at")
+
+  // relations
+  modulesOwned        Module[]              @relation("ModuleOwner")
+  modulesCreated      Module[]              @relation("ModuleCreator")
+  modulesUpdated      Module[]              @relation("ModuleUpdater")
+  testCasesAuthored   TestCase[]            @relation("TestCaseAuthor")
+  testCasesEdited     TestCase[]            @relation("TestCaseEditor")
+  testCasesAssigned   TestCase[]            @relation("TestCaseAssignee")
+  testCaseHistory     TestCaseHistory[]
+  reviewRequestsReq   ReviewRequest[]       @relation("ReviewRequester")
+  reviewRequestsRev   ReviewRequest[]       @relation("Reviewer")
+  moduleReviewsReq    ModuleReviewRequest[] @relation("ModuleReviewRequester")
+  moduleReviewsRev    ModuleReviewRequest[] @relation("ModuleReviewer")
+  reviewEvents        ReviewEvent[]
+  bugsReported        Bug[]                 @relation("BugReporter")
+  bugsAssigned        Bug[]                 @relation("BugAssignee")
+  taskReports         TaskReport[]
+  notifications       Notification[]
+  activityLogs        ActivityLog[]
+  refreshTokens       RefreshToken[]
+  wikiDocsAuthored    WikiDocument[]        @relation("WikiAuthor")
+  wikiDocsEdited      WikiDocument[]        @relation("WikiEditor")
+
+  @@map("users")
+}
+
+model RefreshToken {
+  refreshTokenId String @db.Char(36)   @id @default(dbgenerated("(uuid())")) @map("refresh_token_id")
+  userId         String @db.Char(36)   @map("user_id")
+  token          String @db.VarChar(768)   @unique
+  expiresAt      DateTime @db.DateTime(3) @map("expires_at")
+  revoked        Boolean  @default(false)
+  createdAt      DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  user           User     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ---------- Modules ----------
+
+model Module {
+  moduleId    String @db.Char(36)   @id @default(dbgenerated("(uuid())")) @map("module_id")
+  name        String @db.VarChar(200)
+  description String? @db.Text
+  parentId    String? @db.Char(36)  @map("parent_id")
+  path        String @db.VarChar(1000) // materialised path "rootId.subId.subSubId"
+  depth       Int      @default(0)
+  ownerId     String @db.Char(36)   @map("owner_id")
+  createdById String @db.Char(36)   @map("created_by_id")
+  updatedById String? @db.Char(36)  @map("updated_by_id")
+  createdAt   DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt   DateTime @db.DateTime(3) @updatedAt @map("updated_at")
+
+  parent        Module?               @relation("ModuleTree", fields: [parentId], references: [moduleId], onDelete: Cascade)
+  children      Module[]              @relation("ModuleTree")
+  owner         User                  @relation("ModuleOwner", fields: [ownerId], references: [userId])
+  createdBy     User                  @relation("ModuleCreator", fields: [createdById], references: [userId])
+  updatedBy     User?                 @relation("ModuleUpdater", fields: [updatedById], references: [userId])
+  testCases     TestCase[]
+  bugs          Bug[]
+  moduleReviews ModuleReviewRequest[]
+
+  @@index([parentId])
+  @@index([ownerId])
+  @@map("modules")
+}
+
+// Runtime-togglable permission matrix overrides (VP edits these).
+// Cells not present here fall back to DEFAULT_PERMISSIONS (src/lib/permissions.ts).
+model RolePermission {
+  role        String @db.VarChar(32)   @map("role")
+  action      String @db.VarChar(64)   @map("action")
+  enabled     Boolean  @default(true)
+  updatedById String? @db.Char(36)  @map("updated_by_id") // no FK on purpose: toggles outlive users
+  updatedAt   DateTime @db.DateTime(3) @default(now()) @map("updated_at")
+
+  @@id([role, action])
+  @@map("role_permissions")
+}
+
+// Brute-force guard state for login (5 failed attempts -> 1 minute lock).
+model LoginAttempt {
+  email          String @db.VarChar(254)    @id @map("email")
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  lockedUntil    DateTime? @map("locked_until")
+  updatedAt      DateTime @db.DateTime(3)  @default(now()) @map("updated_at")
+
+  @@map("login_attempts")
+}
+
+// ---------- Test Cases ----------
+
+model TestCase {
+  testCaseId     String @db.Char(36)   @id @default(dbgenerated("(uuid())")) @map("test_case_id")
+  moduleId       String? @db.Char(36)  @map("module_id")
+  title          String @db.VarChar(200)
+  description    String? @db.Text
+  preconditions  String? @db.Text
+  steps          Json     @default("[]") // JSONB array of {stepNumber, action, expected}
+  expectedResult String? @db.Text  @map("expected_result")
+  priority       String @db.VarChar(8)   @default("P2") // P0 | P1 | P2 | P3
+  status         String @db.VarChar(32)   @default("draft") // draft | in_review | needs_revision | approved | active | deprecated
+  tags           Json     @default("[]") // JSONB array of strings
+  version        Int      @default(1)
+  authorId       String @db.Char(36)   @map("author_id")
+  lastEditedById String? @db.Char(36)  @map("last_edited_by_id")
+  assigneeId     String? @db.Char(36)  @map("assignee_id")
+  attachments    Json     @default("[]") // JSONB array
+  createdAt      DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt      DateTime @db.DateTime(3) @updatedAt @map("updated_at")
+
+  module       Module?            @relation(fields: [moduleId], references: [moduleId], onDelete: SetNull)
+  author       User               @relation("TestCaseAuthor", fields: [authorId], references: [userId])
+  lastEditedBy User?              @relation("TestCaseEditor", fields: [lastEditedById], references: [userId])
+  assignee     User?              @relation("TestCaseAssignee", fields: [assigneeId], references: [userId])
+  history      TestCaseHistory[]
+  reviews      ReviewRequest[]
+  bugLinks     BugTestCaseLink[]
+
+  @@index([moduleId])
+  @@index([authorId])
+  @@index([status])
+  @@map("test_cases")
+}
+
+model TestCaseHistory {
+  historyId     String @db.Char(36)   @id @default(dbgenerated("(uuid())")) @map("history_id")
+  testCaseId    String @db.Char(36)   @map("test_case_id")
+  version       Int
+  snapshot      Json // JSONB snapshot of the test_cases row at this version
+  changedById   String? @db.Char(36)  @map("changed_by_id")
+  changeSummary String? @db.VarChar(2000)  @map("change_summary")
+  createdAt     DateTime @db.DateTime(3) @default(now()) @map("created_at")
+
+  testCase  TestCase @relation(fields: [testCaseId], references: [testCaseId], onDelete: Cascade)
+  changedBy User?    @relation(fields: [changedById], references: [userId])
+
+  @@index([testCaseId])
+  @@map("test_case_history")
+}
+
+// ---------- Reviews ----------
+
+// A module-level review request groups multiple test-case reviews together
+// so a reviewer can approve a whole module (or its submodules) at once.
+model ModuleReviewRequest {
+  moduleReviewRequestId String @db.Char(36)    @id @default(dbgenerated("(uuid())")) @map("module_review_request_id")
+  moduleId              String @db.Char(36)    @map("module_id")
+  reviewerId            String @db.Char(36)    @map("reviewer_id")
+  requesterId           String @db.Char(36)    @map("requester_id")
+  status                String @db.VarChar(32)    @default("pending") // pending | in_progress | completed
+  dueDate               DateTime? @map("due_date")
+  cycle                 Int       @default(1)
+  createdAt             DateTime @db.DateTime(3)  @default(now()) @map("created_at")
+  updatedAt             DateTime @db.DateTime(3)  @updatedAt @map("updated_at")
+
+  module      Module          @relation(fields: [moduleId], references: [moduleId], onDelete: Cascade)
+  reviewer    User            @relation("ModuleReviewer", fields: [reviewerId], references: [userId])
+  requester   User            @relation("ModuleReviewRequester", fields: [requesterId], references: [userId])
+  caseReviews ReviewRequest[]
+
+  @@index([reviewerId])
+  @@index([moduleId])
+  @@index([status])
+  @@map("module_review_requests")
+}
+
+model ReviewRequest {
+  reviewRequestId String @db.Char(36)    @id @default(dbgenerated("(uuid())")) @map("review_request_id")
+  testCaseId      String @db.Char(36)    @map("test_case_id")
+  reviewerId      String @db.Char(36)    @map("reviewer_id")
+  requesterId     String @db.Char(36)    @map("requester_id")
+  status          String @db.VarChar(32)    @default("pending") // pending | in_progress | completed
+  dueDate         DateTime? @map("due_date")
+  cycle           Int       @default(1)
+  // When this review is part of a module-level review, link to the parent.
+  moduleReviewId  String? @db.Char(36)   @map("module_review_id")
+  createdAt       DateTime @db.DateTime(3)  @default(now()) @map("created_at")
+  updatedAt       DateTime @db.DateTime(3)  @updatedAt @map("updated_at")
+
+  testCase     TestCase             @relation(fields: [testCaseId], references: [testCaseId], onDelete: Cascade)
+  reviewer     User                 @relation("Reviewer", fields: [reviewerId], references: [userId])
+  requester    User                 @relation("ReviewRequester", fields: [requesterId], references: [userId])
+  events       ReviewEvent[]
+  moduleReview ModuleReviewRequest? @relation(fields: [moduleReviewId], references: [moduleReviewRequestId], onDelete: Cascade)
+
+  @@index([reviewerId])
+  @@index([status])
+  @@index([moduleReviewId])
+  @@map("review_requests")
+}
+
+model ReviewEvent {
+  reviewEventId   String @db.Char(36)   @id @default(dbgenerated("(uuid())")) @map("review_event_id")
+  reviewRequestId String @db.Char(36)   @map("review_request_id")
+  reviewerId      String @db.Char(36)   @map("reviewer_id")
+  verdict         String @db.VarChar(32) // approved | failed | needs_revision
+  comment         String? @db.VarChar(2000)
+  flaggedFields   Json     @default("[]") @map("flagged_fields") // JSONB array of strings
+  createdAt       DateTime @db.DateTime(3) @default(now()) @map("created_at")
+
+  reviewRequest ReviewRequest @relation(fields: [reviewRequestId], references: [reviewRequestId], onDelete: Cascade)
+  reviewer      User          @relation(fields: [reviewerId], references: [userId])
+
+  @@index([reviewRequestId])
+  @@map("review_events")
+}
+
+// ---------- Bugs ----------
+
+model Bug {
+  bugId             String @db.Char(36)    @id @default(dbgenerated("(uuid())")) @map("bug_id")
+  title             String @db.VarChar(200)
+  description       String? @db.Text
+  severity          String @db.VarChar(16)    @default("medium") // critical | high | medium | low
+  status            String @db.VarChar(32)    @default("open") // open | in_progress | resolved | closed | wont_fix
+  environment       String? @db.VarChar(500)
+  stepsToReproduce  String? @db.Text   @map("steps_to_reproduce")
+  expectedBehaviour String? @db.Text   @map("expected_behaviour")
+  actualBehaviour   String? @db.Text   @map("actual_behaviour")
+  reportedById      String @db.Char(36)    @map("reported_by_id")
+  assignedToId      String? @db.Char(36)   @map("assigned_to_id")
+  moduleId          String? @db.Char(36)   @map("module_id")
+  attachments       Json      @default("[]") // JSONB array
+  resolvedAt        DateTime? @map("resolved_at")
+  createdAt         DateTime @db.DateTime(3)  @default(now()) @map("created_at")
+  updatedAt         DateTime @db.DateTime(3)  @updatedAt @map("updated_at")
+
+  reportedBy    User               @relation("BugReporter", fields: [reportedById], references: [userId])
+  assignedTo    User?              @relation("BugAssignee", fields: [assignedToId], references: [userId])
+  module        Module?            @relation(fields: [moduleId], references: [moduleId])
+  testCaseLinks BugTestCaseLink[]
+
+  @@index([status])
+  @@index([severity])
+  @@index([assignedToId])
+  @@map("bugs")
+}
+
+model BugTestCaseLink {
+  bugId      String @db.Char(36)   @map("bug_id")
+  testCaseId String @db.Char(36)   @map("test_case_id")
+  createdAt  DateTime @db.DateTime(3) @default(now()) @map("created_at")
+
+  bug      Bug      @relation(fields: [bugId], references: [bugId], onDelete: Cascade)
+  testCase TestCase @relation(fields: [testCaseId], references: [testCaseId], onDelete: Cascade)
+
+  @@id([bugId, testCaseId])
+  @@map("bug_test_case_links")
+}
+
+// ---------- Task Reports ----------
+
+model TaskReport {
+  taskReportId String @db.Char(36)   @id @default(dbgenerated("(uuid())")) @map("task_report_id")
+  reportedById String @db.Char(36)   @map("reported_by_id")
+  reportDate   DateTime @db.DateTime(3) @map("report_date")
+  tasks        Json     @default("[]") // JSONB array of task items
+  notes        String? @db.Text
+  totalMinutes Int      @default(0) @map("total_minutes")
+  createdAt    DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt    DateTime @db.DateTime(3) @updatedAt @map("updated_at")
+
+  reportedBy User @relation(fields: [reportedById], references: [userId], onDelete: Cascade)
+
+  @@unique([reportedById, reportDate])
+  @@index([reportedById])
+  @@index([reportDate])
+  @@map("task_reports")
+}
+
+// ---------- Notifications ----------
+
+model Notification {
+  notificationId String @db.Char(36)   @id @default(dbgenerated("(uuid())")) @map("notification_id")
+  userId         String @db.Char(36)   @map("user_id")
+  type           String @db.VarChar(64) // review_assigned | review_approved | review_failed | review_needs_revision | comment_added | bug_assigned | test_case_updated | module_created | daily_summary
+  title          String @db.VarChar(200)
+  body           String? @db.Text
+  entityType     String? @db.VarChar(64)  @map("entity_type")
+  entityId       String? @db.Char(36)  @map("entity_id")
+  isRead         Boolean  @default(false) @map("is_read")
+  createdAt      DateTime @db.DateTime(3) @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt]) // bell-dropdown newest-first sort (perf task 2026-10)
+  @@map("notifications")
+}
+
+// ---------- Activity Logs ----------
+
+model ActivityLog {
+  activityLogId String @db.Char(36)   @id @default(dbgenerated("(uuid())")) @map("activity_log_id")
+  userId        String? @db.Char(36)  @map("user_id")
+  action        String @db.VarChar(64) // CREATE | UPDATE | DELETE | STATUS_CHANGE | LOGIN | REVIEW_SUBMITTED | REVIEW_VERDICT
+  entityType    String @db.VarChar(64)   @map("entity_type") // test_case | module | bug | review | user | task_report
+  entityId      String? @db.Char(36)  @map("entity_id")
+  entityName    String? @db.VarChar(200)  @map("entity_name")
+  beforeSnapshot Json?   @map("before_snapshot") // JSONB snapshot before the change
+  afterSnapshot  Json?   @map("after_snapshot") // JSONB snapshot after the change
+  diff           Json?   // JSONB of changed fields
+  ipAddress      String? @db.VarChar(64) @map("ip_address")
+  userAgent      String? @db.VarChar(512) @map("user_agent")
+  createdAt      DateTime @db.DateTime(3) @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [userId], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt]) // dashboard recent-activity sort (perf task 2026-10)
+  @@map("activity_logs")
+}
+
+// Crew Desk module<->ticket link history (raw-SQL repository is the only writer).
+model CrewDeskLink {
+  linkId            String @db.Char(36)   @id @default(dbgenerated("(uuid())")) @map("link_id")
+  moduleId          String @db.Char(36)   @map("module_id")
+  ticketId          String @db.VarChar(64)   @map("ticket_id")
+  ticketTitle       String? @db.VarChar(500)  @map("ticket_title")
+  ticketStatus      String? @db.VarChar(64)  @map("ticket_status")
+  crewdeskCommentId String? @db.VarChar(64)  @map("crewdesk_comment_id")
+  status            String @db.VarChar(32)   // posted | failed
+  lastError         String? @db.VarChar(1000)  @map("last_error")
+  linkedById        String @db.Char(36)   @map("linked_by_id")
+  note              String? @db.VarChar(1200)  // free text typed by the linker, posted into the ticket comment
+  createdAt         DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt         DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([moduleId, ticketId]) // duplicate module+ticket links are blocked
+  @@index([createdAt])
+  @@map("crew_desk_links")
+}
+
+// ---------- Wiki ----------
+
+// Team knowledge base. `kind = 'written'` documents carry rich-text HTML in
+// `content`; `kind = 'file'` documents carry an uploaded binary in `file_data`
+// (bytea). File bytes NEVER flow through list/get queries — only the
+// dedicated download route reads that column.
+model WikiDocument {
+  wikiDocumentId String @db.Char(36)   @id @default(dbgenerated("(uuid())")) @map("wiki_document_id")
+  title          String @db.VarChar(200)
+  kind           String @db.VarChar(16)   @default("written") // written | file
+  content        String? @db.MediumText // sanitized rich-text HTML (written docs)
+  fileName       String? @db.VarChar(255)  @map("file_name")
+  fileType       String? @db.VarChar(128)  @map("file_type") // MIME type from the upload
+  fileSize       Int?     @map("file_size") // bytes
+  fileData       Bytes?   @map("file_data") // binary content (never serialized)
+  tags           Json     @default("[]") // JSONB array of strings
+  authorId       String @db.Char(36)   @map("author_id")
+  lastEditedById String? @db.Char(36)  @map("last_edited_by_id")
+  createdAt      DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt      DateTime @db.DateTime(3) @updatedAt @map("updated_at")
+
+  author       User @relation("WikiAuthor", fields: [authorId], references: [userId])
+  lastEditedBy User? @relation("WikiEditor", fields: [lastEditedById], references: [userId])
+
+  @@index([authorId])
+  @@index([kind])
+  @@index([updatedAt])
+  @@map("wiki_documents")
+}

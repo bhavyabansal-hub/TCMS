@@ -1,0 +1,7 @@
+{
+  "name": "tcms-crewdesk-mock",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "bun index.ts"
+  }
+}
