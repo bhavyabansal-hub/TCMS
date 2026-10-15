@@ -3,6 +3,8 @@
 //   withheld -> the user CANNOT see it (UI) nor call it (API 403)
 // Covers every fix from the permission-correctness pass.
 // Sandbox-only. Usage: node scripts/verify-permissions.mjs
+import { randomUUID } from 'node:crypto'
+
 const BASE = 'http://localhost:3000'
 let pass = 0
 let fail = 0
@@ -158,6 +160,15 @@ async function main() {
   await new Promise((r) => setTimeout(r, 3500))
   const dReviews3 = await api(developer, 'GET', '/api/reviews?pageSize=10')
   check('developer GET /reviews -> 403 again after revert', dReviews3.status === 403, `got ${dReviews3.status}`)
+
+  // ---- 7b. R11 (REQ-001): PUT /task-reports?id= requires create_task_report,
+  //      checked before the lookup. Random UUID + valid body {} -> writes nothing.
+  const vPut = await api(viewer, 'PUT', `/api/task-reports?id=${randomUUID()}`, {})
+  check('viewer PUT /task-reports?id=<random uuid> body {} -> 403 Insufficient role',
+    vPut.status === 403 && vPut.data?.error === 'Insufficient role', `got ${vPut.status} ${JSON.stringify(vPut.data)}`)
+  const qPut = await api(qa, 'PUT', `/api/task-reports?id=${randomUUID()}`, {})
+  check('qa PUT /task-reports?id=<random uuid> body {} -> 404 Report not found (holder passes the gate)',
+    qPut.status === 404, `got ${qPut.status} ${JSON.stringify(qPut.data)}`)
 
   // ---- 8. override hygiene: every remaining row must be a KNOWN grant ----
   // The deployment intentionally seeds {developer, qa_engineer}:perform_review
