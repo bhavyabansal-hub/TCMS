@@ -276,30 +276,36 @@ export function DashboardViewV2() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <Button
-              onClick={() => navigate('test-cases')}
-              className="bg-white text-zinc-900 hover:bg-zinc-200 shadow-sm"
-            >
-              <Plus className="h-4 w-4 mr-1" /> New Test Case
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => navigate('bugs')}
-              className="border-zinc-700 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white"
-            >
-              <BugIcon className="h-4 w-4 mr-1" /> Report Bug
-            </Button>
-            {can('view_all_task_reports') && (
-              <Button
-                variant="outline"
-                onClick={() => navigate('reports')}
-                className="border-zinc-700 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white"
-              >
-                <BarChart3 className="h-4 w-4 mr-1" /> Reports
-              </Button>
-            )}
-          </div>
+          {(can('create_test_case') || can('create_bug') || can('view_all_task_reports')) && (
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {can('create_test_case') && (
+                <Button
+                  onClick={() => navigate('test-cases')}
+                  className="bg-white text-zinc-900 hover:bg-zinc-200 shadow-sm"
+                >
+                  <Plus className="h-4 w-4 mr-1" /> New Test Case
+                </Button>
+              )}
+              {can('create_bug') && (
+                <Button
+                  variant="outline"
+                  onClick={() => navigate('bugs')}
+                  className="border-zinc-700 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white"
+                >
+                  <BugIcon className="h-4 w-4 mr-1" /> Report Bug
+                </Button>
+              )}
+              {can('view_all_task_reports') && (
+                <Button
+                  variant="outline"
+                  onClick={() => navigate('reports')}
+                  className="border-zinc-700 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white"
+                >
+                  <BarChart3 className="h-4 w-4 mr-1" /> Reports
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </section>
 
@@ -367,7 +373,7 @@ export function DashboardViewV2() {
               <span className="font-medium text-amber-600 dark:text-amber-400">Waiting on your verdict</span>
             )
           }
-          onClick={() => navigate('reviews')}
+          onClick={canReview ? () => navigate('reviews') : undefined}
         />
       </section>
 
@@ -658,7 +664,7 @@ export function DashboardViewV2() {
                 {focusShown.map((item) => (
                   <FocusRow key={item.key} item={item} />
                 ))}
-                {focusItems.length > focusShown.length && (
+                {canReview && focusItems.length > focusShown.length && (
                   <li className="pt-1 text-center">
                     <button
                       className="text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -679,12 +685,20 @@ export function DashboardViewV2() {
             <CardDescription>Jump straight to work</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-3">
-            <QuickAction icon={<FilePlus2 className="h-4 w-4" />} tint="sky" label="New Test Case" onClick={() => navigate('test-cases')} />
-            <QuickAction icon={<BugIcon className="h-4 w-4" />} tint="rose" label="Report Bug" onClick={() => navigate('bugs')} />
-            <QuickAction icon={<ClipboardCheck className="h-4 w-4" />} tint="amber" label="Reviews" onClick={() => navigate('reviews')} />
+            {can('create_test_case') && (
+              <QuickAction icon={<FilePlus2 className="h-4 w-4" />} tint="sky" label="New Test Case" onClick={() => navigate('test-cases')} />
+            )}
+            {can('create_bug') && (
+              <QuickAction icon={<BugIcon className="h-4 w-4" />} tint="rose" label="Report Bug" onClick={() => navigate('bugs')} />
+            )}
+            {canReview && (
+              <QuickAction icon={<ClipboardCheck className="h-4 w-4" />} tint="amber" label="Reviews" onClick={() => navigate('reviews')} />
+            )}
             <QuickAction icon={<ListTodo className="h-4 w-4" />} tint="teal" label="Tasks" onClick={() => navigate('tasks')} />
             <QuickAction icon={<FolderTree className="h-4 w-4" />} tint="violet" label="Modules" onClick={() => navigate('modules')} />
-            <QuickAction icon={<BarChart3 className="h-4 w-4" />} tint="emerald" label="Reports" onClick={() => navigate('reports')} />
+            {can('view_all_task_reports') && (
+              <QuickAction icon={<BarChart3 className="h-4 w-4" />} tint="emerald" label="Reports" onClick={() => navigate('reports')} />
+            )}
           </CardContent>
         </Card>
       </section>
@@ -696,9 +710,11 @@ export function DashboardViewV2() {
             <CardTitle className="text-base">Latest Activity</CardTitle>
             <CardDescription>What the team touched most recently</CardDescription>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => navigate('activity-log')}>
-            View all <ChevronRight className="h-4 w-4" />
-          </Button>
+          {can('view_activity_logs') && (
+            <Button variant="ghost" size="sm" onClick={() => navigate('activity-log')}>
+              View all <ChevronRight className="h-4 w-4" />
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {data.recentActivity.length === 0 ? (
@@ -913,12 +929,8 @@ function KpiCard({
   index: number
 }) {
   const counted = useCountUp(value)
-  return (
-    <button
-      onClick={onClick}
-      aria-label={label}
-      className={`group relative overflow-hidden rounded-xl border bg-card p-5 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md animate-in fade-in slide-in-from-bottom-2 fill-mode-both ${STAGGER[index] ?? STAGGER[0]}`}
-    >
+  const body = (
+    <>
       {/* corner glow */}
       <span
         aria-hidden
@@ -927,11 +939,33 @@ function KpiCard({
       />
       <div className="relative flex items-start justify-between">
         <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${TINTS[tint].chip}`}>{icon}</div>
-        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+        {onClick && (
+          <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+        )}
       </div>
       <div className="relative mt-4 text-3xl font-bold tabular-nums leading-none">{counted}</div>
       <div className="relative mt-1.5 text-sm font-medium">{label}</div>
       <div className="relative mt-1 text-xs text-muted-foreground">{sub}</div>
+    </>
+  )
+  // Without onClick (e.g. no perform_review) the card is static: not
+  // focusable, no hover lift, no chevron.
+  if (!onClick) {
+    return (
+      <div
+        className={`relative overflow-hidden rounded-xl border bg-card p-5 text-left shadow-sm transition-all duration-200 animate-in fade-in slide-in-from-bottom-2 fill-mode-both ${STAGGER[index] ?? STAGGER[0]}`}
+      >
+        {body}
+      </div>
+    )
+  }
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      className={`group relative overflow-hidden rounded-xl border bg-card p-5 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md animate-in fade-in slide-in-from-bottom-2 fill-mode-both ${STAGGER[index] ?? STAGGER[0]}`}
+    >
+      {body}
     </button>
   )
 }

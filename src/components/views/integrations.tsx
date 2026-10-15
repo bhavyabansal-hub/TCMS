@@ -65,15 +65,24 @@ export function IntegrationsView() {
   const [manualCopy, setManualCopy] = useState<{ comment: string; moduleUrl: string } | null>(null)
 
   const modulesQuery = useQuery({ queryKey: ['modules', 'flat'], queryFn: () => modulesApi.tree() })
-  const configQuery = useQuery({ queryKey: ['crewdesk', 'config'], queryFn: crewdeskApi.config })
+  // Crew Desk calls only run for manage_integrations holders (the server
+  // gates them too); without it the page renders PermissionDenied below.
+  const canManageIntegrations = !!user && can('manage_integrations')
+  const configQuery = useQuery({
+    queryKey: ['crewdesk', 'config'],
+    queryFn: crewdeskApi.config,
+    enabled: canManageIntegrations,
+  })
   const linksQuery = useQuery({
     queryKey: ['crewdesk', 'links'],
     queryFn: () => crewdeskApi.list({ pageSize: '50' }),
+    enabled: canManageIntegrations,
   })
   const emailCheckQuery = useQuery({
     queryKey: ['crewdesk', 'email-check'],
     queryFn: crewdeskApi.emailCheck,
     retry: 0,
+    enabled: canManageIntegrations,
   })
 
   const invalidate = () => {

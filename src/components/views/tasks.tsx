@@ -56,6 +56,12 @@ const EMPTY_TASK: TaskRow = {
   linkUrl: '',
 }
 
+/** Read-only notices on /tasks (REQ-001 R1). At most one is shown. */
+const NOTICE_CANNOT_LOG =
+  'Your role can view work logs but cannot log work. A VP can enable "Create task reports" for your role under Permissions.'
+const NOTICE_OTHER_USER_CAN_LOG = "You are viewing another user's report. Switch back to yourself to make edits."
+const NOTICE_OTHER_USER = "You are viewing another user's report."
+
 function linkTypeForTask(t: TaskItem): LinkType {
   if (t.moduleId) return 'module'
   if (t.testCaseId) return 'test_case'
@@ -179,7 +185,18 @@ export function TasksView() {
   const reportsError = !canViewAllReports ? myReportsQuery.isError : userReportsQuery.isError
   const reportsRefetch = () => (!canViewAllReports ? myReportsQuery.refetch() : userReportsQuery.refetch())
 
-  const isReadOnly = canViewAllReports && effectiveUserId !== user?.userId
+  // Read-only without create_task_report (the server enforces it too) or
+  // while viewing another user's log.
+  const canCreateReport = can('create_task_report')
+  const viewingOther = canViewAllReports && effectiveUserId !== user?.userId
+  const isReadOnly = !canCreateReport || viewingOther
+  const notice = viewingOther
+    ? canCreateReport
+      ? NOTICE_OTHER_USER_CAN_LOG
+      : NOTICE_OTHER_USER
+    : !canCreateReport
+      ? NOTICE_CANNOT_LOG
+      : null
 
   // ---- Monthly report export (per user, all tasks of the month) ----
   const exportMutation = useMutation({
@@ -306,11 +323,9 @@ export function TasksView() {
         }
       />
 
-      {isReadOnly && (
+      {notice && (
         <Alert>
-          <AlertDescription>
-            You are viewing another user&apos;s report. Switch back to yourself to make edits.
-          </AlertDescription>
+          <AlertDescription>{notice}</AlertDescription>
         </Alert>
       )}
 
@@ -376,7 +391,7 @@ function TaskReportForm({
 
   // Initialize editable state once from props (lazy initializer).
   const [tasks, setTasks] = useState<TaskRow[]>(() =>
-    initialTasks.length ? initialTasks.map(withLinkType) : [{ ...EMPTY_TASK }]
+    initialTasks.length ? initialTasks.map(withLinkType) : isReadOnly ? [] : [{ ...EMPTY_TASK }]
   )
   const [notes, setNotes] = useState<string>(initialNotes)
 
@@ -553,16 +568,20 @@ function TaskReportForm({
               <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
                 <ListTodo className="h-6 w-6 text-muted-foreground" />
               </div>
-              <div>
-                <p className="text-sm font-medium">No tasks logged yet</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Add your first entry for {reportDate}.
-                </p>
-              </div>
-              {!isReadOnly && (
-                <Button size="sm" variant="outline" onClick={addTask}>
-                  <Plus className="h-4 w-4 mr-1" /> Add task
-                </Button>
+              {isReadOnly ? (
+                <p className="text-sm font-medium">No tasks logged for {reportDate}.</p>
+              ) : (
+                <>
+                  <div>
+                    <p className="text-sm font-medium">No tasks logged yet</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Add your first entry for {reportDate}.
+                    </p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={addTask}>
+                    <Plus className="h-4 w-4 mr-1" /> Add task
+                  </Button>
+                </>
               )}
             </div>
           ) : (
