@@ -1,7 +1,7 @@
 'use client'
 //
 // DASHBOARD V2 — "QA Command Center" (preview)
-// A ground-up redesign of the dashboard view, served at /dashboard-preview so
+// Now live at /dashboard (old dashboard.tsx + /dashboard-preview archived); was previewed so
 // the production dashboard (/dashboard, dashboard.tsx) stays untouched until
 // the new design is approved. Same data contract (DashboardStats) — the two
 // extra aggregates it uses (priorityBreakdown, bugStatusBreakdown) are

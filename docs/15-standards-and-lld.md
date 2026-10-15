@@ -72,7 +72,7 @@ repository files are 100% parameterized raw SQL (0 ORM model calls, 0
   occurrences today).
 - Column names are snake_case (DB truth) mapped to camelCase row interfaces declared
   per query in `types/sql-rows.ts` or beside the query.
-- Migrations live in `prisma/` (see `prisma/database-setup.sql`); repositories never
+- Migrations live in `prisma/` (see `prisma/migrations/`); repositories never
   mutate schema.
 
 ## 3. LLD principles in force

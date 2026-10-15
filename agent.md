@@ -179,7 +179,7 @@ A task is **not done** until all of these pass:
    including the no-permission and no-session cases.
 5. Docs updated when behavior changes (`docs/` + this file if conventions evolve) and
    `worklog.md` appended (append-only — never overwrite).
-6. The canonical zip `download/tcms-postgresql.zip` refreshed with every changed
+6. Canonical zip: none at present (`download/` no longer exists; pending) — refresh it with every changed
    file (the legacy `scripts/tcms-package/` mirror was removed 2026-10-14).
 
 ## 4. Task workflow

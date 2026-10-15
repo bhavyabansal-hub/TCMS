@@ -4,10 +4,10 @@ Current as of **2026-10-14**. TCMS runs on **MySQL 8.4 only** (utf8mb4, strict m
 Two deployment realities are documented:
 
 - **Sandbox / local** — a real MySQL 8.4.6 server booted by script on `127.0.0.1:5500` (this is what the live preview uses).
-- **Company IT (production)** — the real MySQL server operated by IT. The migration and cutover plan is fully specified in [`docs/migration/04-cutover-rollback.md`](docs/migration/04-cutover-rollback.md); the exact questions to send IT are drafted in [`download/it-request-mysql.md`](download/it-request-mysql.md).
+- **Company IT (production)** — the real MySQL server operated by IT. The migration and cutover plan is fully specified in [`docs/migration/04-cutover-rollback.md`](docs/migration/04-cutover-rollback.md); the questions for IT: IT request file: to be recreated (pending).
 
 > The former Vercel + Neon/Supabase guide is retired and kept only as history in
-> `DEPLOYMENT-GUIDE.md` (root) and `docs/DEPLOYMENT-GUIDE.md` — **do not follow it
+> `archive/postgres/docs/DEPLOYMENT-GUIDE.md` — **do not follow it
 > for new deployments**; TCMS no longer speaks PostgreSQL and no longer needs the
 > old keep-alive cron.
 
@@ -18,7 +18,7 @@ Two deployment realities are documented:
 | Piece | What it is | Needs a server? |
 |---|---|---|
 | Next.js 16 app (UI + API routes) | The whole TCMS: auth, RBAC, test cases, bugs, reviews, wiki, reports, users, notifications | Yes — one Node 20+ process |
-| MySQL 8.4 database | 17 tables, schema via `npx prisma db push` from `prisma/schema.prisma` | Managed/self-hosted MySQL 8.4 |
+| MySQL 8.4 database | 17 tables, schema via `npx prisma migrate deploy` from `prisma/migrations/` | Managed/self-hosted MySQL 8.4 |
 | Notifications WS mini-service | Realtime toast push (`mini-services/notifications`, Bun) | Optional — without it the app degrades to **refresh-visible** delivery: the DB row shows on the client's next list fetch (page load / socket reconnect / tab re-visible; no polling timers) |
 | Backup scheduler | `scripts/backup-scheduler.mjs` → `mysqldump` nightly, 14-day retention | Optional but **strongly recommended** (wired into autostart) |
 
@@ -59,7 +59,7 @@ npm run dev                               # scripts/dev-tcms.mjs — MySQL-only 
 The full, ordered plan with rollback lives in `docs/migration/04-cutover-rollback.md`.
 Summary of the sequence:
 
-1. **Send the IT request** (`download/it-request-mysql.md`): server/port + MySQL 8.4
+1. **Send the IT request** (IT request file: to be recreated (pending)): server/port + MySQL 8.4
    version, TEST schema + limited app user (exact grant list included), TLS certs,
    `sql_mode` (STRICT_ALL_TABLES or STRICT_TRANS_TABLES), `utf8mb4` + timezone,
    `max_connections`, backup ownership + one-off restore drill permission,
@@ -67,8 +67,8 @@ Summary of the sequence:
 2. **Receive creds → set env**: `DATABASE_URL`/`DIRECT_URL` to the IT host
    (pass-through — `scripts/dev-tcms.mjs` never touches a non-sandbox host),
    production `JWT_SECRET`, `TCMS_ENABLE_SEED` **off**.
-3. **Schema**: `npx prisma db push` against the TEST schema (or run the generated
-   DDL `prisma/database-setup.sql` if IT prefers manual review).
+3. **Schema**: `npx prisma migrate deploy` against the TEST schema (or hand IT the
+   SQL in `prisma/migrations/` if they prefer manual review).
 4. **Certify**: run the battery + Crew Desk + import suites against IT's TEST
    schema; run one `backup-db-mysql.sh` + `restore-mysql.sh` drill on IT hardware.
 5. **Go live** per the cutover doc's checklist; keep `PG_SOURCE_URL` set for the

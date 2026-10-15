@@ -2,7 +2,7 @@
 
 > Source of truth: `prisma/schema.prisma` (MySQL 8.4 provider, utf8mb4). This document mirrors
 > every model, column, relation, default and index, then explains *why* it is shaped
-> that way. Apply `prisma/database-setup.sql` (or `npm run db:push`) to create it.
+> that way. Apply `prisma/migrations/` (`npx prisma migrate deploy`) to create it.
 
 
 > **⚠️ SEPTEMBER 2026 RESTRUCTURE:** the database was renamed to strict SQL
@@ -11,7 +11,7 @@
 > generic `id`), DB-generated uuid PKs (`gen_random_uuid()`). This chapter's
 > prose still explains the SHAPE of every table correctly, but wherever you see
 > `id` or camelCase column names, read the new names from `prisma/schema.prisma`
-> (`@map`/`@@map`) or `prisma/database-setup.sql`. Full mapping:
+> (`@map`/`@@map`) or `prisma/migrations/`. Full mapping:
 > `REFACTORING-REPORT.md` §1.
 
 ---
@@ -23,7 +23,7 @@
 | Primary keys | `id String @id @default(cuid())` — collision-safe string ids (except `BugTestCaseLink`, composite PK). |
 | Timestamps | `createdAt DateTime @default(now())` + `updatedAt DateTime @updatedAt` (Prisma sets it on every update). Some log-like tables deliberately omit `updatedAt`. |
 | Enums | Stored as plain `String` columns with documented value sets (roles, statuses, priorities). The TypeScript unions in `src/types/index.ts` mirror them. |
-| JSON columns | **10 columns are native JSONB** (Prisma `Json`): `TestCase.steps/tags/attachments`, `TestCaseHistory.snapshot`, `ReviewEvent.flaggedFields`, `Bug.attachments`, `TaskReport.tasks`, `ActivityLog.beforeSnapshot/afterSnapshot/diff`. Array-typed ones carry `@default("[]")`. |
+| JSON columns | **10 columns are MySQL JSON** (Prisma `Json`): `TestCase.steps/tags/attachments`, `TestCaseHistory.snapshot`, `ReviewEvent.flaggedFields`, `Bug.attachments`, `TaskReport.tasks`, `ActivityLog.beforeSnapshot/afterSnapshot/diff`. Array-typed ones carry `@default("[]")`. |
 | Case sensitivity | Table names are quoted PascalCase (`"TestCase"`) — relevant when writing raw SQL in Neon/pgAdmin. |
 | Datasource | `DATABASE_URL` (pooled, app traffic) + `DIRECT_URL` (schema tools). Identical locally. |
 
@@ -267,7 +267,7 @@ Daily work log — **one row per user per day**, enforced by
 | `notes` | String? | null | Free-text end-of-day notes |
 | `totalMinutes` | Int | `0` | Server-computed sum of task minutes |
 
-`TaskItem` shape (inside the JSONB array):
+`TaskItem` shape (inside the MySQL JSON array):
 `{ description, timeSpentMinutes, moduleId | null, testCaseId | null, bugId | null, status: 'done' | 'in_progress' | 'blocked' }`
 — the three optional ids link a task line to any entity (rendered as pickers in the Tasks view).
 
@@ -319,9 +319,9 @@ page), `userId`, `action`. Activity rows are never deleted by the app.
 | User | **Soft** — `isActive: false`; login blocked; data preserved | Admin (not on self) |
 | TaskReport / Notification / ActivityLog | Not deletable via dedicated business rules (notifications deletable by owner; reports editable only by owner) | — |
 
-## 17. How JSONB is read back (the parser contract)
+## 17. How MySQL JSON is read back (the parser contract)
 
-Prisma returns JSONB as already-parsed JavaScript objects. To stay compatible with
+Prisma returns MySQL JSON as already-parsed JavaScript objects. To stay compatible with
 legacy rows that might contain JSON *strings*, every read path funnels through:
 
 ```ts

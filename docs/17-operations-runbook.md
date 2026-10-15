@@ -5,7 +5,7 @@
 > every file it writes, and alerts every manage_users holder in-app when a backup fails or
 > the newest valid backup is > 26 h old. All commands below target **MySQL 8.4** via
 > `scripts/backup-db-mysql.sh` / `restore-mysql.sh` / `scripts/mysql-env.sh`. The old
-> PostgreSQL/Supabase procedures (backup-db.mjs, restore-db.mjs, supabase-check.mjs,
+> PostgreSQL/Supabase procedures (archived in `archive/postgres/scripts/`: backup-db.mjs, restore-db.mjs, supabase-check.mjs,
 > hosted-pooler wiring) are historical — see `docs/migration/` for the migration and
 > cutover plan.
 
@@ -13,7 +13,7 @@
 > **Status:** verified 2026-10-02 (pre-launch checklist item 4). Every command below was
 > executed against the running stack as part of the go-live confirmation; results are quoted
 > inline. Companion documents: [16-single-instance-and-scaling.md](./16-single-instance-and-scaling.md)
-> (scaling limits + load-test numbers) and [DEPLOYMENT-GUIDE.md](./DEPLOYMENT-GUIDE.md)
+> (scaling limits + load-test numbers) and [DEPLOYMENT-GUIDE.md](../archive/postgres/docs/DEPLOYMENT-GUIDE.md) (historical)
 > (first-time deployment).
 
 ---
@@ -33,7 +33,7 @@
   failed check deletes the file, appends a line to `logs/error-<day>.log` and exits
   non-zero. Retention: files older than 14 days are removed here (age-based), and the
   scheduler additionally keeps only the newest 14 files (count-based).
-- **`scripts/backup-db.mjs`** — HISTORICAL (PostgreSQL era): Prisma-JSON dump that
+- **`archive/postgres/scripts/backup-db.mjs`** — HISTORICAL (PostgreSQL era): Prisma-JSON dump that
   refuses every mysql:// URL by design. Not invoked by anything; removal is scheduled
   with the separate PG-cleanup task.
 - **`scripts/restore-mysql.sh`** — restore drill into a scratch schema with per-table
@@ -239,7 +239,7 @@ node scripts/loadtest.mjs                         # report; compare vs §6 basel
 ### 4.5 Certifying against the company MySQL TEST schema
 The app is MySQL-only; pointing it at a different MySQL server is just a `DATABASE_URL`
 change. **Never certify against production data** — ask IT for a dedicated TEST schema
-and a limited user (request drafted in `download/it-request-mysql.md`), then:
+and a limited user (IT request file: to be recreated (pending)), then:
 
 ```
 # 0. IT provides: host, port, TEST schema name, limited user (SELECT/INSERT/UPDATE/

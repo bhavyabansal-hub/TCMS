@@ -23,7 +23,7 @@
       - useNotificationSocket(user.id)  → WS connect + seed notifications (50)
       - <Sidebar> prefetch ['reviews','queue'] + ['module-reviews','queue'] (30s poll)
       - CurrentView = 'dashboard'
- 5. Dashboard                 [dashboard.tsx]
+ 5. Dashboard                 [dashboard-v2.tsx]
       GET /api/stats?action=dashboard → 6 parallel Prisma queries → KPIs + charts
  6. User clicks demo fill + "Sign in" (first visit):
       POST /api/auth?path=login → bcrypt check → createSession

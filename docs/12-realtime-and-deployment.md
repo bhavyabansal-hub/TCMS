@@ -2,7 +2,7 @@
 
 > How the optional WebSocket mini-service works, and how the whole system maps onto
 > **2026-10-14 MySQL migration note:** TCMS now runs on **MySQL 8.4** (utf8mb4, strict mode). Sections written for the former Vercel + Neon/Supabase PostgreSQL hosting are kept for history; DB-specific facts below have been updated where they matter operationally. See `docs/migration/` for the migration and cutover plan.
-> Former target: Vercel + Neon (step-by-step in `DEPLOYMENT-GUIDE.md`). CURRENT: MySQL 8.4 — company server pending IT answers; sandbox rehearsal complete.
+> Former target: Vercel + Neon (step-by-step in `archive/postgres/docs/DEPLOYMENT-GUIDE.md`). CURRENT: MySQL 8.4 — company server pending IT answers; sandbox rehearsal complete.
 
 ---
 
@@ -58,6 +58,8 @@ fail-closed as well — the service refuses to start when `WS_CORS_ORIGIN` is un
 `*`. Reverse-proxy deployment recipes: `docs/deploy/reverse-proxy-websocket.md`.
 
 ## 3. Production topology on Vercel + Neon
+
+> Historical (PostgreSQL era). Current: MySQL 8.4 — see [`../DEPLOYMENT.md`](../DEPLOYMENT.md).
 
 > ### ⚠️ SINGLE-INSTANCE ONLY — read this before running more than one server
 >
@@ -143,9 +145,11 @@ pause policy: Neon's ~5-minute sleep cannot be prevented by a daily ping, but
 free Supabase database awake forever — and **Aiven** never sleeps at all. The
 endpoint is public because Vercel Cron sends unauthenticated GETs; it leaks nothing
 (no data, `SELECT 1` only) and is safe to call from a browser too. Full switch-over
-steps for Supabase/Aiven live in DEPLOYMENT-GUIDE.md, Appendix E.
+steps for Supabase/Aiven live in `archive/postgres/docs/DEPLOYMENT-GUIDE.md`, Appendix E.
 
 ## 4. Local development topology (for completeness)
+
+> Historical (PostgreSQL era). Current: MySQL 8.4 — see [`LOCAL-SETUP-WINDOWS.md`](./LOCAL-SETUP-WINDOWS.md).
 
 ```
 npm run dev (Next.js :3000)  ←→  any PostgreSQL (DATABASE_URL = DIRECT_URL locally)
@@ -184,7 +188,7 @@ Verify with `TCMS_BASE_URL=http://localhost:3000 node scripts/verify-notificatio
 |---|---|
 | Deploy an app change | push to GitHub → Vercel auto-deploys |
 | Change a secret | Vercel → Settings → Environment Variables → **Redeploy** |
-| Create tables on a fresh DB | paste `prisma/database-setup.sql` in Neon SQL Editor (or `npm run db:push`) |
+| Create tables on a fresh DB | `npx prisma migrate deploy` (applies `prisma/migrations/`) |
 | Load demo data | open `https://your-app/api/seed` once |
 | Reset all data | `TRUNCATE … CASCADE` from the deployment guide FAQ Q7, then seed again |
 | Inspect data | pgAdmin 4 (direct string + SSL Require) or Neon SQL Editor (`SELECT * FROM "TestCase"`) |

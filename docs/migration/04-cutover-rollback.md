@@ -5,7 +5,7 @@ already executed a full rehearsal of every step against the TEST schema.
 
 ## Preconditions (from IT)
 
-> Ask: `download/it-request-mysql.md` (ready to send). Answers also fill the
+> Ask: IT request file: to be recreated (pending). Answers also fill the
 > "only IT can confirm" list in the phase-1 audit report.
 
 - [ ] MySQL 8.4 host:port reachable from the app server, TLS available.
@@ -41,7 +41,7 @@ already executed a full rehearsal of every step against the TEST schema.
 1. **Freeze writes**: put TCMS in maintenance (or stop the app) — PostgreSQL
    becomes quiescent. Announce a window (~30 min).
 2. **Final backup**: run `scripts/backup-db-mysql.sh` equivalent against PG
-   (`scripts/backup-db.mjs`) + keep the last mysqldump of the TEST schema.
+   (`archive/postgres/scripts/backup-db.mjs`) + keep the last mysqldump of the TEST schema.
 3. **Final copy**: `node --env-file=.env scripts/migration/migrate-pg-to-mysql.mjs`
    (NO --truncate on the real schema unless IT provisioned it empty; the
    script is idempotent — re-running after a failed attempt is safe).

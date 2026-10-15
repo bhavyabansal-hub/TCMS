@@ -73,7 +73,7 @@ team can:
                                 ▼                            ▼
                    ┌────────────────────────┐   ┌──────────────────────┐
                    │  MySQL 8.4 (:5500)     │   │ mini-services/       │
-                   │  15 tables, 10 JSONB   │   │ notifications WS     │
+                   │  15 tables, 10 MySQL JSON│   │ notifications WS     │
                    └────────────────────────┘   │ :3003 (optional)     │
                                                 └──────────────────────┘
 ```
@@ -166,7 +166,7 @@ Every flow in the system follows this same 6-step shape: **view → api client �
 ```
 ├── prisma/
 │   ├── schema.prisma          14 models, MySQL 8.4 (explicit VARCHAR/TEXT native types), 10 Json columns
-│   └── database-setup.sql     paste-into-Neon table creation script
+│   └── migrations/            versioned MySQL migrations (`npx prisma migrate deploy`)
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx         root layout: fonts, metadata, <Providers>, toasters
@@ -187,9 +187,9 @@ Every flow in the system follows this same 6-step shape: **view → api client �
 │   │   ├── api.ts             BACKEND response helpers (ok/401/403/404/paginate)
 │   │   ├── auth.ts            JWT, password hash, roles, permission matrix
 │   │   ├── db.ts              Prisma singleton
-│   │   ├── activity.ts        audit logging + JSONB helpers
+│   │   ├── activity.ts        audit logging + MySQL JSON helpers
 │   │   ├── notifications.ts   in-app notification + WS broadcast
-│   │   ├── serializers.ts     JSONB normalisers for every row type
+│   │   ├── serializers.ts     MySQL JSON normalisers for every row type
 │   │   ├── format.ts          dates, colors, labels
 │   │   ├── errors.ts          client error → toast mapping
 │   │   └── utils.ts           cn() class merger
@@ -197,7 +197,7 @@ Every flow in the system follows this same 6-step shape: **view → api client �
 │   └── types/index.ts         shared TypeScript domain types
 ├── mini-services/notifications/  optional socket.io WS relay (:3003)
 ├── docs/                          THIS documentation
-├── DEPLOYMENT-GUIDE.md            step-by-step online deployment (English)
+├── DEPLOYMENT.md                  MySQL 8.4 deployment guide
 └── package.json / configs
 ```
 
@@ -216,7 +216,7 @@ mini-service is configured by constant (`PORT = 3003` inside `mini-services/noti
 
 - **String enums**: status/priority/role values are plain strings (`'draft'`, `'P2'`,
   `'team_lead'`) mirrored in `src/types/index.ts` — the single source of truth for the UI.
-- **JSONB columns** are read through `parseJson()` (handles both native JSONB objects and
+- **MySQL JSON columns** are read through `parseJson()` (handles both native JSON objects and
   legacy JSON strings) and serialised exactly once per row via `lib/serializers.ts`.
 - **Auth transport**: the JWT access token travels in the `Authorization: Bearer` header
   AND is mirrored into cookie `tcms-access` (server routes read the cookie via

@@ -17,8 +17,8 @@ A production-grade test case management web application for QA teams: modules, t
 | Verification suites | ✅ battery 63/63 · Crew Desk 5/5 · CSV import 33/33 · 250-row import probe PASS · 200-VU load test 0 errors · backup/restore drill PASS |
 | Crew Desk ticket rule | ✅ Normalized to designated test ticket **1355** everywhere (`rg 4190` = 0 matches); ticket 4191 used only as the guard-refusal probe (never written to) |
 | Phase 2 hardening | ✅ 5 fix groups landed (DB wiring, FK 404s, boot/backup logging, docs refresh, repository-only SQL + lint clean) — commits `a281b4e`…`a9ef188` |
-| Real-IT cutover (production MySQL) | ⏳ **PENDING IT ANSWERS** — server/port, TEST schema + limited user, TLS certs, `sql_mode`, backup ownership. Request drafted: [`download/it-request-mysql.md`](download/it-request-mysql.md); plan: [`docs/migration/04-cutover-rollback.md`](docs/migration/04-cutover-rollback.md) |
-| PostgreSQL fallback | 🔒 Kept READ-ONLY as rollback insurance: `PG_SOURCE_URL`, `scripts/pg-sandbox/` data, `schema.pg.prisma`, `scripts/pg-client/`; rollback plan in `docs/migration/04` |
+| Real-IT cutover (production MySQL) | ⏳ **PENDING IT ANSWERS** — server/port, TEST schema + limited user, TLS certs, `sql_mode`, backup ownership. IT request file: to be recreated (pending); plan: [`docs/migration/04-cutover-rollback.md`](docs/migration/04-cutover-rollback.md) |
+| PostgreSQL fallback | 🔒 Kept READ-ONLY as rollback insurance: `PG_SOURCE_URL`, `scripts/pg-sandbox/` data, `archive/postgres/scripts/migration/schema.pg.prisma`, `scripts/pg-client/`; rollback plan in `docs/migration/04` |
 | Next up (after cutover) | AI-generated test cases feature; Crew Desk stays in guarded test mode (ticket 1355) until the company token is issued |
 
 ## Feature Highlights
@@ -47,7 +47,7 @@ cp .env.example .env
 #   DATABASE_URL=mysql://tcms_app:pass@127.0.0.1:5500/tcms_test
 
 # 2) Create the schema
-npx prisma db push
+npx prisma migrate deploy
 
 # 3) Run it
 npm run dev                 # scripts/dev-tcms.mjs — MySQL-only wrapper; auto-boots
@@ -82,7 +82,7 @@ All green on MySQL 8.4 as of 2026-10-14:
 - `verify-import.mjs` (**33 checks**) — CSV/XLSX import contract; plus `import-250-probe.mjs` (at-cap + over-cap rows)
 - `loadtest-200.mjs` — 200-VU load test (autocannon; ~33k requests, 0 errors on MySQL)
 - `backup-db-mysql.sh` / `restore-mysql.sh` — mysqldump backup + scratch-schema restore drill
-- Older feature suites still runnable: `verify-permission-matrix.mjs` (165), `verify-review-ux-round.mjs` (28), `verify-notifications.mjs` (28), `verify-rbac.sh` (16), `verify-wiki.mjs`, `verify-security-fixes.mjs` (32), `audit-500-hunt.sh`
+- Older feature suites still runnable: `verify-permission-matrix.mjs` (165), `verify-review-ux-round.mjs` (28), `verify-notifications.mjs` (28), `verify-wiki.mjs`, `verify-security-fixes.mjs` (32), `audit-500-hunt.sh`
 
 QA deliverables: `docs/qa/TCMS-MASTER-QA-PROMPT.md` (full-system deep-verification prompt) and `docs/qa/TCMS-TEST-REPORT-2026-10-09.md` (210-case sheet-imported marathon, five-role verdicts, DB deep checks).
 
@@ -90,10 +90,9 @@ QA deliverables: `docs/qa/TCMS-MASTER-QA-PROMPT.md` (full-system deep-verificati
 
 `01` overview & architecture · `02` database schema · `03` auth & permissions · `04` API reference · `05` frontend architecture · `06` login & dashboard · `07` modules & test cases · `08` reviews workflow · `09` bugs/tasks/reports · `10` activity/users/notifications/profile · `11` end-to-end flows · `12` realtime & deployment · `13` file index · `14` test-case import · `15` standards & LLD · `16` single-instance & scaling · `17` operations runbook · `18` Crew Desk integration · `migration/` PG→MySQL migration + cutover/rollback plan (01 audit, 02 schema conversion, 03 verification, 04 cutover) · `qa/` master QA prompt + test report · `TCMS-ARCHITECTURE-GUIDE.pdf`
 
-Start at [`docs/README.md`](docs/README.md). Current deployment path: [`DEPLOYMENT.md`](DEPLOYMENT.md) (MySQL 8.4, sandbox + real-IT). Legacy `DEPLOYMENT-GUIDE.md` files (Vercel/Neon/Supabase) are kept **HISTORICAL**.
+Start at [`docs/README.md`](docs/README.md). Current deployment path: [`DEPLOYMENT.md`](DEPLOYMENT.md) (MySQL 8.4, sandbox + real-IT). The legacy Vercel/Neon/Supabase guide is kept **HISTORICAL** at `archive/postgres/docs/DEPLOYMENT-GUIDE.md`; PG-era scripts (incl. `verify-rbac.sh`) are in `archive/postgres/`. Windows local setup: [`docs/LOCAL-SETUP-WINDOWS.md`](docs/LOCAL-SETUP-WINDOWS.md).
 
 ## Repository hygiene
 
 - `main` branch, clean working tree; latest commit documents every Phase 2 group.
 - `.env` is intentionally git-ignored; the sandbox copy is for **local development only** — rotate `JWT_SECRET` and the Crew Desk credentials before any shared deployment.
-- `download/tcms-postgresql.zip` is the canonical packaged snapshot (443 files, integrity-checked) refreshed after every verified round.

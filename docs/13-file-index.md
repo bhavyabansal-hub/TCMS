@@ -31,8 +31,8 @@
 
 | File | Lines | What it is |
 |---|---|---|
-| `schema.prisma` | 324 | The 14 models, relations, JSONB columns, indexes. → doc 02 |
-| `database-setup.sql` | 410 | Generated SQL that creates all tables — paste into Neon SQL Editor (deployment Part 2) |
+| `schema.prisma` | 324 | The 14 models, relations, MySQL JSON columns, indexes. → doc 02 |
+| `migrations/` | — | Versioned MySQL migrations, applied with `npx prisma migrate deploy` (the only DDL path) |
 
 ## src/app — Next.js App Router
 
@@ -88,7 +88,7 @@ mounts its view component from `src/components/views/`; the URL↔view map lives
 
 | File | Lines | ViewKey | One-liner |
 |---|---|---|---|
-| `dashboard.tsx` | 236 | `dashboard` | KPI cards, status/severity charts, recent activity feed |
+| `dashboard-v2.tsx` | — | `dashboard` | QA Command Center (live /dashboard); the classic `dashboard.tsx` is archived in `archive/src/` |
 | `modules.tsx` | 511 | `modules` | Module tree browser, create/delete, submit module for review |
 | `test-cases.tsx` | 411 | `test-cases` | Filterable table, create dialog (steps editor), CSV export |
 | `test-case-detail.tsx` | 626 | `test-case-detail` | Read/edit modes, steps table, submit for review, PERMANENT delete (confirm), history/reviews/activity panels |
@@ -131,9 +131,9 @@ mounts its view component from `src/components/views/`; the URL↔view map lives
 | `server/role-permission.repository.ts` | 65 | Raw SQL for the `role_permissions` override table (list/find/upsert/delete) |
 | `api.ts` | 49 | Response helpers: `ok/paginate/badRequest/unauthorized/forbidden/notFound/getQueryParams` |
 | `db.ts` | 12 | Prisma singleton (HMR-safe via globalThis in dev) |
-| `activity.ts` | 79 | `logActivity()` (snapshots + diff + IP/UA, never throws) + JSONB `parseJson/toJson` |
+| `activity.ts` | 79 | `logActivity()` (snapshots + diff + IP/UA, never throws) + MySQL JSON `parseJson/toJson` |
 | `notifications.ts` | 106 | `createNotification()` (preference-gated insert) + WS broadcast + email/Telegram fan-out. → doc 12 |
-| `serializers.ts` | 374 | 7 row normalisers guaranteeing JSONB parsed exactly once (+ `TaskItem` type) |
+| `serializers.ts` | 374 | 7 row normalisers guaranteeing MySQL JSON parsed exactly once (+ `TaskItem` type) |
 | `format.ts` | 145 | All color maps + date/duration/text formatters (exact mappings in doc 05 §6) |
 | `errors.ts` | 63 | Client `ApiError` → friendly toast message mapping; `handleMutation` |
 | `server/csv.ts` | 123 | Pure RFC-4180 CSV parser + `parseCsvSteps`/`parseCsvTags` (no I/O, no business logic) → doc 14 |
@@ -154,17 +154,17 @@ mounts its view component from `src/components/views/`; the URL↔view map lives
 | `start-tcms.sh` | Idempotent stack launcher: MySQL 8.4 wiring via `scripts/mysql-env.sh` (repair-only .env self-heal) + WS mini-service (:3003) + Crew Desk mock (:3010) + Next.js (:3000, production build by default — `TCMS_DEV=1` for dev); PG :5499 stays bootable as READ-ONLY drill source |
 | `dev-with-pg.mjs` | `npm run dev` wrapper — boots/awaits the sandbox DB, then `next dev` |
 | `verify-battery.sh` | 23 checks — end-to-end API sweep (health, seed, auth, CRUD, reviews, bugs, reports, notifications, stats, leak scan) |
-| `verify-rbac.sh` | 16 checks — login, permission gates, role hierarchy over the live API |
+| `verify-rbac.sh` | Archived (PG-era, uses psql): `archive/postgres/scripts/` |
 | `verify-permissions.mjs` | 29 checks — matrix defaults, override toggle round-trip, cache invalidation |
 | `verify-review-matrix.mjs` | 36 checks — review endpoints per role (participation gating included) |
 | `verify-import.mjs` | 32 checks — CSV template + import happy path, per-row errors, auth/permission/validation failures → doc 14 |
 | `verify-notifications.mjs` | 28 checks — Bearer auth, password-change validation + refresh-token revocation + security notification, channel prefs persistence, ownership scoping, bug-assign delivery |
-| `migrate-rbac.mjs` | One-shot RBAC migration/seeding helper |
+| `migrate-rbac.mjs` | Archived (PG-era): `archive/postgres/scripts/` |
 | `seed-open-reviews.mjs` | Seeds demo review queues for manual testing |
 | `cleanup-e2e-cases.mjs` / `cleanup-import-demo.mjs` | Remove test/demo artifacts after verification runs |
 | `clear-login-lock.mjs` | Reset the brute-force lock counter for a demo account |
-| `check-db-state.mjs` / `probe-rbac-state.mjs` / `check-overrides.mjs` | Small read-only DB state probes used while debugging |
-| `pg-sandbox/` | Embedded PostgreSQL sandbox kept as the READ-ONLY migration/drill source (own package + data dir); the app never connects to it |
+| `check-db-state.mjs` / `check-overrides.mjs` (`probe-rbac-state.mjs` archived in `archive/postgres/scripts/`) | Small read-only DB state probes used while debugging |
+| `pg-sandbox/` | Embedded PostgreSQL sandbox (git-ignored; exists only on the Linux sandbox, not in this repo); READ-ONLY rollback source — the app never connects to it |
 | `scan-dead-src.mjs` / `prune-deps.mjs` | Hygiene audits: unused src files / unused npm dependencies |
 
 ## mini-services/notifications

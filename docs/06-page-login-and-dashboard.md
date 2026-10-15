@@ -1,7 +1,7 @@
 # 06 · Pages — Login / Register & Dashboard
 
 > Screens: **AuthScreen** (`src/components/auth-screen.tsx`) and **Dashboard**
-> (`src/components/views/dashboard.tsx`). These are the first two things every user
+> (`src/components/views/dashboard-v2.tsx`; the classic view described below is archived at `archive/src/components/views/dashboard.tsx`). These are the first two things every user
 > sees; together they illustrate the app's whole pattern: gate → fetch → render → navigate.
 
 ---
@@ -54,7 +54,7 @@ Login does **not** navigate anywhere — the auth store flips `user`, and the sa
 
 ## 2. Dashboard — the landing overview
 
-**File:** `src/components/views/dashboard.tsx` (236 lines). **ViewKey:** `'dashboard'`
+**File:** `archive/src/components/views/dashboard.tsx` (archived; live: `src/components/views/dashboard-v2.tsx`). **ViewKey:** `'dashboard'`
 (default after login). **Visible to:** every role.
 
 ### Data

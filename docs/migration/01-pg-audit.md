@@ -79,7 +79,7 @@ Schema-level deltas (Prisma → MySQL):
 
 - `scripts/pg-sandbox/*` — embedded PG runtime; stays ONLY as the read-only
   migration source, then retired from boot.
-- `scripts/backup-db.mjs` + `scripts/backup-scheduler.mjs` — Prisma-based
+- `scripts/backup-db.mjs` (now `archive/postgres/scripts/backup-db.mjs`) + `scripts/backup-scheduler.mjs` — Prisma-based
   JSON dumps; replaced with `mysqldump` (+ same 14-retention, restore drill).
 - `src/app/api/keep-alive/*` — PG keep-alive route; removed (MySQL pool
   doesn't need the PG-specific ping; app health route remains).

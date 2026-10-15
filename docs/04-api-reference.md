@@ -247,7 +247,7 @@ Purpose: free database providers pause idle projects. NOTE (2026-10-14): the kee
 activity). `vercel.json` schedules a daily cron — the Hobby plan's maximum
 frequency — to call this endpoint, so the database records activity every day and
 never pauses. Harmless with every provider; also callable manually from a browser.
-See doc 12 §3 and DEPLOYMENT-GUIDE.md Appendix E.
+See doc 12 §3 and `archive/postgres/docs/DEPLOYMENT-GUIDE.md` Appendix E (historical).
 
 ## 14b. `/api/integrations/crewdesk` — Crew Desk link management 🔒 (`integrations/crewdesk/route.ts`)
 | Method + path | Who | Validation | Service |

@@ -2,7 +2,7 @@
 
 The converted schema lives at `prisma/schema.prisma` (provider `mysql`).
 The original PostgreSQL schema is preserved at
-`scripts/migration/schema.prisma.pg-backup`. Conversion was done mechanically
+`archive/postgres/scripts/migration/schema.prisma.pg-backup`. Conversion was done mechanically
 by `scripts/migration/convert-schema-mysql.cjs` (deterministic, re-runnable).
 
 ## Per-column sizing table (validation-cap driven)

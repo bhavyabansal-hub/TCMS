@@ -10,9 +10,9 @@ Test Case Management System. Next.js 16 App Router · React 19 · TypeScript 5 �
 Tailwind v4 + shadcn/ui · Zustand 5 · TanStack React Query 5 · Prisma 6 (client only,
 **raw SQL everywhere**) · **MySQL 8.4** (utf8mb4_unicode_ci, strict, UTC, native JSON) ·
 JWT in httpOnly cookies · zod 4 · socket.io mini-service for realtime.
-PostgreSQL retired 2026-10-14 (kept read-only as rollback source; PG-era scripts stay
-until after go-live). Production cutover is **pending IT answers**
-(`download/it-request-mysql.md`, plan in `docs/migration/04-cutover-rollback.md`).
+PostgreSQL retired 2026-10-14 (kept read-only as rollback source; PG-era scripts live in
+`archive/postgres/` until after go-live). Production cutover is **pending IT answers**
+(IT request file: to be recreated (pending); plan in `docs/migration/04-cutover-rollback.md`).
 
 ## 2. Top-level layout
 
@@ -20,14 +20,18 @@ until after go-live). Production cutover is **pending IT answers**
 agent.md            binding coding standards + Definition of Done   (READ FIRST)
 CLAUDE.md           pointer to agent.md + this file
 worklog.md          append-only engineering log (never overwrite)
-docs/               01–18 guides, migration/ (PG→MySQL dossier), deploy/, qa/, PDF guide
+docs/               README.md index, 01–18 guides, LOCAL-SETUP-WINDOWS.md, migration/ (PG→MySQL
+                    dossier), deploy/, qa/, PDF guide, refactor reports, CHANGELOG
 prisma/             schema.prisma (mysql) + migrations/ (the ONLY DDL path)
 src/                application (see §3–§8)
 mini-services/      notifications (socket.io WS relay), crewdesk-mock (test double)
-scripts/            ~110 boot/verify/backup/migration/one-off scripts (see §10)
-download/           canonical zip + it-request-mysql.md + README
-archive/            moved-out unused files (see archive/README.md)
-.zscripts/ start-dev.sh Caddyfile bun.lock vercel.json   LOAD-BEARING pipeline files — never delete
+scripts/            ~50 boot/verify/backup/migration scripts (see §10)
+archive/            moved-out files (see archive/README.md): postgres/ = PG-era scripts +
+                    schemas + old deploy guide (rollback plan until go-live); scripts/ =
+                    one-off probes/repros; src/ = classic dashboard + /dashboard-preview
+README.md DEPLOYMENT.md CHANGELOG.md   root docs (deploy guide = MySQL 8.4)
+.zscripts/ (git-ignored) start-dev.sh Caddyfile bun.lock vercel.json   LOAD-BEARING pipeline files — never delete
+(no download/ folder: the canonical zip and IT request file are pending re-creation)
 ```
 
 ## 3. Request pipeline (every API call)
@@ -208,16 +212,18 @@ never `db push`): `20261015034822_init_mysql` (hand-edited collations + JSON def
   `backup-app-staleness-test.mjs` (10), `ws-auth-probe.mjs` (10), `ws-reconnect-test.mjs` (5).
 - **Backups:** `backup-db-mysql.sh`, `backup-scheduler.mjs` (02:30 UTC, 14 kept), `restore-mysql.sh`.
 - **Migration one-offs:** `migration/migrate-pg-to-mysql.mjs`, `convert-schema-mysql.cjs`.
-- **PG-era (keep until after go-live, do not run on MySQL):** backup-db.mjs, restore-db.mjs,
-  apply-indexes.mjs, add-load-indexes.mjs, migrate-rbac.mjs, db-qa-checks.mjs,
-  supabase-check.mjs, probe-rbac-state.mjs.
+- **PG-era → `archive/postgres/scripts/`** (keep until after go-live, never run on MySQL):
+  backup-db, restore-db, apply-indexes, add-load-indexes, migrate-rbac, db-qa-checks,
+  supabase-check, probe-rbac-state, check-tables, cleanup-probe-data, validate-db-setup,
+  verify-no-corruption, verify-rbac.sh, start-dev-fresh.sh, migration/schema.pg.prisma.
+- **One-offs → `archive/scripts/`** (46 unreferenced repro/probe/audit/round verifiers).
 - Several scripts hard-code `/home/z/my-project/...` (sandbox-only paths).
 
 ## 11. Definition of Done (agent.md §3)
 
 `npx tsc --noEmit` 0 errors · `npm run lint` 0 errors · battery + crewdesk + import +
 feature verifier green · full status-code set checked · docs + `worklog.md` updated ·
-canonical zip `download/tcms-postgresql.zip` refreshed.
+canonical zip refreshed (none at present — `download/` no longer exists; pending).
 
 ## 12. Known deviations / tech debt (noted, NOT yet fixed)
 
@@ -236,7 +242,7 @@ canonical zip `download/tcms-postgresql.zip` refreshed.
 10. CSV export formula-injection guard only in test-cases (not bugs/tasks); bugs CSV under-quotes.
 11. Lists capped at 200 silently (bugs board, picker `all-light` queries).
 12. Unused deps: `react-hook-form`, `z-ai-web-dev-sdk`; `db:push --accept-data-loss` script contradicts migrate-only policy.
-13. Stale docs: README quickstart says `prisma db push`; docs 02/13 describe pre-restructure schema; `api/route.ts` mentions keep-alive; comments mention old roles admin/team_lead.
+13. Stale docs: docs 02/13 describe pre-restructure schema; docs 12 §3–§4 historical (PG era); `api/route.ts` mentions keep-alive; comments mention old roles admin/team_lead.
 
 ## 13. Local machine state (Windows, checked 2026-10-15)
 
