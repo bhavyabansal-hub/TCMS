@@ -18,4 +18,4 @@ Fast orientation:
   plus the compiled `TCMS-ARCHITECTURE-GUIDE.pdf` and refactor reports.
 - **Engineering log:** `worklog.md` (append-only).
 - **Definition of done:** `agent.md` §3 — tsc 0 errors, eslint clean, verification
-  battery green, worklog appended, canonical zip refreshed.
+  battery green, worklog appended.

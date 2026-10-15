@@ -73,7 +73,7 @@ scripts/pg-sandbox/data/
 .z-ai-config
 .claude/settings.local.json
 *.zbak
-local-*
+/local-*
 dev.log
 
 # DB backups contain full user data — never commit

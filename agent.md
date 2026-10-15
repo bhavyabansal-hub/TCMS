@@ -37,7 +37,7 @@ PostgreSQL is retired (2026-10-14 migration) and kept READ-ONLY as rollback sour
    Cross-resource reads go through that resource's repository/service functions.
 5. **DRY** — shared logic is extracted to `src/lib/*`, never copy-pasted. Single
    sources of truth: domain types/enums → `src/types/index.ts`, row serialization →
-   `src/lib/serializers.ts`, JSONB reads → `parseJson()` (`src/lib/activity.ts`),
+   `src/lib/serializers.ts`, MySQL JSON reads → `parseJson()` (`src/lib/activity.ts`),
    client HTTP → `src/lib/client/api.ts`, download helper → `src/lib/client/download.ts`,
    CSV parsing → `src/lib/server/csv.ts`.
 6. **All DB queries are raw SQL** — every query runs through
@@ -179,8 +179,6 @@ A task is **not done** until all of these pass:
    including the no-permission and no-session cases.
 5. Docs updated when behavior changes (`docs/` + this file if conventions evolve) and
    `worklog.md` appended (append-only — never overwrite).
-6. Canonical zip: none at present (`download/` no longer exists; pending) — refresh it with every changed
-   file (the legacy `scripts/tcms-package/` mirror was removed 2026-10-14).
 
 ## 4. Task workflow
 

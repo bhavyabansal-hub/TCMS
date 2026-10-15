@@ -222,8 +222,7 @@ never `db push`): `20261015034822_init_mysql` (hand-edited collations + JSON def
 ## 11. Definition of Done (agent.md §3)
 
 `npx tsc --noEmit` 0 errors · `npm run lint` 0 errors · battery + crewdesk + import +
-feature verifier green · full status-code set checked · docs + `worklog.md` updated ·
-canonical zip refreshed (none at present — `download/` no longer exists; pending).
+feature verifier green · full status-code set checked · docs + `worklog.md` updated.
 
 ## 12. Known deviations / tech debt (noted, NOT yet fixed)
 
