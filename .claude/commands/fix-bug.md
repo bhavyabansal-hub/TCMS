@@ -13,10 +13,10 @@ Read first: `CLAUDE.md`, `agent.md`, `docs/process/WORKFLOW.md`,
    with exact steps, expected, actual and evidence. If it cannot be reproduced, stop and tell me.
 2. Call `manager` to set severity and the owning developer.
 3. Call the owning developer: reproduce, find the root cause (cite `path:line`), fix,
-   paste tsc/eslint/audit/suite output. If the fix changes behavior described in a BRD,
+   paste the Definition of Done in `agent.md` §3 output. If the fix changes behavior described in a BRD,
    stop and ask me first.
 4. Call `sdet` to add a regression test that fails before the fix and passes after,
-   then run the full regression.
+   then run the `agent.md` §3 suites.
 5. Call `tester` to re-test and close the bug file.
 6. Show me: root cause, fix, evidence, NOT VERIFIED list.
 

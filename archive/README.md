@@ -17,10 +17,10 @@ Definition of Done.
 
 | Item | Original location | Why |
 |---|---|---|
-| `postgres/scripts/*` (14), `postgres/scripts/migration/schema.pg.prisma`, `schema.prisma.pg-backup` | `scripts/` | PostgreSQL-era scripts and schema copies. **Rollback plan until production go-live — do not delete.** Never run them against MySQL. |
+| `postgres/scripts/*` (14), `postgres/scripts/migration/schema.pg.prisma`, `schema.prisma.pg-backup` | `scripts/` | PostgreSQL-era scripts and schema copies. **Rollback plan until 2 weeks after go-live (decision D1) — do not delete before then.** Never run them against MySQL. |
 | `postgres/prisma/cleanup-old-tables.sql` | `prisma/` | PG pre-restructure DROP script. |
 | `postgres/DEPLOYMENT-GUIDE.md`, `postgres/docs/DEPLOYMENT-GUIDE.md` | repo root, `docs/` | Historical Vercel + Neon/Supabase deployment guide (two versions). Current guide: `DEPLOYMENT.md`. |
-| `scripts/*` (45), `scripts/migration/add-status-column.mjs` | `scripts/` | One-off audits, repros, probes, cleanups and round-specific verifiers; no references in `package.json`, `src/`, other scripts or docs. |
+| `scripts/*` (44), `scripts/migration/add-status-column.mjs` | `scripts/` | One-off audits, repros, probes, cleanups and round-specific verifiers; no references in `package.json`, `src/`, other scripts or docs. (`audit-standards.mjs` was moved back to `scripts/` on 2026-10-15: the agent team uses it.) |
 | `src/components/views/dashboard.tsx` | same | Classic dashboard; never imported. Live view: `dashboard-v2.tsx`. |
 | `src/app/(app)/dashboard-preview/page.tsx` | same | `/dashboard-preview` side-by-side review route; the redesign is live at `/dashboard`. |
 | `REFACTORING-REPORT.md` | repo root | Older copy of `docs/REFACTORING-REPORT.md`. |

@@ -18,7 +18,7 @@ Then run, in order, stopping at every gate that fails:
    "Proceed to development?" Wait for my OK if the design touches the schema, auth,
    permissions, or deletes anything.
 2. **Development (phase 6).** `developer-backend`, then `developer-frontend`.
-   Each must paste tsc, eslint, standards audit and suite results. Small commits, message
+   Each must paste the Definition of Done in `agent.md` §3 results. Small commits, message
    starting with the REQ id. If a gate fails, send it back to the same developer once;
    if it fails again, stop and show me.
 3. **Testing (phase 7).** `sdet` (automated tests + full regression + standards review),

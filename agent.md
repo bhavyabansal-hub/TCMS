@@ -14,9 +14,13 @@ RBAC user management, notifications, full audit log.
 Zustand 5 · TanStack React Query 5 · Prisma 6 (client only — all queries are raw SQL) ·
 MySQL 8.4 (utf8mb4, strict mode, native JSON columns) · JWT auth (jsonwebtoken +
 bcryptjs) · zod validation · optional socket.io mini-service for realtime notifications.
-PostgreSQL is retired (2026-10-14 migration) and kept READ-ONLY as rollback source.
+PostgreSQL is retired (2026-10-14 migration) and kept READ-ONLY as rollback source
+until 2 weeks after go-live (`docs/process/decisions.md` D1).
 
-**Deep-dive documentation:** `docs/README.md` (study hub, docs 01–14 + PDF guide).
+**Deep-dive documentation:** `docs/README.md` (study hub, docs 01–18 + PDF guide).
+**Team workflow (6 agents):** roles in `.claude/agents/`, process in `docs/process/WORKFLOW.md`.
+This file is the single source of the project rules; `docs/process/coding-standards.md`
+holds the owner's original wording and points here.
 
 ---
 
@@ -56,8 +60,9 @@ PostgreSQL is retired (2026-10-14 migration) and kept READ-ONLY as rollback sour
 
    Dynamic fragments use `Prisma.sql` / `Prisma.join` (`IN (${Prisma.join(ids)})`).
    Search/filter uses `LIKE` (utf8mb4_unicode_ci collation makes it case-insensitive).
-   Every UPDATE sets `updated_at = NOW(3)` (Prisma's `@updatedAt` does not apply to
-   raw SQL). MySQL has no `RETURNING`: INSERT/UPDATE then SELECT by an app-side
+   Every raw-SQL write sets `created_at` / `updated_at` with `UTC_TIMESTAMP(3)` — never
+   `NOW()` (Prisma's `@updatedAt` does not apply to raw SQL; decision D7). No
+   `INSERT IGNORE`; duplicates use `ON DUPLICATE KEY UPDATE <pk> = <pk>`. MySQL has no `RETURNING`: INSERT/UPDATE then SELECT by an app-side
    uuid (`newId()` from `src/lib/server/id.ts`). Aggregates arrive as driver
    bigints — wrap in `Number()` at the repository boundary; booleans are
    TINYINT(1) 1/0 — normalize to real booleans where a consumer compares
@@ -164,21 +169,60 @@ PostgreSQL is retired (2026-10-14 migration) and kept READ-ONLY as rollback sour
   client's next list fetch (page load / socket reconnect / tab re-visible;
   there are NO polling timers). Never hard-depend on it.
 
-## 3. Definition of done (every task)
+## 2a. Routes, performance, logging, schema changes
 
-A task is **not done** until all of these pass:
+- **Routes and permissions.** Every page is a real App Router route under
+  `src/app/(app)/...` with its own URL. A page that needs a permission checks
+  `useAuthStore.can(action)` (or `canAny`) and renders `PermissionDenied`
+  (`src/components/shared/permission-denied.tsx`) without it — e.g.
+  `src/components/views/reports.tsx`. Its API service calls `ensurePermission`. The
+  sidebar shows a link only when the user holds the permission. The permission matrix
+  is `DEFAULT_PERMISSIONS` in `src/lib/permissions.ts` (+ `role_permissions` overrides);
+  new permissions go there and into the route → permission table in `docs/03`.
+- **Performance.** One Prisma client per process (`src/lib/db.ts` singleton); bounded
+  pool via `DATABASE_URL` (`connection_limit`, `pool_timeout`). Cache only read-heavy,
+  shareable data through `src/lib/server/cache.ts` (TTL, coalescing), invalidate on
+  write, never cache per-user secrets or failed loads. Lists are paginated with a
+  server-side cap; a new filter/sort column gets an index through a migration.
+- **Logs.** Use `src/lib/logger.ts` only (`logs/app-*.log`, `logs/error-*.log`). Log
+  business events with ids, never secrets or passwords. Every write is also recorded
+  through `logActivity`.
+- **Schema changes.** Edit `prisma/schema.prisma` **together with** a new migration in
+  `prisma/migrations/` (never one without the other); apply with
+  `npx prisma migrate deploy`, never `db push` (decision D4). Collation
+  `utf8mb4_unicode_ci`; `utf8mb4_bin` for secret columns; JSON defaults in the
+  migration SQL.
+
+## 3. Definition of done (every task) — the single source
+
+Every other file (CLAUDE.md, CODEBASE-MAP.md, docs/process/*, .claude/*) points here.
+
+**Must pass on the owner's Windows machine:**
 
 1. `npx tsc --noEmit` → 0 errors.
-2. `npm run lint` → 0 errors.
-3. Verification battery green (server running — `scripts/verify-battery.sh`
-   self-boots the MySQL sandbox stack):
-   `scripts/verify-battery.sh` (63) · `scripts/run-crewdesk-tests.sh` (5) ·
-   `scripts/verify-import.mjs` (33) · plus the feature-specific verifier
-   (e.g. `scripts/verify-permission-matrix.mjs`, 165).
-4. New/changed endpoints verified for the full status-code set (200/400/401/403/404)
-   including the no-permission and no-session cases.
-5. Docs updated when behavior changes (`docs/` + this file if conventions evolve) and
-   `worklog.md` appended (append-only — never overwrite).
+2. `npx eslint .` → 0 errors.
+3. `npm run build` → succeeds.
+4. `node scripts/verify-import.mjs` → 0 failed.
+5. `node scripts/verify-permissions.mjs` → 0 failed.
+6. `node scripts/verify-notifications.mjs` → 0 failed.
+7. `node scripts/verify-review-matrix.mjs` → 0 failed (once the suite is updated to
+   the current reviews rule — see `docs/qa/QA-CHECK-2026-10-15.md` bug 5).
+
+Paste the raw counts. The Linux-only suites (`scripts/*.sh`, the `*-test.mjs` infra
+verifiers that need `/tmp`, `ss` or a sandbox MySQL) are reported as
+**NOT RUN ON WINDOWS**; this does not block a release (porting them is backlog B11).
+Also run and paste `node scripts/audit-standards.mjs` (report only, not blocking).
+
+**And for every change:**
+
+- New/changed endpoints checked for the full status-code set (200/400/401/403/404),
+  including the no-permission and no-session cases.
+- New behavior covered by an automated test.
+- Route → permission table in `docs/` updated when routes or permissions change.
+- Docs updated when behavior changes (`docs/` + this file if conventions evolve).
+- `worklog.md` appended (append-only — never overwrite): what changed, evidence,
+  NOT VERIFIED list.
+- Root `CHANGELOG.md` updated for user-visible changes.
 
 ## 4. Task workflow
 
@@ -191,6 +235,10 @@ A task is **not done** until all of these pass:
    then the client call in `lib/client/api.ts`, then the view.
 4. **Verify** per §3, including a live browser pass when UI changed.
 5. **Log** the task in `worklog.md` (what/why/verification/results).
+6. **Commit** small, one logical change per commit. The message starts with the
+   requirement or bug id (`REQ-<NNN>`, `BUG-<NNN>`), or `MAINT:` for maintenance work
+   without one. Never rewrite history (no reset/rebase/amend/force-push; D9). Never push —
+   the owner pushes.
 
 ## 5. Known quirks (documented on purpose — do not "fix" silently)
 
@@ -202,4 +250,13 @@ A task is **not done** until all of these pass:
 - Platform files that look foreign are load-bearing: `start-dev.sh` + `.zscripts/*` +
   `Caddyfile` + `bun.lock` (bun runtime) + `vercel.json` (crons now empty; keep the
   file for the pipeline) belong to the deployment pipeline — do not delete or rename
-  them.
+  them. (`.zscripts/` is git-ignored and exists only on the pipeline host.)
+
+## 6. Environment rules (every session)
+
+- **Database:** only MySQL 8.4 at `127.0.0.1:5500`, schema `tcms_test`. **Never connect
+  to port 3306** (a different company server) or any other database.
+- **Windows:** the owner's machine is Windows 11 (`docs/LOCAL-SETUP-WINDOWS.md`). New
+  scripts use cross-platform Node (`fileURLToPath`, `path.join`); no `/tmp`, `/proc`,
+  `ss` or Linux-only shell. Existing `.sh` scripts are Linux-only.
+- **Secrets:** never read, print or edit `.env` values; never put passwords in docs or logs.

@@ -30,11 +30,13 @@ and regression suites that must stay green.
   `finally`, never touch real data, and print `PASS=n FAIL=n`.
 - Add fast checks to `scripts/verify-battery.sh` when safe; slow or disruptive tests stay
   separate and are listed in `07-test-report.md` with how to run them.
-- **Standards review**: run `node scripts/audit-standards.mjs` (if present) and read the diff
+- **Standards review**: run `node scripts/audit-standards.mjs` (report only, agent.md §3) and read the diff
   for: SQL outside repositories, business logic in controllers, missing validators,
   `NextResponse.json` outside helpers, routes without permission gates, duplicate helpers.
-  Every violation becomes a bug file (S2 by default).
-- Run the full regression (all suites) and paste raw counts in `07-test-report.md`.
+  Every confirmed violation becomes a bug file (S2 by default); check the audit's findings
+  are real first (its naming rule misreports Windows paths, backlog B12).
+- Run the `agent.md` §3 suites and paste raw counts in `07-test-report.md`; list the
+  Linux-only suites as NOT RUN ON WINDOWS.
 
 ## Allowed to edit
 `scripts/**` (tests and test helpers only), `docs/requirements/**` (your files, sections,

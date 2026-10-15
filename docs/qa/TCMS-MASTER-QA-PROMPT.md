@@ -18,7 +18,8 @@ then prove it.
 ## ENVIRONMENT
 
 - App: `http://localhost:3000` · health: `GET /api` → `{"status":"ok"}`
-- Restart: `pkill -f next-server; sleep 1; bash scripts/start-tcms.sh > /tmp/tcms-start.log 2>&1; sleep 6`
+- Start/restart (Windows): `npm run dev` — see `docs/LOCAL-SETUP-WINDOWS.md`. Never `pkill -f next-server`
+  (it kills the running dev server); database only at 127.0.0.1:5500 (never port 3306).
 - Admin: `admin@tcms.com / Admin@123` · login: `POST /api/auth?path=login`
 - Non-GET requests need `X-Requested-With: tcms` AND `Origin: http://localhost:3000` (CSRF funnel)
 - Roles: vp > manager > product > developer > qa_engineer > viewer
@@ -135,7 +136,7 @@ Never probe role-changes against real users (use a non-existent id → 404-allow
 
 - DB: counts, orphans (cases→modules, reviews→cases, notifications→users, authors exist),
   version>1 cases have history rows, override hygiene, import fidelity.
-- Logs: `logs/error-*.log` and `/tmp/next-prod.log` — no NEW errors during the run;
+- Logs: `logs/error-*.log` and `logs/app-*.log` (plus the dev server console) — no NEW errors during the run;
   no secrets anywhere in log lines.
 - Notifications: verdict + assignment + password-changed rows exist; none to
   deactivated users (except self security alerts); WS push works with tickets.

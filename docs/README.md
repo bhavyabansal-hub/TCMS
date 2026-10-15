@@ -35,6 +35,37 @@ project: every layer, every endpoint, every page and every file documented. Star
 | [`../DEPLOYMENT.md`](../DEPLOYMENT.md) | Current MySQL 8.4 deployment guide (sandbox + company IT cutover) |
 | [`deploy/reverse-proxy-websocket.md`](./deploy/reverse-proxy-websocket.md) | Reverse-proxy recipes (nginx / Apache / IIS) + firewall rules for the realtime socket service |
 
+## Team process (6-agent team)
+
+The roles are defined in `../.claude/agents/` (manager, product-owner, developer-backend,
+developer-frontend, tester, sdet) and started with the slash commands in `../.claude/commands/`.
+Project rules and the Definition of Done live only in [`../agent.md`](../agent.md).
+
+| File | What it is |
+|---|---|
+| [`process/HOW-TO-INSTALL.md`](./process/HOW-TO-INSTALL.md) | How the agent team was installed and how to start a requirement, fix a bug or run a retro |
+| [`process/WORKFLOW.md`](./process/WORKFLOW.md) | The binding team workflow: requirement folder, phases 0–11 with gates, ground rules, bug severity, stop conditions |
+| [`process/coding-standards.md`](./process/coding-standards.md) | The owner's coding standards in their original wording; points to `agent.md` for the concrete rules |
+| [`process/decisions.md`](./process/decisions.md) | Owner-approved decision log (D1–D9) that overrides older docs |
+| [`process/backlog.md`](./process/backlog.md) | Open work not yet in an approved requirement (B1–B12) |
+| [`process/lessons/README.md`](./process/lessons/README.md) | Format and rules for each role's lessons file |
+| [`process/lessons/manager.md`](./process/lessons/manager.md) | Lessons for the manager |
+| [`process/lessons/product-owner.md`](./process/lessons/product-owner.md) | Lessons for the product owner |
+| [`process/lessons/developer-backend.md`](./process/lessons/developer-backend.md) | Lessons for the backend developer |
+| [`process/lessons/developer-frontend.md`](./process/lessons/developer-frontend.md) | Lessons for the frontend developer |
+| [`process/lessons/tester.md`](./process/lessons/tester.md) | Lessons for the tester |
+| [`process/lessons/sdet.md`](./process/lessons/sdet.md) | Lessons for the SDET |
+| [`process/templates/kickoff.md`](./process/templates/kickoff.md) | Template: kickoff (phase 1) |
+| [`process/templates/brd.md`](./process/templates/brd.md) | Template: BRD (phase 2) |
+| [`process/templates/review.md`](./process/templates/review.md) | Template: BRD review meeting (phase 3) |
+| [`process/templates/design.md`](./process/templates/design.md) | Template: low-level design (phase 5) |
+| [`process/templates/test-plan.md`](./process/templates/test-plan.md) | Template: test plan (phase 5) |
+| [`process/templates/bug.md`](./process/templates/bug.md) | Template: bug report (phases 7–9) |
+| [`process/templates/release.md`](./process/templates/release.md) | Template: release review (phase 10) |
+| [`process/templates/retro.md`](./process/templates/retro.md) | Template: retrospective (phase 11) |
+
+Requirement folders are created under `requirements/REQ-<NNN>-<slug>/` by `/new-requirement`.
+
 ## Migration dossier (PostgreSQL → MySQL 8.4, 2026-10-14)
 
 | File | What it covers |
@@ -68,7 +99,7 @@ project: every layer, every endpoint, every page and every file documented. Star
 | File | What it is |
 |---|---|
 | [`../archive/postgres/docs/DEPLOYMENT-GUIDE.md`](../archive/postgres/docs/DEPLOYMENT-GUIDE.md) | **HISTORICAL** — the old Vercel + Neon/Supabase (PostgreSQL) deployment path; do not follow |
-| [`../archive/README.md`](../archive/README.md) | What was moved to `archive/` and why (PG-era scripts in `archive/postgres/` are the rollback plan until go-live) |
+| [`../archive/README.md`](../archive/README.md) | What was moved to `archive/` and why (PG-era scripts in `archive/postgres/` are the rollback plan until 2 weeks after go-live) |
 
 ## Where do the coding standards live?
 

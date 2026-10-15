@@ -11,7 +11,7 @@ Tailwind v4 + shadcn/ui · Zustand 5 · TanStack React Query 5 · Prisma 6 (clie
 **raw SQL everywhere**) · **MySQL 8.4** (utf8mb4_unicode_ci, strict, UTC, native JSON) ·
 JWT in httpOnly cookies · zod 4 · socket.io mini-service for realtime.
 PostgreSQL retired 2026-10-14 (kept read-only as rollback source; PG-era scripts live in
-`archive/postgres/` until after go-live). Production cutover is **pending IT answers**
+`archive/postgres/` until 2 weeks after go-live, decision D1). Production cutover is **pending IT answers**
 (IT request file: to be recreated (pending); plan in `docs/migration/04-cutover-rollback.md`).
 
 ## 2. Top-level layout
@@ -19,15 +19,19 @@ PostgreSQL retired 2026-10-14 (kept read-only as rollback source; PG-era scripts
 ```
 agent.md            binding coding standards + Definition of Done   (READ FIRST)
 CLAUDE.md           pointer to agent.md + this file
+.claude/            agents/ (6 team roles), commands/ (/new-requirement, /build-requirement,
+                    /fix-bug, /retro), settings.json (project permission deny/ask rules)
 worklog.md          append-only engineering log (never overwrite)
 docs/               README.md index, 01–18 guides, LOCAL-SETUP-WINDOWS.md, migration/ (PG→MySQL
-                    dossier), deploy/, qa/, PDF guide, refactor reports, CHANGELOG
+                    dossier), deploy/, qa/, process/ (team workflow, decisions, backlog,
+                    lessons, templates), requirements/ (created per REQ), PDF guide,
+                    refactor reports, CHANGELOG
 prisma/             schema.prisma (mysql) + migrations/ (the ONLY DDL path)
 src/                application (see §3–§8)
 mini-services/      notifications (socket.io WS relay), crewdesk-mock (test double)
 scripts/            ~50 boot/verify/backup/migration scripts (see §10)
 archive/            moved-out files (see archive/README.md): postgres/ = PG-era scripts +
-                    schemas + old deploy guide (rollback plan until go-live); scripts/ =
+                    schemas + old deploy guide (rollback plan until 2 weeks after go-live); scripts/ =
                     one-off probes/repros; src/ = classic dashboard + /dashboard-preview
 README.md DEPLOYMENT.md CHANGELOG.md   root docs (deploy guide = MySQL 8.4)
 .zscripts/ (git-ignored) start-dev.sh Caddyfile bun.lock vercel.json   LOAD-BEARING pipeline files — never delete
@@ -204,25 +208,25 @@ never `db push`): `20261015034822_init_mysql` (hand-edited collations + JSON def
 
 - **Sandbox boot (Linux):** `start-tcms.sh`, `mysql-env.sh`, `dev-tcms.mjs` (`npm run dev`),
   `boot-tcms-autostart.sh`, `migration/mysql84-boot.sh` (MySQL 8.4.6 on :5500).
-- **DoD suites:** `verify-battery.sh` (67), `run-crewdesk-tests.sh` (5 phases),
-  `verify-import.mjs` (33), feature verifiers (`verify-permission-matrix.mjs`,
+- **DoD suites:** see agent.md §3 (Windows: verify-import, verify-permissions,
+  verify-notifications, verify-review-matrix). Linux-only: `verify-battery.sh`,
+  `run-crewdesk-tests.sh` (5 phases). `audit-standards.mjs` (report only). Other feature verifiers (`verify-permission-matrix.mjs`,
   `verify-review-matrix.mjs`, `verify-permissions.mjs`, `verify-notifications.mjs`, `verify-wiki.mjs`…).
 - **Infra verifiers:** `startup-guard-test.mjs` (17), `db-settings-guard-test.mjs` (11),
   `mysql-baseline-test.mjs` (19), `mysql-correctness-test.mjs` (15), `backup-test.mjs` (26),
   `backup-app-staleness-test.mjs` (10), `ws-auth-probe.mjs` (10), `ws-reconnect-test.mjs` (5).
 - **Backups:** `backup-db-mysql.sh`, `backup-scheduler.mjs` (02:30 UTC, 14 kept), `restore-mysql.sh`.
 - **Migration one-offs:** `migration/migrate-pg-to-mysql.mjs`, `convert-schema-mysql.cjs`.
-- **PG-era → `archive/postgres/scripts/`** (keep until after go-live, never run on MySQL):
+- **PG-era → `archive/postgres/scripts/`** (keep until 2 weeks after go-live, never run on MySQL):
   backup-db, restore-db, apply-indexes, add-load-indexes, migrate-rbac, db-qa-checks,
   supabase-check, probe-rbac-state, check-tables, cleanup-probe-data, validate-db-setup,
   verify-no-corruption, verify-rbac.sh, start-dev-fresh.sh, migration/schema.pg.prisma.
-- **One-offs → `archive/scripts/`** (46 unreferenced repro/probe/audit/round verifiers).
+- **One-offs → `archive/scripts/`** (45 unreferenced repro/probe/audit/round verifiers).
 - Several scripts hard-code `/home/z/my-project/...` (sandbox-only paths).
 
 ## 11. Definition of Done (agent.md §3)
 
-`npx tsc --noEmit` 0 errors · `npm run lint` 0 errors · battery + crewdesk + import +
-feature verifier green · full status-code set checked · docs + `worklog.md` updated.
+See agent.md §3 — the single source (not repeated here).
 
 ## 12. Known deviations / tech debt (noted, NOT yet fixed)
 

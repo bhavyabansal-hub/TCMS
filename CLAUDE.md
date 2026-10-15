@@ -17,5 +17,6 @@ Fast orientation:
   CSV import, standards, scaling, runbook, Crew Desk) + `docs/migration/` (PG→MySQL)
   plus the compiled `TCMS-ARCHITECTURE-GUIDE.pdf` and refactor reports.
 - **Engineering log:** `worklog.md` (append-only).
-- **Definition of done:** `agent.md` §3 — tsc 0 errors, eslint clean, verification
-  battery green, worklog appended.
+- **Definition of done:** `agent.md` §3 (the single source — not repeated here).
+- **Environment:** `agent.md` §6 — MySQL only at 127.0.0.1:5500 (never port 3306), Windows.
+- **Agent team:** 6 roles in `.claude/agents/`, workflow in `docs/process/WORKFLOW.md`.

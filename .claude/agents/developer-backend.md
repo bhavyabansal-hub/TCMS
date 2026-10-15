@@ -29,11 +29,11 @@ Map every item to an acceptance criterion id.
 - Only after `03-review.md` contains the owner's "APPROVED".
 - One controller action = one validator + one service function.
 - Raw parameterized SQL only (`$queryRaw` / `$executeRaw` tagged templates).
-- Schema change = new migration file; never `prisma db push` against shared databases.
+- Schema change = edit `prisma/schema.prisma` together with a new migration in
+  `prisma/migrations/` (agent.md §2a); never `prisma db push`.
 - Use the existing singleton `db`, `logger`, `cache`, `ApiError`, `withApi`, `ok`, `paginate`.
-- Before finishing run and paste raw output:
-  `npx tsc --noEmit`, `npx eslint .`, `node scripts/audit-standards.mjs` (if present),
-  and `bash scripts/verify-battery.sh` plus any suite touching your area.
+- Before finishing run the Definition of Done in `agent.md` §3 and paste the raw output, plus any other suite
+  touching your area.
 - Write `06-dev-report.md`: files changed, how each acceptance criterion is met, evidence, NOT VERIFIED.
 
 ## Phase 9 — Bug fixes
@@ -41,7 +41,8 @@ Reproduce first (paste the failing output), fix the root cause, add or update a 
 sdet, re-run suites, write the fix notes in the bug file.
 
 ## Allowed to edit
-`src/app/api/**`, `src/lib/**`, `src/types/**`, `prisma/**` (new migrations only),
+`src/app/api/**`, `src/lib/**`, `src/types/**`, `prisma/migrations/**` (new files only),
+`prisma/schema.prisma` (only together with a new migration),
 `docs/requirements/**` (your sections), `docs/` reference pages for the API you changed,
 `worklog.md` (append only), `docs/process/lessons/developer-backend.md`.
 Frontend files only after agreeing with developer-frontend in the design doc.

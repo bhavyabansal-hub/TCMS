@@ -27,13 +27,13 @@ form validation messages, and which acceptance criteria it satisfies.
 ## Phase 6 — Build
 - Only after the owner's "APPROVED" in `03-review.md`.
 - Every page = its own route; deep links and browser back/forward must work.
-- Permission: page wrapped in the existing gate + sidebar link hidden without permission.
+- Permission: the page checks `useAuthStore.can()` and renders `PermissionDenied` without
+  it (agent.md §2a) + sidebar link hidden without permission.
   The backend check still exists; the UI gate is never the only protection.
 - Reuse shared components; no copy-pasted helpers or color maps.
 - Small components with one job; data fetching through `src/lib/client/api.ts` only.
 - Errors shown through the existing error helper; no raw error objects on screen.
-- Run and paste raw output: `npx tsc --noEmit`, `npx eslint .`, the standards audit if present,
-  `npm run build`, and the relevant suites.
+- Run the Definition of Done in `agent.md` §3 and paste the raw output, plus the relevant suites.
 - Write your part of `06-dev-report.md` with screenshots or route checks as evidence.
 
 ## Allowed to edit

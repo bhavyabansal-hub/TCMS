@@ -20,8 +20,8 @@ Every agent reads this file, `docs/process/coding-standards.md`, `CLAUDE.md`,
 - Agents keep **no memory between runs**. Everything they need lives in files:
   the requirement folder, `worklog.md`, `docs/process/decisions.md` and
   `docs/process/lessons/`. If it is not written down, it did not happen.
-- Commands: `/new-requirement <title>`, `/fix-bug <BUG-ID or description>`,
-  `/retro <REQ-ID>` (see `.claude/commands/`).
+- Commands: `/new-requirement <title>`, `/build-requirement <REQ-ID>`,
+  `/fix-bug <BUG-ID or description>`, `/retro <REQ-ID>` (see `.claude/commands/`).
 
 ## 2. Requirement folder
 
@@ -53,10 +53,10 @@ Templates: `docs/process/templates/`.
 | 3 | BRD review meeting | all six | Each role wrote APPROVE or CHANGES with reasons; manager resolved every CHANGES |
 | 4 | **Owner approval** | human owner | Owner writes "APPROVED" in `03-review.md`. **No code before this.** |
 | 5 | Design (LLD) + test plan | developers, tester, sdet | Design maps every BRD item to files/layers; test plan maps every acceptance criterion to a test |
-| 6 | Development | developers | Standards audit 0 violations, tsc 0, eslint 0, all existing suites green |
-| 7 | Testing | tester + sdet | Every acceptance criterion tested; new automated tests added; full regression green |
+| 6 | Development | developers | Definition of Done in `agent.md` §3 passes (raw output pasted) |
+| 7 | Testing | tester + sdet | Every acceptance criterion tested; new automated tests added; `agent.md` §3 suites green |
 | 8 | UAT | product-owner | Every acceptance criterion marked PASS with evidence |
-| 9 | Bug loop | all | No open S1/S2 bugs; every fix re-tested; regression green again |
+| 9 | Bug loop | all | No open S1/S2 bugs; every fix re-tested; `agent.md` §3 suites green again |
 | 10 | Release review | manager → owner | Every gate PASS with evidence; owner says "RELEASE" |
 | 11 | Retrospective | all | Lessons written; proposed process edits listed for owner approval |
 
@@ -77,17 +77,12 @@ Templates: `docs/process/templates/`.
 7. Each agent edits only the paths its agent file allows.
 
 ### Code and data safety
-8. Coding standards (`coding-standards.md`) are mandatory. A deviation needs the
-   owner's written approval in `docs/process/decisions.md`.
-9. Never: rewrite git history (no reset/rebase/amend/force-push), delete data,
-   drop tables, edit `.env` secrets, or touch production. Ask first.
+8. Coding standards (`agent.md`; owner's wording in `coding-standards.md`) are mandatory.
+   A deviation needs the owner's written approval in `docs/process/decisions.md`.
+9. Never delete data, drop tables, edit `.env` secrets or touch production. Ask first.
 10. Never print secrets, passwords or tokens in docs, logs or output.
-11. Schema changes only through new `prisma/migrations/` files (`migrate deploy`), never `db push`.
-12. One small, reviewable commit per logical change, message starts with the REQ or BUG id.
-12a. Database: only MySQL 8.4 at `127.0.0.1:5500`, schema `tcms_test`. **Never connect to port 3306**
-    or any company database. Never `git push` — the owner pushes.
-12b. The owner's machine is Windows: use cross-platform Node code (`fileURLToPath`, `path.join`),
-    no `/tmp` or `/proc`. Sandbox `.sh` scripts are Linux-only.
+11. Schema changes, commits and git history: `agent.md` §2a and §4 (step 6).
+12. Database, Windows and secrets rules: `agent.md` §6 (port 5500 only, never 3306).
 
 ### Communication
 13. Every agent ends its run with the STATUS block from its agent file.
