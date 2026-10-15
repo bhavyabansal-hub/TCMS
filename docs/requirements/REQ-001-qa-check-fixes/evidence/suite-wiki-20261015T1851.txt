@@ -1,0 +1,100 @@
+STAMP=1792090273053
+MANIFEST=C:\Users\sgass\AppData\Local\Temp\tcms-verify\wiki-1792090273053.json
+GUARD @@port=5500 DATABASE()=tcms_test urlTargetOk=true
+LOCK tcms_verify acquired
+
+== 1. CREATE (create_wiki_doc) ==
+  ok  VP (matrix holder) creates written doc
+  ok  QA (default holder) creates written doc
+  ok  developer (no create_wiki_doc) create -> 403 (must be 403)
+  ok  viewer (no permissions at all) create -> 403 (must be 403)
+  ok  viewer cannot create (got 400 — validation/permission both block)
+
+== 2. READ (all authenticated users) ==
+  ok  viewer can list the wiki (3 docs)
+  ok  viewer can read a single document
+  ok  written content comes back intact
+  ok  file bytes never leak into JSON responses
+  ok  unknown id -> 404 (must be 404)
+
+== 3. EDIT (edit_own vs edit_any) ==
+  ok  QA edits OWN doc (edit_own_wiki_doc)
+  ok  QA edits VP's doc (no edit_any) -> 403 (must be 403)
+  ok  Manager edits ANY doc (edit_any_wiki_doc)
+  ok  Product edits someone else's doc (no edit_any) -> 403 (must be 403)
+  ok  Developer edit -> 403 (must be 403)
+
+== 4. DELETE (author OR delete_wiki_doc — same rule as test cases) ==
+  ok  Author deletes OWN doc (no delete_wiki_doc needed)
+  ok  QA deletes VP's doc -> 403 (must be 403)
+  ok  Manager deletes ANY doc (delete_wiki_doc holder)
+  ok  second delete of same doc -> 404 (must be 404)
+  ok  Developer delete -> 403 (must be 403)
+
+== 5. UPLOAD + DOWNLOAD (bytes round-trip) ==
+  ok  QA uploads a text file -> 200
+  ok  file meta stored (notes.txt, 28B)
+  ok  viewer downloads the file (read is open to all authenticated)
+  ok  downloaded bytes match the upload exactly
+  ok  Content-Disposition is attachment (download-only)
+  ok  cross-site upload (unmatched Origin, no marker) -> 403 (must be 403)
+  ok  author replaces the file -> 200
+  ok  downloaded bytes after replace are the new file
+  ok  developer upload -> 403 (must be 403)
+  ok  manager (edit_any) replaces someone else's file -> 200
+
+== 6. VALIDATION & SANITIZATION ==
+  ok  empty title -> 400 (must be 400)
+  ok  written doc without content is allowed (created empty)
+  ok  script tags stripped server-side
+  ok  inline event handlers stripped server-side
+  ok  javascript: URLs neutralized server-side
+  ok  disallowed extension (.exe) -> 400 (must be 400)
+  ok  oversize file (>10MB) -> 400 (must be 400)
+
+== 7. LIST FILTERS & SEARCH ==
+  ok  search finds by title
+  ok  search endpoint answers for content too
+  ok  kind=written filter works
+  ok  kind=file filter works
+  ok  tag filter works
+  ok  global search surfaces wiki documents
+
+== 8. RUNTIME MATRIX TOGGLE (VP can grant/revoke live) ==
+  ok  grant developer/create_wiki_doc via PUT /api/permissions as fixture VP -> 200 (must be 200)
+  ok  grant developer/delete_wiki_doc via PUT /api/permissions as fixture VP -> 200 (must be 200)
+  ok  developer creates after matrix grant (runtime toggle works)
+  ok  developer deletes after delete_wiki_doc grant (not author, matrix-driven)
+  ok  revoke developer/create_wiki_doc via PUT (default-restore) -> 200 (must be 200)
+  ok  revoke developer/delete_wiki_doc via PUT (default-restore) -> 200 (must be 200)
+  ok  create blocked again after revoke -> 403 (must be 403)
+
+== 9. CLEANUP (API) ==
+  ok  all fixture documents removed (5/5)
+  ok  wiki clean after cleanup
+
+== CLEANUP (SQL, keyed on fixture ids) ==
+      fixture users found=6 wiki docs=2
+      wiki_documents by fixture author_id: 2 deleted of 2 listed
+  ok  cleanup: wiki_documents by fixture author_id
+      role_permissions touched cells: 0 fixture row(s) deleted
+  ok  cleanup: role_permissions touched cells
+  ok  matrix: touched cells equal the pre-run GET snapshot
+  ok  matrix: untouched cells unchanged
+      activity_logs by fixture user_id: 32 deleted
+  ok  cleanup: activity_logs by fixture user_id
+      login_attempts by fixture email: 0 deleted
+  ok  cleanup: login_attempts by fixture email
+      users by fixture id: 6 deleted
+  ok  cleanup: users by fixture id
+
+== RESIDUE (by stamp e-mails and fixture ids) ==
+  ok  residue: users=0
+  ok  residue: wiki_documents=0
+  ok  residue: activity_logs=0
+  ok  residue: notifications=0
+  ok  residue: refresh_tokens=0
+
+PASS=64 FAIL=0
+RESULT: ALL WIKI API CHECKS GREEN
+exit=0

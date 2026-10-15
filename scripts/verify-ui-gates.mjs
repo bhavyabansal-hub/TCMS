@@ -85,7 +85,8 @@ async function login(account) {
   if (res.status !== 200) throw new Error(`login failed for role ${account.role} (${res.status})`)
   const cookies = (res.headers.getSetCookie?.() ?? []).map(parseSetCookie)
   if (!cookies.some((c) => c.name === 'tcms-access')) throw new Error(`login for role ${account.role} set no tcms-access cookie`)
-  return cookies
+  const { user } = await res.json()
+  return { cookies, user }
 }
 
 function parseSetCookie(header) {
@@ -157,7 +158,7 @@ class Cdp {
 
 /** One isolated tab (own browser context) with network capture. */
 class RolePage {
-  static async open(cdp, cookies) {
+  static async open(cdp, { cookies, user }) {
     const page = new RolePage()
     page.cdp = cdp
     page.requests = []
@@ -181,6 +182,12 @@ class RolePage {
     for (const c of cookies) {
       await page.send('Network.setCookie', { name: c.name, value: c.value, url: BASE, path: c.path, httpOnly: c.httpOnly, sameSite: 'Lax' })
     }
+    // The client AuthGate treats a browser without the `tcms-user` display profile as signed
+    // out (src/store/index.ts initialize), so the cookies alone land on /login. Seed it the way
+    // a real login does (saveUser in src/lib/client/api.ts) before any app script runs.
+    await page.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `try { localStorage.setItem('tcms-user', ${JSON.stringify(JSON.stringify(user))}) } catch {}`,
+    })
     return page
   }
   send(method, params) {
@@ -525,7 +532,8 @@ async function main() {
     console.log(`NOT RUN: demo account(s) not found in seed.service.ts: ${missing.join(', ')}`)
     return 2
   }
-  const vpCookies = await login(accounts.vp)
+  const vpSession = await login(accounts.vp)
+  const vpCookies = vpSession.cookies
   const pre = await readMatrixDefaultState(vpCookies)
   if (!pre.ok) {
     console.log(`PRECONDITION: permission matrix is not all default (${pre.detail})`)
@@ -557,8 +565,8 @@ async function main() {
     cdp = await Cdp.connect(launched.wsUrl)
     for (const role of ROLES) {
       console.log(`\n=== ${role} ===`)
-      const cookies = role === 'vp' ? vpCookies : await login(accounts[role])
-      const page = await RolePage.open(cdp, cookies)
+      const session = role === 'vp' ? vpSession : await login(accounts[role])
+      const page = await RolePage.open(cdp, session)
       try {
         await checkDashboard(page, role)
         if (role === 'vp') await checkVpPositive(page, tc)
@@ -579,7 +587,7 @@ async function main() {
     check(interrupted ? 'INTERRUPTED (SIGINT)' : `run aborted: ${err.message}`, false)
   } finally {
     await shutdownChrome(cdp, child)
-    const end = await readMatrixDefaultState(await login(accounts.vp)).catch((e) => ({ ok: false, detail: e.message }))
+    const end = await readMatrixDefaultState((await login(accounts.vp)).cookies).catch((e) => ({ ok: false, detail: e.message }))
     check('harness: matrix still 126 default at the end', end.ok, end.detail)
     process.removeListener('SIGINT', onSigint)
   }

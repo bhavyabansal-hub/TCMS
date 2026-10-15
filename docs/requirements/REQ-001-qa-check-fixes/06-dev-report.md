@@ -79,6 +79,28 @@ PUT CSRF, no session:
 - The R11.AC4 **control run before the fix** (test plan A4: expect `32 passed, 1 failed`): this commit puts the gate on the live tree, so the sdet must run the control against a pre-fix checkout (the commit before this one) or record it as NOT VERIFIED.
 - `npm run build` and DoD suites 4–7: phase 7 by sdet.
 
+### SQL review (phase 6)
+
+Read-only review of the sdet scripts against design 2.2 (R9) and 2.3 (R6/R7). Nothing run, nothing edited. Evidence I used: `evidence/r9-dryrun-1.txt`.
+
+**Verdict: PASS. No blocking defects.** Per check:
+- Parameterized only: PASS. All values go through tagged `$queryRaw`/`$executeRaw` or `Prisma.join`. `Prisma.raw` is only used for constant column names (`sqlIn`, `db-guard.mjs:127-130`) and the constant SELECT heads in `ROOT_LOCK_SQL` (`cleanup-req001-testdata.mjs:135-141`). LIKE patterns are literals or bound parameters.
+- DB guard: PASS. The URL is checked in-process before any `PrismaClient` exists (`db-guard.mjs:61-66`). Then `@@port`/`DATABASE()` is the first statement (`:85`), then `GET_LOCK` (`:100`), with `connection_limit=1`. All three scripts call `openGuardedDb()` before any SQL.
+- ID-scoped deletes: PASS. R9 deletes only by PKs from the approved file. Suites delete only by fixture ids or collected entity ids. No LIKE in any DELETE.
+- FK order: PASS. R9 goes notifications → crew_desk_links → bugs → test_cases → wiki → task_reports → modules (`cleanup-req001-testdata.mjs:162-168`). Matrix suite goes notifications → bugs → cases → participant reviews → wiki → modules (with a SET NULL dependents guard) → cells → activity_logs → login_attempts → users. Wiki suite goes docs → cells → activity_logs → users. In both suites activity_logs are deleted before users.
+- R9 transaction: PASS. It locks the roots with `FOR UPDATE`, rebuilds the children and orphans from the approved parent ids, and compares the PK sets. If they differ it rolls back. After the deletes it checks the affected-row counts and that residue is 0, and rolls back if not. `innodb_lock_wait_timeout=5`.
+- No UPDATE and no activity_logs/users/role_permissions/refresh_tokens in R9: PASS (only `FOR UPDATE`).
+- `--delete` without `--approved` exits 2, and `--approved` without `--delete` exits 2 (`:257-264`).
+- Permission restore: PASS. The precondition is checked by SQL (matrix suite: 0 rows; wiki suite: its 2 cells). The restore deletes a touched cell's row only if `updated_by_id` is a fixture (`suite-data.mjs:175-189`). It never writes other cells, and it compares against the pre-run snapshot.
+
+**Findings (not blocking; fix or accept before phase 10):**
+1. MEDIUM, owner action, data. Group B also selects `task_reports` `c74e9549-8445-4b92-a82e-fdcd84d99d7c` ("Wrote test cases for login flow", notes about Safari). That is seed/demo content, not QA-check text. It matches only because `DATE(report_date) = 2026-10-15` (`r9-candidates.mjs:37`), and the template puts it in `tables.task_reports` by default (`cleanup-req001-testdata.mjs:111`). The owner must strike it from the approved file. Optional sdet fix: mark B rows whose `tasks`/`notes` contain no `QACHECK` as `B-NO-QACHECK` in the dry-run output.
+2. LOW, fail-safe. If one approved module root is nested inside another, the subtree rows are pushed once per root, and `submodules` is not de-duplicated (`r9-candidates.mjs:86-90`). The delete run would then fail `sameSet` or the affected-row count and roll back (a false block, no data risk). Not triggered by the current data (1 root, 0 submodules). Fix: `uniq` the subtree by pk before filtering.
+3. LOW, fail-safe. `sameSet` (`cleanup-req001-testdata.mjs:131`) can return true when the second list has duplicates. Today only `submodules` can carry duplicates (see 2). Fix: compare `new Set(b).size` as well.
+4. INFO. The PKs in the approved file are not checked for UUID shape (`readApproved`, `:123-129`). There is no injection risk because the values are bound parameters. A shape check would catch a hand-edit typo before the transaction starts.
+5. INFO, owner decision (design 2.2 Group D). The dry run flags `D-EMPTY` for module review `11ceea3a-…`: groups C and D together remove all 4 of its case reviews.
+6. INFO. If the owner strikes a root (for example `fc2f0e2f` in group B), its listed children (3 `task_report` notifications) must be struck too. Otherwise the re-check fails and rolls back, which is intended.
+
 ## 2. R8 — audit evidence (R8.AC4)
 
 Raw contents of `evidence/r8-audit-after.txt` (captured with the R8 fix, commit 848bcc1, before any `src/` edit):

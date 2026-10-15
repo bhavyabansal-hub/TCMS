@@ -205,8 +205,7 @@ Every other file (CLAUDE.md, CODEBASE-MAP.md, docs/process/*, .claude/*) points 
 4. `node scripts/verify-import.mjs` → 0 failed.
 5. `node scripts/verify-permissions.mjs` → 0 failed.
 6. `node scripts/verify-notifications.mjs` → 0 failed.
-7. `node scripts/verify-review-matrix.mjs` → 0 failed (once the suite is updated to
-   the current reviews rule — see `docs/qa/QA-CHECK-2026-10-15.md` bug 5).
+7. `node scripts/verify-review-matrix.mjs` → `36 passed, 0 failed`.
 
 Paste the raw counts. The Linux-only suites (`scripts/*.sh`, the `*-test.mjs` infra
 verifiers that need `/tmp`, `ss` or a sandbox MySQL) are reported as

@@ -1,0 +1,12 @@
+GUARD @@port=5500 DATABASE()=tcms_test urlTargetOk=true
+LOCK tcms_verify acquired
+CHECK suite=wiki stamp=1792090273053 manifest=C:\Users\sgass\AppData\Local\Temp\tcms-verify\wiki-1792090273053.json
+RESIDUE users=0
+RESIDUE wiki_documents=0
+RESIDUE activity_logs=0
+RESIDUE notifications=0
+RESIDUE refresh_tokens=0
+RESIDUE login_attempts=0
+RESIDUE role_permissions=0
+RESIDUE TOTAL=0
+exit=0

@@ -1,0 +1,4 @@
+R11 live proof, 2026-10-16, http://localhost:3000, body {} (valid partial body), report fc2f0e2f (qa1, QACHECK, R9 cleanup row)
+viewer@tcms.com    PUT ?id=fc2f0e2f -> {"error":"Insufficient role"}   HTTP 403
+qa1@tcms.com       PUT ?id=fc2f0e2f -> {"taskReportId":"fc2f0e2f-...",...}   HTTP 200   (owner)
+admin@tcms.com     PUT ?id=fc2f0e2f -> {"error":"You can only edit your own reports"}   HTTP 403   (non-owner)

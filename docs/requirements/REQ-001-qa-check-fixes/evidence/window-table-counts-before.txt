@@ -1,0 +1,20 @@
+GUARD @@port=5500 DATABASE()=tcms_test urlTargetOk=true
+LOCK tcms_verify acquired
+CHECK table-counts
+COUNT users=8
+COUNT refresh_tokens=74
+COUNT modules=10
+COUNT role_permissions=0
+COUNT login_attempts=2
+COUNT test_cases=13
+COUNT test_case_history=0
+COUNT module_review_requests=2
+COUNT review_requests=7
+COUNT review_events=0
+COUNT bugs=6
+COUNT bug_test_case_links=0
+COUNT task_reports=3
+COUNT notifications=8
+COUNT activity_logs=90
+COUNT crew_desk_links=0
+COUNT wiki_documents=1

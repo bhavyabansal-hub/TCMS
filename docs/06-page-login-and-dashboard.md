@@ -71,9 +71,9 @@ same dashboard shows different numbers to different roles.
 
 ### Screen anatomy (top → bottom)
 
-1. **Greeting header** — `Welcome back, {first name} 👋` from the auth store, with two
-   quick actions on the right: **"New Test Case"** → `navigate('test-cases')` and
-   **"Report Bug"** → `navigate('bugs')`.
+1. **Greeting header** — `Welcome back, {first name} 👋` from the auth store, with up to three
+   buttons on the right, each shown only with its permission: **"New Test Case"** (`create_test_case`),
+   **"Report Bug"** (`create_bug`), **"Reports"** (`view_all_task_reports`). Quick Actions tiles use the same gates, plus Reviews (`perform_review`); Tasks and Modules show for everyone.
 2. **Four KPI cards** (clickable, each navigates):
 
    | Card | Value source | Navigates to |
@@ -90,8 +90,8 @@ same dashboard shows different numbers to different roles.
    - *Open Bugs by Severity* — horizontal `BarChart` over `severityBreakdown`.
      Colors: critical `#dc2626`, high `#ea580c`, medium `#f59e0b`, low `#0ea5e9`.
 4. **Recent Activity feed** — last 10 `ActivityLog` rows (action badge, actor avatar,
-   entity name, `timeAgo`); **"View all"** → `navigate('activity-log')` (menu item itself
-   is lead/admin only, but the dashboard feed renders for everyone).
+   entity name, `timeAgo`); **"View all"** → `navigate('activity-log')` shows only with
+   `view_activity_logs`; the feed renders for everyone. The "My Pending Reviews" KPI card navigates only with `perform_review`.
 
 ### States & permissions
 - Loading: skeleton grid (`StateLoadingCards`).

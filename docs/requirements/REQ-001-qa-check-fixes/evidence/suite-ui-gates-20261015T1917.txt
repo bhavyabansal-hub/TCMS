@@ -1,0 +1,40 @@
+STAMP=1792091861213
+PROFILE=C:\Users\sgass\AppData\Local\Temp\tcms-ui-gates-1792091861213
+CASE 9595f8e2-94cc-492f-bffb-47b8ae62a45d
+
+=== vp ===
+      dashboard vp: page not ready (path=/login); the checks below fail
+FAIL  R2 vp: header "New Test Case" present  (buttons=[])
+FAIL  R2 vp: header "Report Bug" present  (buttons=[])
+FAIL  R2 vp: header "Reports" present  (buttons=[])
+FAIL  R2 vp: quick action "New Test Case" present  (tiles=[])
+FAIL  R2 vp: quick action "Report Bug" present  (tiles=[])
+FAIL  R2 vp: quick action "Reviews" present  (tiles=[])
+FAIL  R2 vp: quick action "Tasks" present  (tiles=[])
+FAIL  R2 vp: quick action "Modules" present  (tiles=[])
+FAIL  R2 vp: quick action "Reports" present  (tiles=[])
+FAIL  R2 vp: quick action tile count = 6  (got 0)
+FAIL  R2.AC8 vp: Latest Activity "View all" present  (viewAll=false)
+FAIL  R2.AC6 vp: KPI card is a <button>  (null)
+FAIL  R2.AC6 vp: KPI click opens /reviews  (path=/login)
+FAIL  R3.AC2 vp: activity-entity request -> 200  (not sent)
+FAIL  R3.AC3 vp: Activity card rendered
+FAIL  R3.AC2 vp: Crew Desk config -> 200  (not sent)
+FAIL  R3.AC2 vp: Crew Desk links -> 200  (not sent)
+FAIL  R3.AC2 vp: Crew Desk email-check -> 200 or 502 not configured  (not sent)
+FAIL  R3.AC2 vp: activity feed -> 200  (not sent)
+
+=== manager ===
+      dashboard manager: page not ready (path=/login); the checks below fail
+FAIL  R2 manager: header "New Test Case" present  (buttons=[])
+FAIL  R2 manager: header "Report Bug" present  (buttons=[])
+FAIL  R2 manager: header "Reports" present  (buttons=[])
+FAIL  R2 manager: quick action "New Test Case" present  (tiles=[])
+FAIL  R2 manager: quick action "Report Bug" present  (tiles=[])
+FAIL  R2 manager: quick action "Reviews" present  (tiles=[])
+FAIL  R2 manager: quick action "Tasks" present  (tiles=[])
+FAIL  R2 manager: quick action "Modules" present  (tiles=[])
+FAIL  R2 manager: quick action "Reports" present  (tiles=[])
+FAIL  R2 manager: quick action tile count = 6  (got 0)
+FAIL  R2.AC8 manager: Latest Activity "View all" present  (viewAll=false)
+FAIL  R2.AC6 manager: KPI card is a <button>  (null)

@@ -1,0 +1,33 @@
+  ok  VP login sets tcms-access cookie
+  ok  no token -> 401
+  ok  Authorization: Bearer works on /me
+  ok  Authorization: Bearer works on dashboard
+  ok  garbage token -> 401
+  ok  VP creates temp user (201/200)
+  ok  temp user logs in (access + refresh cookies)
+  ok  temp user id resolved from token
+  ok  wrong current password -> 400
+  ok  short new password -> 400 (validation)
+  ok  change password -> 200
+  ok  old password no longer logs in -> 401
+  ok  new password logs in -> 200
+  ok  old refresh token revoked after password change -> 401
+  ok  password_changed notification created for the user
+  ok  profile PUT with telegram + channel prefs -> 200
+  ok  telegramChatId persisted
+  ok  notifyEmail=false persisted
+  ok  notifyTelegram=true persisted
+  ok  marking someone else's notification read -> 403
+  ok  owner marks own notification read -> 200
+  ok  read-all -> 200 {success}
+  ok  unread list empty after read-all
+  ok  other user's list never contains temp user's notifications
+  ok  module available for bug creation
+  ok  manager creates bug assigned to temp user -> 201/200
+  ok  bug_assigned notification delivered in-app
+  ok  temp user soft-deleted (isActive -> false)
+  ok  deactivated user cannot log in -> 401
+======================================
+NOTIF-AUTH RESULT: 29 passed, 0 failed
+======================================
+exit=0

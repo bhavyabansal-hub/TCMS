@@ -203,7 +203,7 @@ Kanban board without role friction; only *assignment* and *deletion* are gated.
 | `GET ?id=` 👑 | owner ∨ `view_all_task_reports` | Single report; else 403 `You can only view your own reports` |
 | `GET` list | any | **Non-managers force-filtered to own rows**; managers may pass `userId`; filters `dateFrom`, `dateTo`, `moduleId` (substring match inside the tasks JSON — heuristic) |
 | `POST` 🛡 `create_task_report` | body `{ reportDate, tasks[] (default []), notes? }` | **Upsert by (me, reportDate)** — unique constraint; recomputes `totalMinutes`. Logs `CREATE` or `UPDATE/task_report` |
-| `PUT ?id=` 👑 | **owner only** — even admins | Partial update, recomputes total. Logs `UPDATE/task_report` |
+| `PUT ?id=` 🛡 `create_task_report` + 👑 | `create_task_report` **and** owner only — even admins | Partial update, recomputes total. Logs `UPDATE/task_report`. 403 `Insufficient role` without `create_task_report` (checked first, any id), 404 `Report not found`, 403 `You can only edit your own reports` |
 
 `tasks[]` item validation: `{ description(min 1), timeSpentMinutes(int ≥0), moduleId?,
 testCaseId?, bugId?, status: done|in_progress|blocked }`.
@@ -213,7 +213,7 @@ testCaseId?, bugId?, status: done|in_progress|blocked }`.
 | Endpoint | Auth rules | Behaviour |
 |---|---|---|
 | `GET` full list 🛡 `view_activity_logs` | lead/admin | `page(1)`, `pageSize(50)`, filters `userId`, `entityType`, `action`, `dateFrom`, `dateTo`; desc; snapshots/diff parsed |
-| `GET ?action=entity&type=&id=` | any authenticated *(checked after this branch)* | Latest 50 logs for one entity (used by the case-detail Activity card) |
+| `GET ?action=entity&type=&id=` 🛡 `view_activity_logs` | lead/admin (403 otherwise) | Latest 50 logs for one entity (used by the case-detail Activity card) |
 | `GET ?action=user&id=` | any authenticated *(same)* | Latest 50 logs by one user |
 
 ## 12. `/api/notifications` — the bell (`notifications/route.ts`)

@@ -75,7 +75,7 @@ exported from test-cases.repository) · optimistic locking on test-case edits (4
 | reviews | GET `?action=queue`, `?id`, list; POST `?id` verdict, `&action=forward` | `perform_review` (+ assigned reviewer) |
 | module-reviews | GET `?action=queue\|all`, `?id`; POST `?id&action=approve-all\|bulk-verdict\|change-reviewer` | `perform_review` |
 | bugs | GET list/`?id`/`&action=links`; POST; PUT `?id`, `&action=link-tc`; DELETE `?id` (hard) | `create_bug`; update = `canAny(create_bug,assign_bug)`, reassign needs `assign_bug`; `delete_bug` |
-| task-reports | GET list/`?action=my\|summary\|export`/`?id`; POST upsert (user+date); PUT `?id` (owner only) | `create_task_report`; `view_all_task_reports` for others' data |
+| task-reports | GET list/`?action=my\|summary\|export`/`?id`; POST upsert (user+date); PUT `?id` (`create_task_report` + owner only) | `create_task_report`; `view_all_task_reports` for others' data |
 | notifications | GET mine; POST `?action=read-all`; PATCH `?id`; DELETE `?id` | self-scoped only |
 | activity-logs | GET list, `?action=entity&type&id`, `?action=user&id` | `view_activity_logs` (all branches) |
 | stats | GET `?action=dashboard` (5 s cache), `?action=reports` | any user / `view_all_task_reports`; recent activity needs `view_activity_logs` |
@@ -111,19 +111,19 @@ UI gates via `useAuthStore.can/canAny` only — never compare role strings.
 
 ## 6. Frontend
 
-**Routes** (`src/app/(app)/**/page.tsx` → thin wrappers around `src/components/views/*`;
+**Routes** (`src/app/(app)/**/page.tsx` → thin wrappers around `src/components/views/*`, except `/login` → `src/components/auth-screen.tsx`;
 `(app)/layout.tsx` = `AppShell` auth guard; `src/proxy.ts` redirects cookie-less page hits
 to `/login?next=`):
 
 | URL | View | Client gate |
 |---|---|---|
-| /login | auth-screen.tsx | public (Register tab only if `NEXT_PUBLIC_ALLOW_SIGNUP=true` at build) |
+| /login | `src/components/auth-screen.tsx` | public (Register tab only if `NEXT_PUBLIC_ALLOW_SIGNUP=true` at build) |
 | /dashboard | dashboard-v2.tsx | any |
 | /modules, /modules/[id] | modules.tsx, module-detail.tsx | actions per create/edit_module, submit_review |
 | /test-cases, /test-cases/[id] | test-cases.tsx (+ test-case-import.tsx), test-case-detail.tsx | per case perms |
 | /reviews, /reviews/[id], /module-reviews/[id] | reviews.tsx, review-detail.tsx, module-review-detail.tsx | perform_review |
 | /bugs | bugs.tsx (dnd-kit Kanban) | create/assign/delete_bug |
-| /tasks | tasks.tsx | view_all_task_reports for team view |
+| /tasks | tasks.tsx | view_all_task_reports for team view; create_task_report to edit your own log (read-only notice otherwise) |
 | /reports | reports.tsx | view_all_task_reports |
 | /activity-log | activity-log.tsx | view_activity_logs |
 | /notifications | notifications.tsx | any |
