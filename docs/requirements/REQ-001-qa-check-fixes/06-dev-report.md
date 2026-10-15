@@ -160,3 +160,115 @@ No session, so the app routes redirect to login (expected); this proves the dev 
 - That Fast Refresh kept the owner's open-page state on each save (R10.AC4): not observable from here.
 - `npm run build` and DoD suites 4–7: phase 7 by sdet (separate worktree, Q1).
 - The direct route 200 with a session (above only reaches the login page).
+
+## 4. sdet — test scripts (R5, R6, R7, R9, R10.AC11/AC13, R11.AC4, Q7)
+
+Author: sdet · Date: 2026-10-15 (UTC) · Test plan: `05-test-plan.md` A0–A12. Scripts only: no `src/`, `prisma/` or `.env` edit. The app on :3000 was not started or stopped. Only read-only runs in this phase. The writing suites were **not** run (phase 7, one serial window).
+
+### 4.1 Files
+
+| File | What | Pinned count |
+|---|---|---|
+| `scripts/lib/db-guard.mjs` (new) | `openGuardedDb()`: in-process `DATABASE_URL` check (127.0.0.1/localhost, 5500, `/tcms_test`; prints only `urlTargetOk`). A wrong URL aborts **before any connection** (3306 is never contacted). Single connection (`connection_limit=1`), first statement `SELECT @@port, DATABASE()`, then `GET_LOCK('tcms_verify', 0)`. Every abort is exit 2. A 30 s keepalive stops long HTTP-only stretches from dropping the session lock; `assertLockOwned()` checks the lock before cleanup. `sqlIn()` handles empty lists (`FALSE`). | — |
+| `scripts/lib/fixture-users.mjs` (new) | Raw-SQL fixture INSERT per design 2.3: `UTC_TIMESTAMP(3)`, `notify_email=0`, `notify_telegram=0`, bcrypt of an in-memory random password (never printed); exact e-mails `<prefix>-<key>-<stamp>@tcms.test` | — |
+| `scripts/lib/suite-harness.mjs` (new) | Counter; `VERIFY_FAIL_AT`/`VERIFY_PAUSE_AT` (an unknown value exits 2); SIGINT aborts the in-flight main request, then the `finally` cleanup runs (a second Ctrl+C prints `cleanup in progress`); cookie HTTP helpers; manifest; GET-only matrix snapshot diff; one counted check per cleanup step | — |
+| `scripts/lib/suite-data.mjs` (new) | ID-scoped entity collection by SQL (before cascades); residue queries for 16 tables; FK-ordered cleanup statements (design 2.3); S2 restore of touched cells (fixture row → DELETE; foreign row → untouched + `matrix changed by another actor`); users deleted one by one | — |
+| `scripts/lib/r9-candidates.mjs` (new) | R9 group roots A, B, C, D, E2, I, plus J (listed only); module subtree by materialised path; children; orphan guard; D-EMPTY (design 2.2 SQL) | — |
+| `scripts/check-suite-residue.mjs` (new) | Read-only (`SELECT` only; no `$executeRaw` here or in r9-candidates): `--suite=wiki\|matrix --stamp`, `--pattern=A\|B\|C\|D\|E2\|I\|J`, `--table-counts`. Exit 0/1/2 | — |
+| `scripts/cleanup-req001-testdata.mjs` (new) | R9. Dry run by default (SELECT only; `--template=` writes the approval file). Deletes only with `--delete` **and** `--approved=<file>`, in one transaction: `innodb_lock_wait_timeout=5`; `FOR UPDATE` re-check of every approved PK set (roots, children, orphans) against the approved ids; rollback on any difference; deletes in the design order with affected-row checks; in-transaction residue = 0; then COMMIT. No `UPDATE`, and no statement on users, activity_logs, role_permissions or refresh_tokens. **The delete path was never run.** | — |
+| `scripts/verify-review-matrix.mjs` | R5: `:52` and `:74` → `hasPerform` only; comments updated; `hasSubmit` stays in the log line. No check removed | 36 |
+| `scripts/verify-permissions.mjs` | R11.AC4: viewer `PUT ?id=<random uuid>` `{}` → 403 `Insufficient role`; qa1 same → 404. No check removed | 33 (34 if `:113` runs) |
+| `scripts/verify-wiki.mjs` | R6 rewrite: all 48 existing checks kept (names and expected codes); section-8 grant/revoke via `PUT /api/permissions` as the fixture VP (+4); SQL precondition (exit 2); cleanup + 2 matrix + 5 residue checks; `--cleanup-stamp`; hooks `after-fixtures`, `section-5`, `after-grant`, `mid-cleanup-docs` | 64 |
+| `scripts/verify-permission-matrix.mjs` | R7 port: precondition `role_permissions` = 0 rows (replaces the reset at `:61-66`); 6 SQL fixtures + a fixture module; no demo login; an explicit fixture reviewer on every submit; all 25 probes × 6 roles with stamped titles; toggle-restore check (+1); new round-trip order and hygiene; 10 cleanup + 2 matrix + 15 residue checks; `--cleanup-stamp`; hooks `after-fixtures`, `after-grant`, `mid-cleanup-content` | 193 |
+| `scripts/verify-ui-gates.mjs` (new) | Q7: headless Chrome over CDP (Node's global WebSocket, no new dependency); profile `os.tmpdir()\tcms-ui-gates-<stamp>`; one browser context per role. Demo credentials are read from `seed.service.ts` at runtime (no new hard-coded copy, never printed). Precondition: 126 cells default, else exit 2. Kills only its spawned pid (`taskkill /PID <pid> /T /F`), proves no `chrome.exe` command line holds the profile, then deletes the profile | 159 |
+
+Counts by code reading: wiki 43 + 7 + 2 + 5 + 2 + 5 = 64; matrix 2 + 1 + 150 + 1 + 10 + 2 + 2 + 10 + 15 = 193; ui-gates 66 + 18 + 10 + 6 + 15 + 15 + 20 + 6 + 3 = 159. The forced-failure counts FF-W1 12/1, FF-W2 57/1, FF-M1 30/1 and FF-M2 184/1 follow from where the hooks sit.
+
+### 4.2 Deviations from 05-test-plan.md (no check weakened)
+
+1. **The manifest is kept after a green run** (A0 says it is deleted). RES-1 and RES-2 need its entity ids to check notifications by entity after the users are gone. It holds ids only, under `os.tmpdir()\tcms-verify\`.
+2. **R7 round-trip:** a 3.5 s wait follows each permission toggle, before the next probe. In `next dev`, other route bundles can serve a cached matrix for up to 3 s. No check changed.
+3. **Check names:** the 4 new R6 PUT checks print the observed status, as the existing names do (`… -> 200 (must be 200)`).
+4. **Failure-only checks:** `lock tcms_verify still owned by this run` and `cleanup completed` are printed **only** when they FAIL. A green run has exactly the pinned counts.
+5. **R11.AC4 control run before the fix: NOT VERIFIED.** The server gate (49054b0) was already live when the checks were added.
+
+### 4.3 Verification in this phase (raw)
+
+```
+$ node --check <each of the 12 new/changed script files>
+(all 12: check-ok)
+
+$ npx tsc --noEmit
+tsc_exit=0
+
+$ npx eslint .
+C:\dev\tcms\src\components\shared\rich-text-editor.tsx
+  46:5  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+✖ 1 problem (0 errors, 1 warning)
+eslint_exit=0
+(scripts/** are linted; eslint on the new/changed scripts alone → exit 0, no findings)
+
+$ node scripts/audit-standards.mjs --self-test
+PASS=12 FAIL=0          selftest_exit=0
+$ node scripts/audit-standards.mjs
+STANDARDS AUDIT: 0 violations across 193 TS files      audit_exit=0
+
+static grep A2/A3 (ON CONFLICT | NOW() | INSERT IGNORE | db.<model>.<method> | $queryRaw`INSERT/UPDATE/DELETE | /tmp | execSync)
+  on verify-wiki, verify-permission-matrix, lib/*, cleanup-req001-testdata, check-suite-residue, verify-ui-gates → 0 lines
+grep "admin@tcms.com | @tcms.com'" in verify-permission-matrix.mjs → 0 lines
+grep "UPDATE | DELETE FROM (users|activity_logs|role_permissions|refresh_tokens)" in the R9 script + libs → 0 lines
+```
+
+**DB guard and lock (P5, P8), read-only:**
+```
+$ DATABASE_URL='mysql://nobody:none@127.0.0.1:3306/tcms_test' node scripts/check-suite-residue.mjs --pattern=J
+GUARD urlTargetOk=false (not connected)
+NOT RUN: DB guard: DATABASE_URL does not point at 127.0.0.1:5500/tcms_test      exit=2
+(same for 127.0.0.1:5500/other_db → exit=2)
+
+# while a second process held GET_LOCK('tcms_verify') for 8 s:
+$ node scripts/check-suite-residue.mjs --pattern=J
+GUARD @@port=5500 DATABASE()=tcms_test urlTargetOk=true
+NOT RUN: lock held: another verify/cleanup run holds 'tcms_verify'              checker_exit=2
+# after release:
+RESIDUE users=0
+RESIDUE TOTAL=0                                                                  checker_exit_after_release=0
+```
+
+**RES-P1, the residue checker's positive control** (`evidence/res-p1-pattern-A.txt`, 2026-10-15T18:35:37Z; exit 1 = residue found):
+```
+RESIDUE modules=1 · test_cases=4 · bugs=2 · wiki_documents=1 · task_reports=0 · submodules=0
+RESIDUE module_review_requests=1 · review_requests=3 · review_events=0 · test_case_history=0
+RESIDUE bug_test_case_links=0 · crew_desk_links=0 · notifications=2
+RESIDUE TOTAL=14
+```
+This matches QA doc lines 101-114 (module "QACHECK module 1792076976458", 4 cases, 2 bugs, 1 wiki). The checker is validated, so later "0" results count.
+
+**R9 dry run 1** (`evidence/r9-dryrun-1.txt`, template `evidence/r9-dryrun-1.approved-template.json`, 2026-10-15T18:36:29Z, exit 0). Proof that it wrote nothing: `--table-counts` before and after are identical (`r9-dryrun-1.counts-before.txt` and `counts-after.txt`, empty diff; users=8, role_permissions=0, test_cases=13, review_requests=7, notifications=8, activity_logs=83, …). Counts per table:
+```
+modules=1 test_cases=8 bugs=3 wiki_documents=1 task_reports=2
+submodules=0 module_review_requests=1 review_requests=7 review_events=0 test_case_history=0
+bug_test_case_links=0 crew_desk_links=0 notifications=6   orphan_risk=0 group_j_users=0
+GROUP G: role_permissions rows=0
+```
+Findings for the owner's approval of the list (R9.AC3). None of them is a script bug:
+- **Group B matches 2 qa1 rows dated 2026-10-15.** `fc2f0e2f…` is the QA-check report (`report_date` 00:00, "QACHECK task", notes "QACHECK"). `c74e9549…` looks like **seed data** (`report_date` 2026-10-15T14:09:58.210Z, "Wrote test cases for login flow", 180 min). **It must be struck from the list.** Observation for the manager, not filed: qa1 has two `task_reports` rows for one calendar day. The seed row's `report_date` carries a time of day while the upsert writes midnight, so the unique key `(reported_by_id, report_date)` does not catch the pair. Not checked in the UI.
+- **Group A reviews:** 1 module review `620acfe3…` (2 case reviews: tc1, tc2) plus 1 standalone case review for tc3 (`1eaacc37…`), so 3 `review_requests` in total. The QA doc says "1 module review + 1 case review". The tester reconciles this.
+- **D-EMPTY:** the kept module review `11ceea3a…` (seed module "Authentication - Login") holds 4 case reviews: the 3 group C "Imported:" cases and the group D case. Deleting C and D leaves it with **0 case reviews**.
+- Group I: no ids yet (`07-test-report.md` does not exist). Group J: none.
+
+**R5, `verify-review-matrix`** (read-only, 2026-10-15T18:36:42Z–18:36:50Z, `evidence/suite-review-matrix-20261015T1836.txt`):
+```
+REVIEW-MATRIX RESULT: 36 passed, 0 failed      exit=0
+(qa_engineer: module-reviews?action=all 403, GET /reviews 403 — the two former failures)
+```
+
+`GET http://localhost:3000/api` at the start and end of this phase: `{"status":"ok","service":"tcms-api"} http=200`.
+
+### 4.4 Not run in this phase (phase 7, one serial window)
+
+Not run: verify-wiki (64), verify-permission-matrix (193), verify-permissions (33), verify-import, verify-notifications, verify-ui-gates (159), the A9 forced-failure and recovery runs, A11 CONC/PRE, `npm run build` (worktree). The counts for these suites come from code reading only. **NOT VERIFIED:** the runtime behaviour of the new suites (CDP selectors, SIGINT in a Windows cmd console, the Prisma keepalive and lock over a long run) and the R11.AC4 pre-fix control.
+
+### 4.5 SQL review requested (developer-backend, design 2.3 / 6)
+
+Before the first phase 7 run, please review: `scripts/lib/db-guard.mjs`, `fixture-users.mjs`, `suite-data.mjs` (collect, residue, cleanup order), `r9-candidates.mjs` and `cleanup-req001-testdata.mjs` (delete transaction).

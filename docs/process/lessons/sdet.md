@@ -17,3 +17,7 @@ Append lessons below (format in README.md). Read this file at the start of every
 - Rule from now on: capture tool output with `> file 2>&1` in Git Bash and record the exit code; never PowerShell 5.1 `Out-File` (UTF-16, wraps stderr).
 - What happened: a full-table permission restore would silently undo a toggle the owner makes on :3000 during a run.
 - Rule from now on: restore only the cells the suite touched, and fail with "matrix changed by another actor" if any other cell differs between the start and end snapshots.
+
+## 2026-10-15 REQ-001 phase 6
+- What happened: the R9 group B selection `DATE(report_date) = 2026-10-15` matched a seed task report as well as the QA-check one, because seed `report_date` values carry a time of day.
+- Rule from now on: every date- or pattern-based delete candidate list prints the raw key columns (full timestamp, owner, content) so the owner can strike rows that only look alike.
