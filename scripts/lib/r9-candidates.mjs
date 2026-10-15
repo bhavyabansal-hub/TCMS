@@ -11,6 +11,9 @@ const GROUP_B_EMAIL = 'qa1@tcms.com'
 const GROUP_B_DATE = '2026-10-15'
 const J_PATTERNS = ['wiki-%-%@tcms.test', 'permmatrix-%-%@tcms.test']
 
+export const B_NO_QACHECK = 'B-NO-QACHECK'
+const hasQacheckText = (r) => `${JSON.stringify(r.tasks ?? '')} ${String(r.notes ?? '')}`.includes('QACHECK')
+
 const emptyRoots = () => ({ modules: [], test_cases: [], bugs: [], wiki_documents: [], task_reports: [] })
 
 const caseRows = (prefix) => (q) =>
@@ -35,6 +38,11 @@ export async function collectGroupRoots(q, group, { groupIIds = [] } = {}) {
         tr.total_minutes, tr.tasks, tr.notes, tr.created_at
       FROM task_reports tr JOIN users u ON u.user_id = tr.reported_by_id
       WHERE u.email = ${GROUP_B_EMAIL} AND DATE(tr.report_date) = ${GROUP_B_DATE}`
+    // SQL review finding 1: a same-day row without QACHECK text (seed data with a time of day)
+    // is flagged and kept out of the default candidate set (see splitNoQacheck).
+    for (const r of roots.task_reports) {
+      if (!hasQacheckText(r)) r.flag = B_NO_QACHECK
+    }
   } else if (group === 'C') {
     roots.test_cases = await caseRows('Imported: %')(q)
   } else if (group === 'D') {
@@ -69,6 +77,21 @@ export async function collectGroupJ(q) {
 
 const pks = (rows) => rows.map((r) => r.pk)
 const uniq = (list) => [...new Set(list)]
+const uniqByPk = (rows) => {
+  const seen = new Set()
+  return rows.filter((r) => (seen.has(r.pk) ? false : (seen.add(r.pk), true)))
+}
+
+/**
+ * Split merged roots into the default candidate set and the rows flagged B-NO-QACHECK
+ * (group B rows whose tasks/notes carry no QACHECK text). With include=true nothing is split off.
+ * @returns {{ roots: object, excluded: object[] }}
+ */
+export function splitNoQacheck(roots, { include = false } = {}) {
+  if (include) return { roots, excluded: [] }
+  const excluded = roots.task_reports.filter((r) => r.flag === B_NO_QACHECK)
+  return { roots: { ...roots, task_reports: roots.task_reports.filter((r) => r.flag !== B_NO_QACHECK) }, excluded }
+}
 
 /**
  * Cascade children + explicit no-FK rows for the given parent ids.
@@ -78,14 +101,16 @@ const uniq = (list) => [...new Set(list)]
  */
 export async function deriveChildren(q, p, { forUpdate = false } = {}) {
   const lock = forUpdate ? Prisma.sql`FOR UPDATE` : Prisma.empty
-  const subtree = []
+  const subtreeRows = []
   for (const root of p.moduleRoots) {
     const prefix = `${root.path ?? ''}.${root.pk}`
     const rows = await q.$queryRaw`SELECT module_id AS pk, name AS ident, path, created_at FROM modules
       WHERE module_id = ${root.pk} OR path = ${prefix} OR path LIKE ${`${prefix}.%`} ${lock}`
-    subtree.push(...rows)
+    subtreeRows.push(...rows)
   }
-  const subtreeIds = uniq(pks(subtree))
+  // SQL review finding 2: nested approved roots return the same rows twice; keep one per pk.
+  const subtree = uniqByPk(subtreeRows)
+  const subtreeIds = pks(subtree)
   const rootIds = p.moduleRoots.map((r) => r.pk)
   const submodules = subtree.filter((m) => !rootIds.includes(m.pk))
 

@@ -14,7 +14,9 @@
  * activity_logs, role_permissions or refresh_tokens.
  *
  * Usage:
- *   node scripts/cleanup-req001-testdata.mjs [--group-i=<id,id>] [--template=<file>]
+ *   node scripts/cleanup-req001-testdata.mjs [--group-i=<id,id>] [--template=<file>] [--include-b-no-qacheck]
+ *   Group B rows without QACHECK text in tasks/notes are flagged B-NO-QACHECK and left out
+ *   of the candidate list and template unless --include-b-no-qacheck is given.
  *   node scripts/cleanup-req001-testdata.mjs --delete --approved=<file>     (owner go only)
  * Exit: 0 ok, 1 FAIL/rollback, 2 NOT RUN (guard, lock, bad arguments).
  * Forbidden as tools or evidence: cleanup-import-demo.mjs, check-overrides.mjs (R9.AC12).
@@ -23,11 +25,13 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { GuardAbort, Prisma, openGuardedDb, sqlIn } from './lib/db-guard.mjs'
 import { parseFlags } from './lib/suite-harness.mjs'
 import {
+  B_NO_QACHECK,
   DELETE_GROUPS,
   collectGroupJ,
   collectRoots,
   deriveChildren,
   parentsFromRoots,
+  splitNoQacheck,
 } from './lib/r9-candidates.mjs'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -51,7 +55,7 @@ function printRows(table, rows, extra = () => '') {
 function groupBFlag(r) {
   const base = ` | report_date=${iso(r.report_date)} | total_minutes=${Number(r.total_minutes)}`
   if (r.group !== 'B') return base
-  return `${base} | B (owner decides) | tasks=${JSON.stringify(r.tasks)} | notes=${JSON.stringify(r.notes)}`
+  return `${base} | B (owner decides)${r.flag ? ` | ${r.flag}` : ''} | tasks=${JSON.stringify(r.tasks)} | notes=${JSON.stringify(r.notes)}`
 }
 
 /** Key columns of child rows, so each line can be reconciled by hand. */
@@ -69,7 +73,8 @@ async function runDryRun(db, flags) {
     return 2
   }
   console.log(`MODE=DRY RUN (no write) groups=${DELETE_GROUPS.join(',')} groupI=${groupIIds.length}`)
-  const roots = await collectRoots(db, DELETE_GROUPS, { groupIIds })
+  const includeNoQacheck = flags['include-b-no-qacheck'] === true
+  const { roots, excluded } = splitNoQacheck(await collectRoots(db, DELETE_GROUPS, { groupIIds }), { include: includeNoQacheck })
   const children = await deriveChildren(db, parentsFromRoots(roots))
 
   console.log('\n== ROOTS (delete candidates) ==')
@@ -81,6 +86,10 @@ async function runDryRun(db, flags) {
   console.log('\n== FLAGS ==')
   if (children.orphanRisk.length === 0) console.log('  ORPHAN-RISK: none')
   for (const o of children.orphanRisk) console.log(`  ORPHAN-RISK ${o.table} ${o.pk} | ${o.ident} (in a candidate module subtree, not on the list)`)
+  if (excluded.length === 0) console.log(`  ${B_NO_QACHECK}: none${includeNoQacheck ? ' (--include-b-no-qacheck given)' : ''}`)
+  for (const r of excluded) {
+    console.log(`  ${B_NO_QACHECK} task_reports ${r.pk} | ${r.ident} | report_date=${iso(r.report_date)} | total_minutes=${Number(r.total_minutes)} | tasks=${JSON.stringify(r.tasks)} | notes=${JSON.stringify(r.notes)} | NOT in the candidate list or template (add --include-b-no-qacheck to list it)`)
+  }
   if (children.dEmpty.length === 0) console.log('  D-EMPTY: no kept module review is affected')
   for (const d of children.dEmpty) {
     console.log(`  ${d.remainingCaseReviews === 0 ? 'D-EMPTY' : 'D-KEPT'} module_review ${d.moduleReviewId} remaining case reviews after delete=${d.remainingCaseReviews}`)
@@ -128,7 +137,9 @@ function readApproved(file) {
   return approved
 }
 
-const sameSet = (a, b) => a.length === b.length && new Set([...a, ...b]).size === a.length && new Set(a).size === a.length
+// SQL review finding 3: both lists must be duplicate-free, same size, same members.
+const sameSet = (a, b) =>
+  a.length === b.length && new Set(a).size === a.length && new Set(b).size === b.length && new Set([...a, ...b]).size === a.length
 
 class Rollback extends Error {}
 

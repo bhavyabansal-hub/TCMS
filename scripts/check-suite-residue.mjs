@@ -5,7 +5,7 @@
  *   --suite=wiki|matrix --stamp=<n> [--manifest=<path>]
  *        rows left by one suite run, keyed on the exact fixture e-mails, fixture ids and
  *        the manifest's collected entity ids (default manifest path = the suite's own).
- *   --pattern=A|B|C|D|E2|I|J [--group-i=<id,id>]
+ *   --pattern=A|B|C|D|E2|I|J [--group-i=<id,id>] [--include-b-no-qacheck] (B-NO-QACHECK rows are not counted by default)
  *        R9 candidate rows of one group (same SELECTs as cleanup-req001-testdata.mjs).
  *   --table-counts
  *        exact COUNT(*) per table (R9.AC1 backup evidence).
@@ -18,7 +18,7 @@ import { GuardAbort, Prisma, openGuardedDb } from './lib/db-guard.mjs'
 import { findUsersByEmails, fixtureEmail } from './lib/fixture-users.mjs'
 import { manifestPath, parseFlags, readManifest } from './lib/suite-harness.mjs'
 import { ALL_RESIDUE_TABLES, collectEntities, countResidue, emptyEntities, mergeEntities } from './lib/suite-data.mjs'
-import { ALL_GROUPS, collectGroupJ, collectRoots, deriveChildren, parentsFromRoots } from './lib/r9-candidates.mjs'
+import { ALL_GROUPS, B_NO_QACHECK, collectGroupJ, collectRoots, deriveChildren, parentsFromRoots, splitNoQacheck } from './lib/r9-candidates.mjs'
 
 const SUITES = {
   wiki: {
@@ -77,7 +77,10 @@ async function checkPattern(db, flags) {
     return printResidue({ users: users.map((u) => `${u.pk}(${u.ident})`) })
   }
   const groupIIds = flags['group-i'] ? String(flags['group-i']).split(',').filter(Boolean) : []
-  const roots = await collectRoots(db, [group], { groupIIds })
+  const { roots, excluded } = splitNoQacheck(await collectRoots(db, [group], { groupIIds }), {
+    include: flags['include-b-no-qacheck'] === true,
+  })
+  for (const r of excluded) console.log(`INFO ${B_NO_QACHECK} task_reports ${r.pk} report_date=${r.report_date?.toISOString?.() ?? r.report_date} (not counted)`)
   const children = await deriveChildren(db, parentsFromRoots(roots))
   const result = {}
   for (const [table, rows] of Object.entries(roots)) result[table] = rows.map((r) => r.pk)

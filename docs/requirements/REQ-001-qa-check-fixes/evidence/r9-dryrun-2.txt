@@ -1,0 +1,77 @@
+GUARD @@port=5500 DATABASE()=tcms_test urlTargetOk=true
+LOCK tcms_verify acquired
+MODE=DRY RUN (no write) groups=A,B,C,D,E2,I groupI=0
+
+== ROOTS (delete candidates) ==
+  modules (1)
+    f7408c4d-13de-45f1-9521-d2f79e19df6b | QACHECK module 1792076976458 | 2026-10-15T15:09:36.484Z | group A
+  test_cases (8)
+    4ee357ca-527d-4c4b-b96c-8738cdd79219 | QACHECK tc1 | 2026-10-15T15:09:36.523Z | group A | module_id=f7408c4d-13de-45f1-9521-d2f79e19df6b status=in_review
+    458fecf3-3efd-4bd4-97ca-f1cbc328d12d | QACHECK tc2 | 2026-10-15T15:09:36.555Z | group A | module_id=f7408c4d-13de-45f1-9521-d2f79e19df6b status=in_review
+    271b3823-2bef-4fd8-b92a-cd858a174531 | QACHECK tc3 | 2026-10-15T15:09:36.644Z | group A | module_id=f7408c4d-13de-45f1-9521-d2f79e19df6b status=in_review
+    8bd2f4ac-9008-4cf4-9180-056953145b94 | QACHECK qa case | 2026-10-15T15:11:42.005Z | group A | module_id=f7408c4d-13de-45f1-9521-d2f79e19df6b status=draft
+    126c7eb9-058a-4d70-aed3-0bef3dd15f34 | Imported: 1792077851236 checkout with saved card | 2026-10-15T15:24:11.285Z | group C | module_id=1716beca-9a6a-4d6e-9c7a-ad6f0a0d0037 status=in_review
+    0bc4e1ee-dbe7-4bce-8278-8ea06f3fc91f | Imported: 1792077851236 checkout with new card | 2026-10-15T15:24:11.299Z | group C | module_id=1716beca-9a6a-4d6e-9c7a-ad6f0a0d0037 status=in_review
+    b79204a9-c913-4a3f-ab36-8ad186605d1c | Imported: 1792077851236 guest checkout limit | 2026-10-15T15:24:11.315Z | group C | module_id=1716beca-9a6a-4d6e-9c7a-ad6f0a0d0037 status=in_review
+    529ecfe6-f484-4547-ac33-9825f98bd606 | Perm-verify case 1792077856811 | 2026-10-15T15:24:16.906Z | group D | module_id=1716beca-9a6a-4d6e-9c7a-ad6f0a0d0037 status=in_review
+  bugs (3)
+    1e8039c6-fb0a-4bf5-bf04-f2a3ef742ef4 | QACHECK bug | 2026-10-15T15:10:57.485Z | group A | module_id=f7408c4d-13de-45f1-9521-d2f79e19df6b status=in_progress
+    45dd75da-ad36-41dd-a932-dcdd34e21995 | QACHECK dev bug | 2026-10-15T15:11:41.973Z | group A | module_id=f7408c4d-13de-45f1-9521-d2f79e19df6b status=in_progress
+    70b3bb7d-5616-4193-ab5b-3ccf622e2add | Verify notification 1792077866356 | 2026-10-15T15:24:29.740Z | group E2 | module_id=3fb3434e-efbd-477b-9e4b-b3fb1688b27a status=open
+  wiki_documents (1)
+    69a63732-9bd3-4648-b433-7dd9c3853d27 | QACHECK wiki | 2026-10-15T15:09:36.735Z | group A
+  task_reports (1)
+    fc2f0e2f-e360-4eaa-806d-82ed11c0f204 | qa1@tcms.com | 2026-10-15T15:11:52.719Z | group B | report_date=2026-10-15T00:00:00.000Z | total_minutes=15 | B (owner decides) | tasks=[{"status":"done","description":"QACHECK task","timeSpentMinutes":15}] | notes="QACHECK"
+
+== CASCADE CHILDREN + NO-FK ROWS ==
+  submodules (0)
+  module_review_requests (1)
+    620acfe3-0955-464c-b2df-a1cd68e7abc2 |  | 2026-10-15T15:09:36.591Z | module_id=f7408c4d-13de-45f1-9521-d2f79e19df6b status=pending
+  review_requests (7)
+    19d32977-6f30-4d7c-ac3c-572f88c72279 |  | 2026-10-15T15:09:36.595Z | test_case_id=4ee357ca-527d-4c4b-b96c-8738cdd79219 module_review_id=620acfe3-0955-464c-b2df-a1cd68e7abc2 status=pending
+    1eaacc37-14c3-42f3-9ed5-acec21ae4125 |  | 2026-10-15T15:09:36.699Z | test_case_id=271b3823-2bef-4fd8-b92a-cd858a174531 status=pending
+    70761c2d-382e-4264-88dd-1db5994a1c95 |  | 2026-10-15T15:09:36.595Z | test_case_id=458fecf3-3efd-4bd4-97ca-f1cbc328d12d module_review_id=620acfe3-0955-464c-b2df-a1cd68e7abc2 status=pending
+    8eb9ac3f-106a-4a89-9f4d-931ddbd2b5c9 |  | 2026-10-15T15:24:17.037Z | test_case_id=529ecfe6-f484-4547-ac33-9825f98bd606 module_review_id=11ceea3a-83af-420a-b0c6-2949aa36abb0 status=pending
+    9c50aa1f-3bbe-4282-b400-180074ee3351 |  | 2026-10-15T15:24:17.037Z | test_case_id=126c7eb9-058a-4d70-aed3-0bef3dd15f34 module_review_id=11ceea3a-83af-420a-b0c6-2949aa36abb0 status=pending
+    faacdcb2-22ed-4b5c-81a2-b667a5b3f7d0 |  | 2026-10-15T15:24:17.037Z | test_case_id=0bc4e1ee-dbe7-4bce-8278-8ea06f3fc91f module_review_id=11ceea3a-83af-420a-b0c6-2949aa36abb0 status=pending
+    fd93544e-a531-4e93-a979-6b49233c7733 |  | 2026-10-15T15:24:17.037Z | test_case_id=b79204a9-c913-4a3f-ab36-8ad186605d1c module_review_id=11ceea3a-83af-420a-b0c6-2949aa36abb0 status=pending
+  review_events (0)
+  test_case_history (0)
+  bug_test_case_links (0)
+  crew_desk_links (0)
+  notifications (6)
+    6a231559-1f07-4c1a-8d64-c14f28fcb080 | daily_report_submitted | 2026-10-15T15:11:52.745Z | user_id=12abe70b-60cd-470b-85e7-4bde4204939e entity_type=task_report entity_id=fc2f0e2f-e360-4eaa-806d-82ed11c0f204
+    79f5c84f-6189-4b9a-a3e8-2f7bd2a136aa | daily_report_submitted | 2026-10-15T15:11:52.744Z | user_id=12dd9819-27ed-47cb-822c-5207fe847710 entity_type=task_report entity_id=fc2f0e2f-e360-4eaa-806d-82ed11c0f204
+    8cc6cbb8-e759-48a8-8a14-63338551115a | daily_report_submitted | 2026-10-15T15:11:52.746Z | user_id=b5cbcb58-1034-4689-bdfd-f62ddf651ab8 entity_type=task_report entity_id=fc2f0e2f-e360-4eaa-806d-82ed11c0f204
+    b696cf63-ce81-40c9-bada-ed09a4618767 | review_assigned | 2026-10-15T15:09:36.612Z | user_id=12dd9819-27ed-47cb-822c-5207fe847710 entity_type=module_review entity_id=620acfe3-0955-464c-b2df-a1cd68e7abc2
+    bdfabd98-fd77-4b02-9c28-3fe4c6ce5e10 | review_assigned | 2026-10-15T15:09:36.709Z | user_id=12dd9819-27ed-47cb-822c-5207fe847710 entity_type=review entity_id=1eaacc37-14c3-42f3-9ed5-acec21ae4125
+    e0cc18d5-6d53-4847-9367-932156d9e8a6 | bug_assigned | 2026-10-15T15:24:29.768Z | user_id=28998a6d-2a6d-4142-9864-615c0aacd0c8 entity_type=bug entity_id=70b3bb7d-5616-4193-ab5b-3ccf622e2add
+
+== FLAGS ==
+  ORPHAN-RISK: none
+  B-NO-QACHECK task_reports c74e9549-8445-4b92-a82e-fdcd84d99d7c | qa1@tcms.com | report_date=2026-10-15T14:09:58.210Z | total_minutes=180 | tasks=[{"bugId":null,"status":"done","moduleId":"1716beca-9a6a-4d6e-9c7a-ad6f0a0d0037","testCaseId":null,"description":"Wrote test cases for login flow","timeSpentMinutes":120},{"bugId":null,"status":"in_progress","moduleId":null,"testCaseId":null,"description":"Investigated Safari login bug","timeSpentMinutes":60}] | notes="Need to coordinate with frontend on Safari fix." | NOT in the candidate list or template (add --include-b-no-qacheck to list it)
+  D-EMPTY module_review 11ceea3a-83af-420a-b0c6-2949aa36abb0 remaining case reviews after delete=0
+
+== GROUP J (listed only; recovery = the suite --cleanup-stamp) ==
+  none
+
+== GROUP G (verify only) ==
+  role_permissions rows=0 (0 = all 126 cells default)
+
+== COUNTS PER TABLE ==
+  modules=1
+  test_cases=8
+  bugs=3
+  wiki_documents=1
+  task_reports=1
+  submodules=0
+  module_review_requests=1
+  review_requests=7
+  review_events=0
+  test_case_history=0
+  bug_test_case_links=0
+  crew_desk_links=0
+  notifications=6
+  orphan_risk=0 group_j_users=0
+
+DRY RUN COMPLETE: nothing was deleted
