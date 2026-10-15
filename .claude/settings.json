@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git rebase:*)",
+      "Bash(git commit --amend:*)",
+      "Bash(git filter-branch:*)",
+      "Bash(git clean -fd:*)",
+      "Bash(rm -rf /:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(npx prisma migrate reset:*)",
+      "Read(./.env)",
+      "Edit(./.env)",
+      "Write(./.env)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(npx prisma migrate deploy:*)",
+      "Bash(rm -rf:*)"
+    ]
+  }
+}
