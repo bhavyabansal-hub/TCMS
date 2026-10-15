@@ -61,6 +61,7 @@ project: every layer, every endpoint, every page and every file documented. Star
 | [`REFACTOR-CHARTER.md`](./REFACTOR-CHARTER.md) | The charter that drove the 4-layer restructure (goals, rules, guardrails) |
 | [`qa/TCMS-MASTER-QA-PROMPT.md`](./qa/TCMS-MASTER-QA-PROMPT.md) | Full-system deep-verification QA prompt (every page, role and endpoint) |
 | [`qa/TCMS-TEST-REPORT-2026-10-09.md`](./qa/TCMS-TEST-REPORT-2026-10-09.md) | 2026-10-09 QA marathon report: 210 sheet-imported cases, five-role verdicts, DB deep checks |
+| [`qa/QA-CHECK-2026-10-15.md`](./qa/QA-CHECK-2026-10-15.md) | 2026-10-15 independent QA check on Windows: page × role matrix, API permission enforcement, suite results, 7 bugs |
 
 ## Archived (outside docs/)
 
