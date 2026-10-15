@@ -1,0 +1,60 @@
+{
+  "generatedAt": "2026-10-15T18:36:29.321Z",
+  "note": "Owner approval = this file with struck rows removed. Invalid while orphanRisk is non-empty.",
+  "groupIIds": [],
+  "orphanRisk": [],
+  "tables": {
+    "modules": [
+      "f7408c4d-13de-45f1-9521-d2f79e19df6b"
+    ],
+    "test_cases": [
+      "4ee357ca-527d-4c4b-b96c-8738cdd79219",
+      "458fecf3-3efd-4bd4-97ca-f1cbc328d12d",
+      "271b3823-2bef-4fd8-b92a-cd858a174531",
+      "8bd2f4ac-9008-4cf4-9180-056953145b94",
+      "126c7eb9-058a-4d70-aed3-0bef3dd15f34",
+      "0bc4e1ee-dbe7-4bce-8278-8ea06f3fc91f",
+      "b79204a9-c913-4a3f-ab36-8ad186605d1c",
+      "529ecfe6-f484-4547-ac33-9825f98bd606"
+    ],
+    "bugs": [
+      "1e8039c6-fb0a-4bf5-bf04-f2a3ef742ef4",
+      "45dd75da-ad36-41dd-a932-dcdd34e21995",
+      "70b3bb7d-5616-4193-ab5b-3ccf622e2add"
+    ],
+    "wiki_documents": [
+      "69a63732-9bd3-4648-b433-7dd9c3853d27"
+    ],
+    "task_reports": [
+      "fc2f0e2f-e360-4eaa-806d-82ed11c0f204",
+      "c74e9549-8445-4b92-a82e-fdcd84d99d7c"
+    ]
+  },
+  "children": {
+    "submodules": [],
+    "module_review_requests": [
+      "620acfe3-0955-464c-b2df-a1cd68e7abc2"
+    ],
+    "review_requests": [
+      "19d32977-6f30-4d7c-ac3c-572f88c72279",
+      "1eaacc37-14c3-42f3-9ed5-acec21ae4125",
+      "70761c2d-382e-4264-88dd-1db5994a1c95",
+      "8eb9ac3f-106a-4a89-9f4d-931ddbd2b5c9",
+      "9c50aa1f-3bbe-4282-b400-180074ee3351",
+      "faacdcb2-22ed-4b5c-81a2-b667a5b3f7d0",
+      "fd93544e-a531-4e93-a979-6b49233c7733"
+    ],
+    "review_events": [],
+    "test_case_history": [],
+    "bug_test_case_links": [],
+    "crew_desk_links": [],
+    "notifications": [
+      "6a231559-1f07-4c1a-8d64-c14f28fcb080",
+      "79f5c84f-6189-4b9a-a3e8-2f7bd2a136aa",
+      "8cc6cbb8-e759-48a8-8a14-63338551115a",
+      "b696cf63-ce81-40c9-bada-ed09a4618767",
+      "bdfabd98-fd77-4b02-9c28-3fe4c6ce5e10",
+      "e0cc18d5-6d53-4847-9367-932156d9e8a6"
+    ]
+  }
+}
