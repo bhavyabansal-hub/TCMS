@@ -1,0 +1,13 @@
+  PASS BadName.ts -> violation "BadName.ts"
+  PASS bad_name.service.ts -> violation "bad_name.service.ts"
+  PASS src\components\views\BadName.tsx -> violation "BadName.tsx"
+  PASS src/components/views/BadName.tsx -> violation "BadName.tsx"
+  PASS C:\dev\tcms\src\components\views\BadName.tsx -> violation "BadName.tsx"
+  PASS test-cases.service.ts -> ok
+  PASS page.tsx -> ok
+  PASS src\app\api\test-cases\test-cases.service.ts -> ok
+  PASS src/app/api/test-cases/test-cases.service.ts -> ok
+  PASS src\app\(app)\activity-log\page.tsx -> ok
+  PASS C:\dev\tcms\src\app\(app)\module-reviews\[id]\page.tsx -> ok
+  PASS /home/ci/tcms/src/app/(app)/module-reviews/[id]/page.tsx -> ok
+PASS=12 FAIL=0

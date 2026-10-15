@@ -2,14 +2,58 @@
 // Persistent CODING-STANDARDS auditor (agent.md §1) — the 14 user standards
 // encoded as greppable rules over src/. Run from the project root:
 //   node scripts/audit-standards.mjs
+//   node scripts/audit-standards.mjs --self-test   (naming-rule check, reads no files)
 // Exit code 1 when any violation is found (CI / pre-delivery gate).
 
 import { readFileSync, readdirSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const SRC = join(ROOT, 'src')
+
+// Naming rule (7): kebab-case file names, dot-separated segments validated
+// separately (e.g. auth.service.ts). Returns the offending base name or null.
+// win32.basename splits on both \ and /, so the result is the same on Windows
+// and POSIX (backlog B12: split('/') returned the whole path on Windows).
+function namingViolation(file) {
+  const base = win32.basename(file)
+  const segments = base.replace(/\.(?:ts|tsx)$/, '').split('.')
+  return segments.every((s) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s)) ? null : base
+}
+
+// --self-test: runs namingViolation (the same function the audit uses) on
+// fixed samples. Touches no file. Prints PASS=n FAIL=n; exit 1 on any failure.
+if (process.argv.includes('--self-test')) {
+  const samples = [
+    ['BadName.ts', 'BadName.ts'],
+    ['bad_name.service.ts', 'bad_name.service.ts'],
+    ['src\\components\\views\\BadName.tsx', 'BadName.tsx'],
+    ['src/components/views/BadName.tsx', 'BadName.tsx'],
+    ['C:\\dev\\tcms\\src\\components\\views\\BadName.tsx', 'BadName.tsx'],
+    ['test-cases.service.ts', null],
+    ['page.tsx', null],
+    ['src\\app\\api\\test-cases\\test-cases.service.ts', null],
+    ['src/app/api/test-cases/test-cases.service.ts', null],
+    ['src\\app\\(app)\\activity-log\\page.tsx', null],
+    ['C:\\dev\\tcms\\src\\app\\(app)\\module-reviews\\[id]\\page.tsx', null],
+    ['/home/ci/tcms/src/app/(app)/module-reviews/[id]/page.tsx', null],
+  ]
+  let pass = 0
+  let fail = 0
+  for (const [input, expected] of samples) {
+    const got = namingViolation(input)
+    if (got === expected) {
+      pass++
+      console.log(`  PASS ${input} -> ${got === null ? 'ok' : `violation "${got}"`}`)
+    } else {
+      fail++
+      console.log(`  FAIL ${input} -> got ${JSON.stringify(got)}, expected ${JSON.stringify(expected)}`)
+    }
+  }
+  console.log(`PASS=${pass} FAIL=${fail}`)
+  process.exit(fail ? 1 : 0)
+}
 
 // ---------- collect files ----------
 function walk(dir) {
@@ -86,9 +130,8 @@ for (const file of files) {
 
   // 7. Naming: kebab-case file names under src/ (dot-separated segments,
   //     e.g. auth.service.ts, are validated per segment).
-  const base = file.split('/').pop()
-  const segments = base.replace(/\.(?:ts|tsx)$/, '').split('.')
-  if (!segments.every((s) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s))) report(file, 'naming', `file name "${base}" is not kebab-case`)
+  const badName = namingViolation(file)
+  if (badName) report(file, 'naming', `file name "${badName}" is not kebab-case`)
 }
 
 // 8. Structure: every API resource dir needs dedicated validation + service modules.
