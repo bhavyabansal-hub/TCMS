@@ -240,7 +240,9 @@ canonical zip `download/tcms-postgresql.zip` refreshed.
 
 ## 13. Local machine state (Windows, checked 2026-10-15)
 
-No Node.js, no npm/bun, no MySQL, no `node_modules`, no `.next`, no `.env`, **not a git
-repo** (folder came from a zip). Only git is installed. Before any DoD run: install
-Node 20+, `npm install`, provide MySQL 8.4 + `.env` (see `.env.example`), then
-`npx prisma migrate deploy`. Sandbox `.sh` scripts assume Linux (`/tmp`, `/proc`).
+Git repo (branches `main`, `improvements`). Node 24, npm 11 and bun installed; MySQL 8.4
+on 127.0.0.1:5500, schema `tcms_test` (never port 3306 — a different server).
+`.env` from `.env.example` (git-ignored), `npm install` (npm 11 install scripts
+approved via `allowScripts` in package.json), `npx prisma migrate deploy` applied,
+demo data seeded; `npm run dev` serves http://localhost:3000. Sandbox `.sh` scripts
+assume Linux (`/tmp`, `/proc`).

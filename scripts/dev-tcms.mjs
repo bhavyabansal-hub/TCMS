@@ -20,8 +20,9 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import net from 'node:net'
+import { fileURLToPath } from 'node:url'
 
-const ROOT = new URL('..', import.meta.url).pathname
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const MYSQL_PORT = 5500
 const MYSQL_BOOT = `${ROOT}scripts/migration/mysql84-boot.sh`
 
