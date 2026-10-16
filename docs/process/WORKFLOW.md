@@ -21,7 +21,8 @@ Every agent reads this file, `docs/process/coding-standards.md`, `CLAUDE.md`,
   the requirement folder, `worklog.md`, `docs/process/decisions.md` and
   `docs/process/lessons/`. If it is not written down, it did not happen.
 - Commands: `/new-requirement <title>`, `/build-requirement <REQ-ID>`,
-  `/fix-bug <BUG-ID or description>`, `/retro <REQ-ID>` (see `.claude/commands/`).
+  `/fix-bug <BUG-ID or description>`, `/quick-fix <description>` (fast lane, §3a),
+  `/retro <REQ-ID>` (see `.claude/commands/`).
 
 ## 2. Requirement folder
 
@@ -61,6 +62,31 @@ Templates: `docs/process/templates/`.
 | 11 | Retrospective | all | Lessons written; proposed process edits listed for owner approval |
 
 **A gate fails if any item is missing evidence.** Missing evidence = "NOT VERIFIED", never "probably fine".
+
+## 3a. Fast lane — `/quick-fix` (owner decision 2026-10-16)
+
+The full phases 0–11 are for **new features** and **schema changes**. Small jobs take
+the fast lane: **developer fixes → sdet runs the Definition of Done → done.** No
+kickoff, BRD, review meeting, UAT or retro.
+
+| Fast lane allowed when ALL hold | Use the full process instead when ANY holds |
+|---|---|
+| Few files (guide: ≤ 5 source files, plus tests/docs) | A new page, route, endpoint or permission action |
+| No schema change, no new migration | `prisma/schema.prisma` or `prisma/migrations/` changes |
+| Fixes a bug, a doc, a test, a message or a small behavior the owner asked for | It changes behavior a BRD describes, or the owner has not asked for it |
+| No data deletion, no secrets, no production | It touches real data, `.env` secrets or production |
+
+Flow:
+1. **Developer** (backend or frontend, by area): reproduce or state the problem, fix it
+   following `agent.md`, add or extend an automated check, run `npx tsc --noEmit`.
+2. **sdet**: runs `agent.md` §3 (tsc, eslint, the DoD suites; build when `src/` changed)
+   and pastes the raw counts.
+3. **Done**: one commit (`MAINT: …` or `BUG-NNN: …`), `worklog.md` entry (what, evidence,
+   NOT VERIFIED). Never push — the owner pushes.
+
+If the job grows past the left column while working, **stop** and switch to
+`/new-requirement` (or `/fix-bug` for an S1/S2 bug that needs triage). The ground rules
+in §4 and the stop conditions in §7 apply unchanged.
 
 ## 4. Ground rules (no exceptions)
 
