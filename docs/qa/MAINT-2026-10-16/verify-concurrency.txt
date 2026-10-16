@@ -1,0 +1,40 @@
+  ok  fixture: temp module
+  ok  fixture: temp test case
+  ok  fixture: temp bug
+  ok  test case: loaded updatedAt
+  ok  test case: user A saves with the loaded value -> 200
+  ok  test case: user B saves the stale copy -> 409 "This item was changed by someone else — reload"
+  ok  test case: two parallel saves from one copy -> one 200 + one 409
+  ok  test case: reload + save -> 200
+  ok  test case: malformed expectedUpdatedAt -> 400
+  ok  test case: legacy client without expectedUpdatedAt -> 200
+  ok  bug: loaded updatedAt
+  ok  bug: user A saves with the loaded value -> 200
+  ok  bug: user B saves the stale copy -> 409 "This item was changed by someone else — reload"
+  ok  bug: two parallel saves from one copy -> one 200 + one 409
+  ok  bug: reload + save -> 200
+  ok  bug: malformed expectedUpdatedAt -> 400
+  ok  bug: legacy client without expectedUpdatedAt -> 200
+  ok  module: loaded updatedAt
+  ok  module: user A saves with the loaded value -> 200
+  ok  module: user B saves the stale copy -> 409 "This item was changed by someone else — reload"
+  ok  module: two parallel saves from one copy -> one 200 + one 409
+  ok  module: reload + save -> 200
+  ok  module: malformed expectedUpdatedAt -> 400
+  ok  fixture: review raised (reviewer = vp)
+  ok  review: forward with the loaded value -> 200
+  ok  review: forward from a stale copy -> 409
+  ok  review: two parallel verdicts from one copy -> one 200 + one 409
+  ok  review: verdict from a stale copy -> 409
+  ok  review: exactly one verdict event recorded (the loser wrote nothing)
+  ok  fixture: module review raised (reviewer = manager)
+  ok  module review: two parallel bulk verdicts from one copy -> one 200 + one 409
+  ok  module review: bulk verdict from a stale copy -> 409
+GUARD @@port=5500 DATABASE()=tcms_test urlTargetOk=true
+LOCK tcms_verify acquired
+  ok  cleanup: module reviews hold only this run's cases
+CLEANUP removed notifications=5 bugs=1 test_cases=2 module_review_requests=1 modules=1 task_reports=0 refresh_tokens=0 login_attempts=0 activity_logs=0 users=0
+  ok  cleanup: residue 0 for every row this run created
+
+CONCURRENCY RESULT: 34 passed, 0 failed
+exit=0

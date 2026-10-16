@@ -24,7 +24,7 @@ project: every layer, every endpoint, every page and every file documented. Star
 | 14 | [Import Test Cases (CSV)](./14-import-test-cases.md) | The bulk-import feature: user flow, CSV format contract, API endpoints, per-layer code path, row-level error reporting |
 | 15 | [Coding Standards & LLD](./15-standards-and-lld.md) | The enforced layering contract (controller→validation→service→repository), raw-SQL rules, LLD principle map, caching/load-management, logging, page route & permission map |
 | 16 | [Single-Instance & Scaling](./16-single-instance-and-scaling.md) | Why one instance is the honest baseline, what breaks at scale, the measured load-test envelope, and the scale-up levers |
-| 17 | [Operations Runbook](./17-operations-runbook.md) | Daily ops: boot/health, mysqldump backup + restore drills, log triage, incident first-aid, TEST-schema certification for IT |
+| 17 | [Operations Runbook](./17-operations-runbook.md) | Daily ops: boot/health, mysqldump backup + restore drills, log triage, incident first-aid, TEST-schema certification for IT, first VP (`create-first-vp.mjs`, §6) |
 | 18 | [Crew Desk Integration](./18-crewdesk-integration.md) | Shared-service-account comment posting, auth modes, 1355-designated-ticket rule, guard probes, mock/test/live modes |
 
 ## Getting started & deployment
@@ -33,12 +33,14 @@ project: every layer, every endpoint, every page and every file documented. Star
 |---|---|
 | [`LOCAL-SETUP-WINDOWS.md`](./LOCAL-SETUP-WINDOWS.md) | Running TCMS locally on Windows: MySQL 8.4 on 127.0.0.1:5500, `.env`, `allowScripts`, migrations, seed, `npm run dev` |
 | [`../DEPLOYMENT.md`](../DEPLOYMENT.md) | Current MySQL 8.4 deployment guide (sandbox + company IT cutover) |
+| [`deploy/PRODUCTION-CHECKLIST.md`](./deploy/PRODUCTION-CHECKLIST.md) | **Production install, one page:** every `.env` key, systemd units for both processes, backups cron, go-live steps |
+| [`deploy/it-request-mysql.md`](./deploy/it-request-mysql.md) | What IT must provide: MySQL 8.4 settings, 3 users + exact grants, TLS, app server, nginx (WebSocket), firewall, single instance, backups |
 | [`deploy/reverse-proxy-websocket.md`](./deploy/reverse-proxy-websocket.md) | Reverse-proxy recipes (nginx / Apache / IIS) + firewall rules for the realtime socket service |
 
 ## Team process (6-agent team)
 
 The roles are defined in `../.claude/agents/` (manager, product-owner, developer-backend,
-developer-frontend, tester, sdet) and started with the slash commands in `../.claude/commands/`.
+developer-frontend, tester, sdet) and started with the slash commands in `../.claude/commands/` (small jobs: `/quick-fix`, see `process/WORKFLOW.md` §3a).
 Project rules and the Definition of Done live only in [`../agent.md`](../agent.md).
 
 | File | What it is |

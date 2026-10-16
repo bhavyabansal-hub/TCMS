@@ -20,7 +20,7 @@ PostgreSQL retired 2026-10-14 (kept read-only as rollback source; PG-era scripts
 agent.md            binding coding standards + Definition of Done   (READ FIRST)
 CLAUDE.md           pointer to agent.md + this file
 .claude/            agents/ (6 team roles), commands/ (/new-requirement, /build-requirement,
-                    /fix-bug, /retro), settings.json (project permission deny/ask rules)
+                    /fix-bug, /quick-fix fast lane, /retro), settings.json (permission deny/ask rules)
 worklog.md          append-only engineering log (never overwrite)
 docs/               README.md index, 01–18 guides, LOCAL-SETUP-WINDOWS.md, migration/ (PG→MySQL
                     dossier), deploy/, qa/, process/ (team workflow, decisions, backlog,
@@ -61,13 +61,17 @@ Dispatch is by query params: `?id=`, `?action=`, auth/crewdesk use `?path=`.
 `CAST(? AS JSON)` writes, `JSON_CONTAINS` filters · `Number()` on aggregates ·
 TINYINT(1) → boolean normalization (user.repository) · `Prisma.join/sql/empty` for
 dynamic fragments · transactions pass `tx: SqlExecutor` (= `Prisma.TransactionClient`,
-exported from test-cases.repository) · optimistic locking on test-case edits (409).
+exported from test-cases.repository) · optimistic locking: guarded UPDATE `WHERE updated_at = <client's
+expectedUpdatedAt>` on test cases (+ version), bugs, modules, review verdict/forward, module bulk
+verdict → 409 `ApiError.staleEdit()`; the guarded parent UPDATE runs before child inserts (no 1213).
+MySQL errors → clean 400/409/503 in `withApi` via `src/lib/server/db-errors.ts` (never SQL text).
 
 ## 4. API resources (`src/app/api/<resource>/` — 4 files each)
 
 | Resource | Endpoints (dispatch) | Permission gates (service) |
 |---|---|---|
-| `/api` (route.ts) | GET health `{status:'ok'}` | public |
+| `/api` (route.ts) | GET liveness `{status:'ok'}` | public |
+| `/api/ready` | GET readiness: DB ping ≤ 3 s → 200 `{status:'ready',database:'ok',readOnly}` / 503 | public |
 | auth | POST `?path=login\|register\|refresh\|logout`; GET me, `?path=ws-ticket`; PUT profile, `?path=password` | public login/refresh/logout; register only if `TCMS_ALLOW_SIGNUP=true` (creates `viewer`); lockout 5 fails→60 s 429; refresh rotation + 120 s grace; password change revokes all refresh tokens |
 | users | GET list, `?action=options`; POST; PUT `?id`; DELETE `?id` (soft `is_active=false`) | `manage_users` (options = any user) |
 | permissions | GET matrix; PUT toggle `{role,action,enabled}` | `manage_permissions` |
@@ -169,6 +173,11 @@ reconnect + tab visible, no polling timers).
 | `src/lib/server/ws-ticket.ts` | 60 s HMAC WS tickets |
 | `src/lib/server/delivery.ts` | SMTP (nodemailer) + Telegram delivery |
 | `src/lib/server/csv.ts` | RFC4180 parser, MAX_IMPORT_ROWS 200 |
+| `src/lib/server/optimistic-lock.ts` | `expectedUpdatedAtField` (zod) + `resolveExpectedUpdatedAt` for guarded updates (409) |
+| `src/lib/server/db-errors.ts` | pure MySQL/Prisma error → `{status,message,kind}` mapper used by `withApi` |
+| `src/lib/server/read-only.ts` | `TCMS_READ_ONLY` rule: writes → 503 except login/refresh/logout |
+| `src/lib/server/login-rate-limit.ts` | per-IP failed sign-in limit (in memory, last X-Forwarded-For entry) |
+| `src/lib/csv-export.ts` | `csvCell`/`toCsv`: RFC-4180 quoting + formula-injection guard (all CSV exports) |
 | `src/lib/server/startup-guard.ts` | `TCMS_DEPLOY_ENV=production` secret/DB-URL checks, exit 1 |
 | `src/lib/server/db-settings-guard.ts` | production: sql_mode/time_zone/charset checks, 5×3 s retry |
 | `src/lib/server/backup-health.ts` | daily stale-backup (>26 h) alert notifications |
@@ -213,6 +222,13 @@ never `db push`): `20261015034822_init_mysql` (hand-edited collations + JSON def
   verify-notifications, verify-review-matrix). Linux-only: `verify-battery.sh`,
   `run-crewdesk-tests.sh` (5 phases). `audit-standards.mjs` (report only). Other feature verifiers (`verify-permission-matrix.mjs`,
   `verify-review-matrix.mjs`, `verify-permissions.mjs`, `verify-notifications.mjs`, `verify-wiki.mjs`…).
+- **Production-readiness verifiers (2026-10-16, all self-cleaning):** `verify-concurrency.mjs` (409 races),
+  `verify-db-errors.mjs` (MySQL error mapping), `verify-flagged-fields.mjs` (B4), `verify-safety.mjs`
+  (headers, /api/ready, read-only, CSV, per-IP limit), `create-first-vp-test.mjs`, `verify-ui-gates.mjs`.
+  Shared cleanup: `scripts/lib/suite-cleanup.mjs` (ID-scoped, DB guard + lock) — the DoD suites remove
+  the rows they create (B16). R9 dry run: `cleanup-req001-testdata.mjs` (dry run by default).
+- **Ops scripts:** `create-first-vp.mjs` (first VP in production, docs/17 §6),
+  `send-test-notification.mjs` (one test email / Telegram message, `--check`).
 - **Infra verifiers:** `startup-guard-test.mjs` (17), `db-settings-guard-test.mjs` (11),
   `mysql-baseline-test.mjs` (19), `mysql-correctness-test.mjs` (15), `backup-test.mjs` (26),
   `backup-app-staleness-test.mjs` (10), `ws-auth-probe.mjs` (10), `ws-reconnect-test.mjs` (5).
@@ -243,7 +259,9 @@ See agent.md §3 — the single source (not repeated here).
 8. Large views: dashboard-v2 1044, tasks 905, bugs 834, integrations 792, test-cases 768,
    module-review-detail 631, modules 608 lines.
 9. ESLint rules mostly disabled; `noImplicitAny` false; `reactStrictMode` false.
-10. CSV export formula-injection guard only in test-cases (not bugs/tasks); bugs CSV under-quotes.
+10. ~~CSV export guard only in test-cases~~ — fixed 2026-10-16 (`src/lib/csv-export.ts` everywhere).
+    New: HSTS is sent by every build (`next.config.ts`); browsers apply it over HTTPS only, nginx also sets it.
+    `FLAGGABLE_FIELDS` is duplicated in `review-detail.tsx` and `module-review-detail.tsx`.
 11. Lists capped at 200 silently (bugs board, picker `all-light` queries).
 12. Unused deps: `react-hook-form`, `z-ai-web-dev-sdk`; `db:push --accept-data-loss` script contradicts migrate-only policy.
 13. Stale docs: docs 02/13 describe pre-restructure schema; docs 12 §3–§4 historical (PG era); `api/route.ts` mentions keep-alive; comments mention old roles admin/team_lead.

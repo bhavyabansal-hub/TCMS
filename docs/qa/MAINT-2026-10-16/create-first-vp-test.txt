@@ -1,0 +1,20 @@
+  ok  rule: short password rejected
+  ok  rule: no digit rejected
+  ok  rule: strong password accepted
+  ok  rule: email normalized
+  ok  CLI: refuses when an active VP exists (exit 1)
+  ok  CLI: password never printed
+  ok  CLI: bad email refused (exit 1)
+  ok  CLI: non-sandbox URL outside production -> NOT RUN (exit 2)
+  ok  CLI: production mode refuses the sandbox URL (exit 2)
+GUARD @@port=5500 DATABASE()=tcms_test urlTargetOk=true
+LOCK tcms_verify acquired
+  ok  tx: no active VP after the in-transaction deactivation
+  ok  tx: VP row inserted (role vp, active)
+  ok  tx: stored hash is bcrypt and verifies
+  ok  tx: hash does not contain the password
+  ok  after rollback: active VP count unchanged
+  ok  after rollback: test email absent
+
+FIRST-VP RESULT: 15 passed, 0 failed
+exit=0

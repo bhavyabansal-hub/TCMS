@@ -1,0 +1,177 @@
+STAMP=1792127171166
+PROFILE=C:\Users\sgass\AppData\Local\Temp\tcms-ui-gates-1792127171166
+CASE 7e1edf04-9a52-4bc5-b10a-65ec0cfb035a
+
+=== vp ===
+  ok  R2 vp: header "New Test Case" present
+  ok  R2 vp: header "Report Bug" present
+  ok  R2 vp: header "Reports" present
+  ok  R2 vp: quick action "New Test Case" present
+  ok  R2 vp: quick action "Report Bug" present
+  ok  R2 vp: quick action "Reviews" present
+  ok  R2 vp: quick action "Tasks" present
+  ok  R2 vp: quick action "Modules" present
+  ok  R2 vp: quick action "Reports" present
+  ok  R2 vp: quick action tile count = 6
+  ok  R2.AC8 vp: Latest Activity "View all" present
+  ok  R2.AC6 vp: KPI card is a <button>
+  ok  R2.AC6 vp: KPI click opens /reviews
+  ok  R3.AC2 vp: activity-entity request -> 200
+  ok  R3.AC3 vp: Activity card rendered
+  ok  R3.AC2 vp: Crew Desk config -> 200
+  ok  R3.AC2 vp: Crew Desk links -> 200
+  ok  R3.AC2 vp: Crew Desk email-check -> 200 or 502 not configured
+  ok  R3.AC2 vp: activity feed -> 200
+
+=== manager ===
+  ok  R2 manager: header "New Test Case" present
+  ok  R2 manager: header "Report Bug" present
+  ok  R2 manager: header "Reports" present
+  ok  R2 manager: quick action "New Test Case" present
+  ok  R2 manager: quick action "Report Bug" present
+  ok  R2 manager: quick action "Reviews" present
+  ok  R2 manager: quick action "Tasks" present
+  ok  R2 manager: quick action "Modules" present
+  ok  R2 manager: quick action "Reports" present
+  ok  R2 manager: quick action tile count = 6
+  ok  R2.AC8 manager: Latest Activity "View all" present
+  ok  R2.AC6 manager: KPI card is a <button>
+  ok  R2.AC6 manager: KPI click opens /reviews
+
+=== product ===
+  ok  R2 product: header "New Test Case" present
+  ok  R2 product: header "Report Bug" present
+  ok  R2 product: header "Reports" present
+  ok  R2 product: quick action "New Test Case" present
+  ok  R2 product: quick action "Report Bug" present
+  ok  R2 product: quick action "Reviews" present
+  ok  R2 product: quick action "Tasks" present
+  ok  R2 product: quick action "Modules" present
+  ok  R2 product: quick action "Reports" present
+  ok  R2 product: quick action tile count = 6
+  ok  R2.AC8 product: Latest Activity "View all" present
+  ok  R2.AC6 product: KPI card is a <button>
+  ok  R2.AC6 product: KPI click opens /reviews
+  ok  R1.AC5 product: "Save report" visible
+  ok  R1.AC5 product: "Add task" visible
+  ok  R1.AC5 product: no N1/N2/N3 notice
+  ok  R3 product /integrations (typed): 0 Crew Desk requests
+  ok  R3 product /integrations (typed): 0 /api/* 403
+  ok  R3 product /integrations (reload): 0 Crew Desk requests
+  ok  R3 product /integrations (reload): 0 /api/* 403
+  ok  R3 product /integrations: PermissionDenied text unchanged
+
+=== developer ===
+  ok  R2 developer: header "New Test Case" absent
+  ok  R2 developer: header "Report Bug" present
+  ok  R2 developer: header "Reports" absent
+  ok  R2 developer: quick action "New Test Case" absent
+  ok  R2 developer: quick action "Report Bug" present
+  ok  R2 developer: quick action "Reviews" absent
+  ok  R2 developer: quick action "Tasks" present
+  ok  R2 developer: quick action "Modules" present
+  ok  R2 developer: quick action "Reports" absent
+  ok  R2 developer: quick action tile count = 3
+  ok  R2.AC8 developer: Latest Activity "View all" absent
+  ok  R2.AC6(a) developer: KPI not a button, no role, no tabindex
+  ok  R2.AC6(b) developer: KPI has no chevron
+  ok  R2.AC6(c) developer: KPI click stays on /dashboard, 0 /api/reviews* requests
+  ok  R2.AC6(d) developer: KPI value equals hero "pending reviews" chip
+  ok  R3 developer /test-cases/[id] (typed): 0 activity-entity requests
+  ok  R3 developer /test-cases/[id] (typed): 0 /api/* 403
+  ok  R3 developer /test-cases/[id] (reload): 0 activity-entity requests
+  ok  R3 developer /test-cases/[id] (reload): 0 /api/* 403
+  ok  R3.AC3 developer: Activity card not rendered
+  ok  R3 developer /activity-log (typed): 0 activity feed requests
+  ok  R3 developer /activity-log (typed): 0 /api/* 403
+  ok  R3 developer /activity-log (reload): 0 activity feed requests
+  ok  R3 developer /activity-log (reload): 0 /api/* 403
+  ok  R3 developer /activity-log: PermissionDenied text unchanged
+  ok  R3 developer /integrations (typed): 0 Crew Desk requests
+  ok  R3 developer /integrations (typed): 0 /api/* 403
+  ok  R3 developer /integrations (reload): 0 Crew Desk requests
+  ok  R3 developer /integrations (reload): 0 /api/* 403
+  ok  R3 developer /integrations: PermissionDenied text unchanged
+
+=== qa_engineer ===
+  ok  R2 qa_engineer: header "New Test Case" present
+  ok  R2 qa_engineer: header "Report Bug" present
+  ok  R2 qa_engineer: header "Reports" absent
+  ok  R2 qa_engineer: quick action "New Test Case" present
+  ok  R2 qa_engineer: quick action "Report Bug" present
+  ok  R2 qa_engineer: quick action "Reviews" absent
+  ok  R2 qa_engineer: quick action "Tasks" present
+  ok  R2 qa_engineer: quick action "Modules" present
+  ok  R2 qa_engineer: quick action "Reports" absent
+  ok  R2 qa_engineer: quick action tile count = 4
+  ok  R2.AC8 qa_engineer: Latest Activity "View all" absent
+  ok  R2.AC6(a) qa_engineer: KPI not a button, no role, no tabindex
+  ok  R2.AC6(b) qa_engineer: KPI has no chevron
+  ok  R2.AC6(c) qa_engineer: KPI click stays on /dashboard, 0 /api/reviews* requests
+  ok  R2.AC6(d) qa_engineer: KPI value equals hero "pending reviews" chip
+  ok  R1.AC5 qa_engineer: "Save report" visible
+  ok  R1.AC5 qa_engineer: "Add task" visible
+  ok  R1.AC5 qa_engineer: no N1/N2/N3 notice
+  ok  R3 qa_engineer /test-cases/[id] (typed): 0 activity-entity requests
+  ok  R3 qa_engineer /test-cases/[id] (typed): 0 /api/* 403
+  ok  R3 qa_engineer /test-cases/[id] (reload): 0 activity-entity requests
+  ok  R3 qa_engineer /test-cases/[id] (reload): 0 /api/* 403
+  ok  R3.AC3 qa_engineer: Activity card not rendered
+  ok  R3 qa_engineer /activity-log (typed): 0 activity feed requests
+  ok  R3 qa_engineer /activity-log (typed): 0 /api/* 403
+  ok  R3 qa_engineer /activity-log (reload): 0 activity feed requests
+  ok  R3 qa_engineer /activity-log (reload): 0 /api/* 403
+  ok  R3 qa_engineer /activity-log: PermissionDenied text unchanged
+  ok  R3 qa_engineer /integrations (typed): 0 Crew Desk requests
+  ok  R3 qa_engineer /integrations (typed): 0 /api/* 403
+  ok  R3 qa_engineer /integrations (reload): 0 Crew Desk requests
+  ok  R3 qa_engineer /integrations (reload): 0 /api/* 403
+  ok  R3 qa_engineer /integrations: PermissionDenied text unchanged
+
+=== viewer ===
+  ok  R2 viewer: header "New Test Case" absent
+  ok  R2 viewer: header "Report Bug" absent
+  ok  R2 viewer: header "Reports" absent
+  ok  R2 viewer: quick action "New Test Case" absent
+  ok  R2 viewer: quick action "Report Bug" absent
+  ok  R2 viewer: quick action "Reviews" absent
+  ok  R2 viewer: quick action "Tasks" present
+  ok  R2 viewer: quick action "Modules" present
+  ok  R2 viewer: quick action "Reports" absent
+  ok  R2 viewer: quick action tile count = 2
+  ok  R2.AC8 viewer: Latest Activity "View all" absent
+  ok  R2.AC6(a) viewer: KPI not a button, no role, no tabindex
+  ok  R2.AC6(b) viewer: KPI has no chevron
+  ok  R2.AC6(c) viewer: KPI click stays on /dashboard, 0 /api/reviews* requests
+  ok  R2.AC6(d) viewer: KPI value equals hero "pending reviews" chip
+  ok  R1 viewer: no "Add task" button
+  ok  R1 viewer: no "Save report" button
+  ok  R1 viewer: no task row card (no remove control)
+  ok  R1 viewer: exactly one notice and it equals N1
+  ok  R1 viewer: empty state "No tasks logged for <date>."
+  ok  R1 viewer: no "Add your first entry"
+  ok  R1 viewer: "Export CSV" disabled
+  ok  R1 viewer: no "User" picker
+  ok  R1 viewer: 0 POST/PUT /api/task-reports
+  ok  R1 viewer: 0 /api/* 403 on /tasks
+  ok  R3 viewer /test-cases/[id] (typed): 0 activity-entity requests
+  ok  R3 viewer /test-cases/[id] (typed): 0 /api/* 403
+  ok  R3 viewer /test-cases/[id] (reload): 0 activity-entity requests
+  ok  R3 viewer /test-cases/[id] (reload): 0 /api/* 403
+  ok  R3.AC3 viewer: Activity card not rendered
+  ok  R3 viewer /activity-log (typed): 0 activity feed requests
+  ok  R3 viewer /activity-log (typed): 0 /api/* 403
+  ok  R3 viewer /activity-log (reload): 0 activity feed requests
+  ok  R3 viewer /activity-log (reload): 0 /api/* 403
+  ok  R3 viewer /activity-log: PermissionDenied text unchanged
+  ok  R3 viewer /integrations (typed): 0 Crew Desk requests
+  ok  R3 viewer /integrations (typed): 0 /api/* 403
+  ok  R3 viewer /integrations (reload): 0 Crew Desk requests
+  ok  R3 viewer /integrations (reload): 0 /api/* 403
+  ok  R3 viewer /integrations: PermissionDenied text unchanged
+  ok  harness: spawned Chrome pid tree gone
+  ok  harness: Chrome profile dir removed
+  ok  harness: matrix still 126 default at the end
+
+PASS=159 FAIL=0
+exit=0
