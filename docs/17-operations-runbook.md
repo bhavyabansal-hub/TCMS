@@ -120,7 +120,7 @@ second line of defense (all commands run from the deployment root, e.g. `/srv/tc
   `OnCalendar=*-*-* 02:30:00` and `OnCalendar=hourly`.
 - **App-side second safety net (automatic, no IT action needed):** the Next server itself
   checks the newest valid backup once per UTC day — shortly after boot, then at every UTC
-  midnight (`src/lib/server/backup-health.ts`, wired in `src/instrumentation.ts`). When
+  midnight (`src/lib/server/backup-health.ts`, wired in `src/instrumentation-node.ts`). When
   the newest valid backup is older than 26 h (or none exists), it raises the SAME
   `backup_failed` in-app alert to every active manage_users holder — but at most ONE such
   alert per UTC day, even across app restarts (deduped against the notifications table:

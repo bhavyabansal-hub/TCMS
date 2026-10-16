@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-16 — MAINT logs
+
+- **Clean dev log:** the 8 "Node.js API in Edge Runtime" warnings are gone — `src/instrumentation.ts` only loads `src/instrumentation-node.ts` in the Node runtime.
+- **SQL logging:** `prisma:query` lines only with `TCMS_LOG_SQL=true` (off by default, any environment).
+- **Fallbacks:** the WebSocket broadcast no longer delays a request when the WS service is slow or down; SMTP sends have a full timeout. DB down → `/api/ready` and data requests answer 503 with a clear message.
+
 ## 2026-10-16 — Cleanup: PostgreSQL removed, docs describe today's app
 
 - **Removed:** the whole `archive/` folder, the PostgreSQL scripts (schema converter, 250-row probe, rollback drill), the migration dossier `docs/migration/`, old one-time reports (REFACTOR-*, CODE-QUALITY-*, older QA prompts/reports), the stale PDF guide and its build script, and raw test evidence files.

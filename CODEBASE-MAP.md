@@ -181,7 +181,7 @@ reconnect + tab visible, no polling timers).
 | `src/lib/server/*.repository.ts` | shared: user, role-permission, notification, activity-log |
 | `src/lib/format.ts` | colors, hex palettes, date/time formatters |
 | `src/types/index.ts` / `sql-rows.ts` | domain unions/interfaces / raw row types |
-| `src/instrumentation.ts` | boot: startup guard → db guard → error handlers → SIGTERM disconnect → backup monitor |
+| `src/instrumentation.ts` → `src/instrumentation-node.ts` | boot (Node runtime only): startup guard → db guard → error handlers → SIGTERM disconnect → backup monitor |
 
 ## 8. Database (`prisma/schema.prisma`, MySQL)
 

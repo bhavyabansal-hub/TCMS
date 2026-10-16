@@ -105,7 +105,7 @@ repository files are 100% parameterized raw SQL (0 ORM model calls, 0
   connections. Server-side guards: MySQL `max_connections` (sandbox 200; ask IT for prod) and Prisma
   `idle_in_transaction_session_timeout=10s` are set at DATABASE level, so a runaway
   query or a leaked transaction can never choke the pool. Shutdown is graceful:
-  `src/instrumentation.ts` closes the pool on SIGTERM/SIGINT (3s cap) so a redeploy
+  `src/instrumentation-node.ts` closes the pool on SIGTERM/SIGINT (3s cap) so a redeploy
   never strands connections.
 
 **Client (React Query)**
@@ -138,7 +138,7 @@ repository files are 100% parameterized raw SQL (0 ORM model calls, 0
      per `TELEGRAM_LOG_MIN_INTERVAL_MS`, oversized batches keep the newest
      lines + a suppression counter). This is a SEPARATE bot from the
      user-notification `TELEGRAM_BOT_TOKEN`.
-- **Process-level capture**: `src/instrumentation.ts` funnels
+- **Process-level capture**: `src/instrumentation-node.ts` funnels
   `unhandledRejection`/`uncaughtException` into the same logger (crash
   behaviour preserved), so global failures reach Telegram too.
 - Services log business milestones; `withApi` logs every request line with

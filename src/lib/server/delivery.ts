@@ -85,6 +85,10 @@ async function getTransporter(config: SmtpConfig) {
         secure: config.secure,
         auth: config.user ? { user: config.user, pass: config.pass } : undefined,
         connectionTimeout: EMAIL_TIMEOUT_MS,
+        // Cap the whole SMTP exchange too, so a stalled server cannot hold
+        // background work open (nodemailer defaults are minutes long).
+        greetingTimeout: EMAIL_TIMEOUT_MS,
+        socketTimeout: EMAIL_TIMEOUT_MS,
       })
     )
   }

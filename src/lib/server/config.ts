@@ -91,6 +91,9 @@ export const LOG_DIR = str('LOG_DIR', 'logs')
 /** Days to keep log files; older files are purged once per day. */
 export const LOG_RETENTION_DAYS = int('LOG_RETENTION_DAYS', 14)
 
+/** Prisma prints every SQL statement (`prisma:query`) only when this is true. Off by default. */
+export const LOG_SQL = str('TCMS_LOG_SQL').toLowerCase() === 'true'
+
 /**
  * Dedicated LOGS BOT (separate from the user-notification bot): when both
  * keys are set, warn/error lines are mirrored to that Telegram chat so the

@@ -40,6 +40,7 @@ startup guard refuses shorter, placeholder or sandbox values and names the varia
 | `TCMS_ALLOW_SIGNUP` | `false` (or unset) | Self-signup off — accounts are created by a VP in Settings → Users. |
 | `NEXT_PUBLIC_ALLOW_SIGNUP` | `false` (or unset) | Build-time twin: hides the Register tab. **Set before `npm run build`.** |
 | `TCMS_READ_ONLY` | unset / `false` | Set `true` only during maintenance (all writes → 503, sign-in still works). |
+| `TCMS_LOG_SQL` | unset / `false` | `true` prints every SQL statement (`prisma:query`) — debugging only. |
 
 ### 1.3 Realtime (WebSocket)
 

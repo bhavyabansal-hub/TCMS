@@ -82,7 +82,9 @@ export async function createNotification(input: CreateNotificationInput) {
       entityId: input.entityId ?? null,
     })
 
-    await broadcastToWs({
+    // Not awaited: a slow or hung WS service must never delay the request
+    // (broadcastToWs has its own timeout and never throws).
+    void broadcastToWs({
       userId: input.userId,
       type: input.type,
       title: input.title,
@@ -95,11 +97,9 @@ export async function createNotification(input: CreateNotificationInput) {
     // deliverNotification never throws; the catch is belt-and-suspenders so
     // delivery can never break the business operation that notified.
     //
-    // SERVERLESS NOTE: on Vercel the function is frozen as soon as the HTTP
-    // response is sent, so a bare fire-and-forget (`void deliver...`) can be
-    // cut off mid-send and the message silently never arrives. Schedule the
-    // send with after() so it runs (and completes) after the response, and
-    // fall back to fire-and-forget when no request scope exists (scripts).
+    // Scheduled with after() so the send runs after the response is sent (the
+    // request never waits for SMTP / Telegram); fire-and-forget when no request
+    // scope exists (scripts).
     const deliveryTarget = {
       email: user.email,
       telegramChatId: user.telegram_chat_id,

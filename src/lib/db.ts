@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { IS_PRODUCTION } from '@/lib/server/config'
+import { IS_PRODUCTION, LOG_SQL } from '@/lib/server/config'
 
 // SINGLETON CONNECTION (design principle):
 // exactly ONE PrismaClient instance exists per runtime. In development the
@@ -22,9 +22,9 @@ export const db =
   globalForPrisma.prisma ??
   new PrismaClient({
     // LOAD: 'query' logging writes one stdout line per SQL statement — useful
-    // for local debugging, but pure I/O overhead (and log noise) under
-    // production load, so production keeps only error logging.
-    log: IS_PRODUCTION ? ['error'] : ['query', 'error'],
+    // for debugging, but pure I/O overhead and log noise, so it is OFF unless
+    // TCMS_LOG_SQL=true (any environment).
+    log: LOG_SQL ? ['query', 'error'] : ['error'],
   })
 
 if (!IS_PRODUCTION) globalForPrisma.prisma = db
