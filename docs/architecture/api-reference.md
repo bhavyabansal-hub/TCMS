@@ -90,7 +90,7 @@ No activity logs / notifications are produced by the seed.
 
 | Endpoint | Returns |
 |---|---|
-| `GET ?action=dashboard` | `{ totalTestCases, statusBreakdown[{status,count}], openBugs, severityBreakdown[{severity,count}], myPendingReviews, recentActivity(10, with user) }` |
+| `GET ?action=dashboard` | `{ totalTestCases, statusBreakdown[{status,count}], openBugs, severityBreakdown[{severity,count}], myPendingReviews, recentActivity(10, with user; summaries without snapshots, IP or user agent — full feed with `view_activity_logs`, else own rows) }` |
 | `GET ?action=reports` 🛡 `view_all_task_reports` | `{ testCasesByStatus, testCasesByPriority, bugsByStatus, weeklyHours[{user,week,minutes,hours}] }` — last 30 days, Sunday-based weeks |
 
 `openBugs` counts `status ∈ ['open','in_progress']`; `myPendingReviews` counts reviews
@@ -101,7 +101,7 @@ returns **200** `{ error: 'Unknown action' }` (elsewhere it's 400).
 
 | Endpoint | Auth rules | Behaviour |
 |---|---|---|
-| `GET` | any role | `{ tree, flat }` — every module with `owner`, `testCaseCount` (groupBy), nested `children` |
+| `GET` | any role | `{ flat }` — every module once, with `owner` and `testCaseCount` (whole subtree); cached server-side (cleared by every write). The client builds the nested tree (`modulesApi.tree()` → `{ tree, flat }`) |
 | `GET ?id=` | any role | `{ module (incl. owner/createdBy/updatedBy/permissions), testCases (desc by updated), submodules }`; 404 `Module not found` |
 | `POST` 🛡 `create_module` | body `{ name(min 1), description?, parentId? }` | Root: `path=''`, depth 0. Child: parent 404-checked; `path=parent.path + '.' + parentId`, `depth+1`. **`ownerId` is never taken from the client — owner = creator.** Logs `CREATE/module` |
 | `PUT ?id=` 🛡 `edit_module` | body `{ name?, description?, ownerId? }` | Ownership transfer allowed; `createdById` immutable (governs delete rights). Sets `updatedById`. Logs `UPDATE/module` with before/after |
@@ -126,6 +126,7 @@ returns **200** `{ error: 'Unknown action' }` (elsewhere it's 400).
 | Endpoint | Auth rules | Behaviour |
 |---|---|---|
 | `GET` list 🛡 any | params `page(1)`, `pageSize(20)`, `moduleId`, `status`, `priority`, `authorId`, `search` | `paginate` of serialized cases, fixed sort `updatedAt desc`. `search` = title `LIKE` (case-insensitive on MySQL 8.4 utf8mb4_unicode_ci) |
+| `GET ?action=options` | any | Light picker list `[{ testCaseId, title }]`, newest first, `limit` 1–500 (default 500) — e.g. the work-log link picker |
 | `GET ?id=` | any | single serialized case; 404 `Test case not found` |
 | `GET ?id=&action=history` | any | `TestCaseHistory[]` (version desc, with `changedBy`) — snapshots parsed |
 | `GET ?id=&action=reviews` | any | `ReviewRequest[]` for the case (with reviewer/requester/events) |
@@ -205,6 +206,7 @@ For each: `ReviewEvent(approved, comment)` → review `completed` → its case �
 | Endpoint | Auth rules | Behaviour |
 |---|---|---|
 | `GET` list | any | `page(1)`, `pageSize(100)`, filters `status`, `severity`, `moduleId`, `assignedToId`, `reportedById`, `search` (title contains, case-insensitive); sort `createdAt desc` |
+| `GET ?action=options` | any | Light picker list `[{ bugId, title }]`, newest first, `limit` 1–500 (default 500) |
 | `GET ?id=` | any | Bug + module + reportedBy + assignedTo + testCaseLinks |
 | `GET ?id=&action=links` | any | `BugTestCaseLink[]` with testCase summaries |
 | `POST` 🛡 `create_bug` | body `{ title, description?, severity(default medium), environment?, stepsToReproduce?, expectedBehaviour?, actualBehaviour?, moduleId?, assignedToId?, testCaseIds[] }` | `reportedById = me`; optional test-case links. An `assignedToId` additionally needs `assign_bug` (403 otherwise). Logs `CREATE/bug`; if assigned → notify assignee (`bug_assigned`) |

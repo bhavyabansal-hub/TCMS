@@ -59,3 +59,13 @@ export function validateUpdateBugBody(body: unknown) {
 export function validateLinkTestCaseBody(body: unknown) {
   return parseOrThrow(linkTestCaseSchema, body, 'Missing testCaseId')
 }
+
+// GET ?action=options — the light picker list (id + title only).
+export const BUG_OPTIONS_MAX_LIMIT = 500
+const bugOptionsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(BUG_OPTIONS_MAX_LIMIT).default(BUG_OPTIONS_MAX_LIMIT),
+})
+
+export function validateBugOptionsQuery(query: unknown) {
+  return parseOrThrow(bugOptionsQuerySchema, query)
+}

@@ -14,6 +14,7 @@ import { logger } from '@/lib/logger'
 import { serializeUser, type SerializedUser } from '@/lib/serializers'
 import type { UserOption } from '@/types'
 import { findUserByEmail, findUserById } from '@/lib/server/user.repository'
+import { REFERENCE_CACHE_PREFIX, REFERENCE_CACHE_TTL_MS, withCache } from '@/lib/server/cache'
 import {
   countUsers,
   deactivateUser,
@@ -58,7 +59,9 @@ export async function listUsersPaginated(
  *  audit fields) stays on the manage_users-gated list above. The
  *  canPerformReview flag comes from the live matrix, not a static role list. */
 export async function listUserOptions(): Promise<UserOption[]> {
-  const rows = await listUserOptionRows()
+  // Cache-aside: every picker reads this; logActivity clears it after any write.
+  // The reviewer flag below is computed live from the matrix, never cached.
+  const rows = await withCache(`${REFERENCE_CACHE_PREFIX}user-options`, REFERENCE_CACHE_TTL_MS, listUserOptionRows)
   // One effective-permission lookup per distinct role (the matrix is
   // role-based), then a cheap membership check per row.
   const reviewerRoles = new Set(

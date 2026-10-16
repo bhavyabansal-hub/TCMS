@@ -23,6 +23,7 @@ import {
 } from '@/lib/serializers'
 import { findFirstActiveReviewer, findUserById } from '@/lib/server/user.repository'
 import { resolveExpectedUpdatedAt } from '@/lib/server/optimistic-lock'
+import { REFERENCE_CACHE_PREFIX, REFERENCE_CACHE_TTL_MS, withCache } from '@/lib/server/cache'
 import {
   deleteModule,
   findModuleById,
@@ -38,7 +39,7 @@ import {
   listTestCases,
   listTestCasesInModuleTree,
   listTestCasesInModules,
-  updateTestCaseStatus,
+  updateTestCaseStatusMany,
 } from '../test-cases/test-cases.repository'
 import { closeOpenReviewsForTestCases, insertReviewRequestsForModuleReview } from '../reviews/reviews.repository'
 import {
@@ -55,11 +56,11 @@ const ELIGIBLE_REVIEW_STATUSES = ['draft', 'needs_revision']
 // the UI pages through with "Load more" instead of one giant payload.
 export const MODULE_DETAIL_PAGE_SIZE = 100
 
-export type ModuleTreeNode = SerializedModule & { children: ModuleTreeNode[] }
 
+/** Flat list only: the client builds the tree (src/lib/client/api.ts modulesApi.tree),
+ *  so every module is sent once instead of twice (perf audit 2026-10-17). */
 export interface ModuleTreeResponse {
-  tree: ModuleTreeNode[]
-  flat: ModuleTreeNode[]
+  flat: SerializedModule[]
 }
 
 export interface ModuleDetailCasePage {
@@ -96,19 +97,9 @@ export interface SubmitModuleReviewResult {
  *  built from parentId. flat entries and tree nodes share the same objects,
  *  exactly like legacy. */
 export async function listModuleTree(): Promise<ModuleTreeResponse> {
-  const rows = await listModulesWithOwnerAndCaseCount()
-  const nodes: ModuleTreeNode[] = rows.map((row) => ({
-    ...serializeModuleWithJoins(row),
-    children: [],
-  }))
-  const byId = new Map(nodes.map((node) => [node.moduleId, node]))
-  const tree: ModuleTreeNode[] = []
-  for (const node of nodes) {
-    const parent = node.parentId ? byId.get(node.parentId) : undefined
-    if (parent) parent.children.push(node)
-    else tree.push(node)
-  }
-  return { tree, flat: nodes }
+  // Cache-aside: every page with a module picker reads this; logActivity clears it.
+  const rows = await withCache(`${REFERENCE_CACHE_PREFIX}module-tree`, REFERENCE_CACHE_TTL_MS, listModulesWithOwnerAndCaseCount)
+  return { flat: rows.map((row) => serializeModuleWithJoins(row)) }
 }
 
 /** Module detail: module with user refs, its test cases, its direct
@@ -288,10 +279,8 @@ export async function submitModuleForReview(
     }))
   )
 
-  // Move all submitted test cases into "in_review".
-  for (const tc of testCases) {
-    await updateTestCaseStatus(tc.test_case_id, 'in_review')
-  }
+  // Move all submitted test cases into "in_review" — one statement for the module.
+  await updateTestCaseStatusMany(testCases.map((tc) => tc.test_case_id), 'in_review')
 
   await logActivity({
     userId: me.userId,

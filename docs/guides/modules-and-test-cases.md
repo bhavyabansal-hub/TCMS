@@ -16,7 +16,7 @@ submodule chips, its test cases, and module-level actions.
 ### Data
 | Query | Endpoint | Notes |
 |---|---|---|
-| `['modules','tree']` | `GET /api/modules` | `{ tree, flat }` — the left panel + every module picker in the app |
+| `['modules','tree']` | `GET /api/modules` (flat list; `modulesApi.tree()` builds the tree) | `{ tree, flat }` — the left panel + every module picker in the app |
 | `['modules','detail',selectedId]` | `GET /api/modules?id=…` | `{ module, testCases, submodules }`, `enabled: !!selectedId` |
 | `['users','all']` | `GET /api/users?pageSize=200` | for the reviewer picker in the submit dialog |
 

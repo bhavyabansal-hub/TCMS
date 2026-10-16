@@ -73,7 +73,7 @@ MySQL errors → clean 400/409/503 in `withApi` via `src/lib/server/db-errors.ts
 | auth | POST `?path=login\|register\|refresh\|logout`; GET me, `?path=ws-ticket`; PUT profile, `?path=password` | public login/refresh/logout; register only if `TCMS_ALLOW_SIGNUP=true` (creates `viewer`); lockout 5 fails→60 s 429; refresh rotation + 120 s grace; password change revokes all refresh tokens |
 | users | GET list, `?action=options`; POST; PUT `?id`; DELETE `?id` (soft `is_active=false`) | `manage_users` (options = any user) |
 | permissions | GET matrix; PUT toggle `{role,action,enabled}` | `manage_permissions` |
-| modules | GET tree `{tree,flat}`, `?id[&caseOffset]`; POST; PUT `?id`, `&action=submit-review`; DELETE `?id` (hard, cascades) | `create_module`, `edit_module`, `submit_review`; delete = creator or `edit_module` |
+| modules | GET `{flat}` (client builds the tree), `?id[&caseOffset]`; POST; PUT `?id`, `&action=submit-review`; DELETE `?id` (hard, cascades) | `create_module`, `edit_module`, `submit_review`; delete = creator or `edit_module` |
 | test-cases | GET list/`?id`/`&action=history\|reviews`/`?action=import-template`; POST, `?action=import` (CSV ≤200 rows); PUT `?id` (versioned + history snapshot), `&action=submit-review`; DELETE `?id`, `?action=bulk-delete` (hard, ≤200) | `create_test_case`; edit = `edit_any_test_case` or author+`edit_own_test_case`; `submit_review`; delete = author or `delete_test_case` |
 | reviews | GET `?action=queue`, `?id`, list; POST `?id` verdict, `&action=forward` | `perform_review` (+ assigned reviewer) |
 | module-reviews | GET `?action=queue\|all`, `?id`; POST `?id&action=approve-all\|bulk-verdict\|change-reviewer` | `perform_review` |
@@ -225,6 +225,9 @@ never `db push`): `20261015034822_init_mysql` (hand-edited collations + JSON def
   (headers, /api/ready, read-only, CSV, per-IP limit), `create-first-vp-test.mjs`, `verify-ui-gates.mjs`.
   Shared cleanup: `scripts/lib/suite-cleanup.mjs` (ID-scoped, DB guard + lock) — the DoD suites remove
   the rows they create (B16). R9 dry run: `cleanup-req001-testdata.mjs` (dry run by default).
+- **Performance (2026-10-17):** `verify-page-apis.mjs` (per page × role: API calls, duplicates,
+  401/403 calls, loading phases, p95 — run against a production build) and `loadtest-1000.mjs`
+  (realistic 1000 users + stress, p50/p95, DB connection peak). Results: `docs/architecture/HLD.md` §7.
 - **Ops scripts:** `create-first-vp.mjs` (first VP in production, `docs/deploy/operations-runbook.md` §6),
   `send-test-notification.mjs` (one test email / Telegram message, `--check`).
 - **Infra verifiers:** `startup-guard-test.mjs` (17), `db-settings-guard-test.mjs` (11),

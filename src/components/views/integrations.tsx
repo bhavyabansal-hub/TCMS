@@ -15,7 +15,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { PageHeader } from '@/components/shared/page-header'
-import { crewdeskApi, modulesApi } from '@/lib/client/api'
+import { crewdeskApi, modulesApi, REFERENCE_STALE_TIME_MS } from '@/lib/client/api'
 import { invalidateAfterMutation } from '@/lib/client/invalidate'
 import type { Module } from '@/types'
 import { formatDateTime } from '@/lib/format'
@@ -64,10 +64,17 @@ export function IntegrationsView() {
   const [preview, setPreview] = useState<{ title: string; status: string; canLink: boolean } | null>(null)
   const [manualCopy, setManualCopy] = useState<{ comment: string; moduleUrl: string } | null>(null)
 
-  const modulesQuery = useQuery({ queryKey: ['modules', 'flat'], queryFn: () => modulesApi.tree() })
   // Crew Desk calls only run for manage_integrations holders (the server
   // gates them too); without it the page renders PermissionDenied below.
   const canManageIntegrations = !!user && can('manage_integrations')
+  // Same key + staleTime as every other module-tree consumer (one shared cache
+  // entry, no duplicate call), and only when the page is actually shown.
+  const modulesQuery = useQuery({
+    queryKey: ['modules', 'tree'],
+    queryFn: modulesApi.tree,
+    staleTime: REFERENCE_STALE_TIME_MS,
+    enabled: canManageIntegrations,
+  })
   const configQuery = useQuery({
     queryKey: ['crewdesk', 'config'],
     queryFn: crewdeskApi.config,

@@ -31,12 +31,12 @@ import {
   type ModuleReviewRequestWithCountSqlRow,
 } from './module-reviews.repository'
 import {
-  insertReviewEvent,
+  insertReviewEventsMany,
   listEventsByRequestIds,
-  updateReviewRequestReviewerIfOpen,
-  updateReviewRequestStatus,
+  updateReviewRequestsReviewerIfOpen,
+  updateReviewRequestStatusMany,
 } from '../reviews/reviews.repository'
-import { listTestCasesByIds, updateTestCaseStatus } from '../test-cases/test-cases.repository'
+import { listTestCasesByIds, updateTestCaseStatusMany } from '../test-cases/test-cases.repository'
 
 // Legacy constants preserved verbatim.
 const DEFAULT_BULK_COMMENT = 'Bulk approved with module review.'
@@ -194,20 +194,19 @@ export async function bulkCaseReviewVerdict(
   await db.$transaction(async (tx) => {
     const changed = await updateModuleReviewRequestStatusIfUnchanged(moduleReviewId, newModuleStatus, expected, tx)
     if (changed === 0) throw ApiError.staleEdit()
-    for (const caseReview of caseReviews) {
-      await insertReviewEvent(
-        {
-          reviewRequestId: caseReview.review_request_id,
-          reviewerId: me.userId,
-          verdict: input.verdict,
-          comment,
-          flaggedFields: [],
-        },
-        tx
-      )
-      await updateReviewRequestStatus(caseReview.review_request_id, newCaseStatus, tx)
-      await updateTestCaseStatus(caseReview.test_case_id, outcome.testCaseStatus, tx)
-    }
+    // Three statements for the whole module, not three per case (perf audit 2026-10-17).
+    await insertReviewEventsMany(
+      caseReviews.map((caseReview) => ({
+        reviewRequestId: caseReview.review_request_id,
+        reviewerId: me.userId,
+        verdict: input.verdict,
+        comment,
+        flaggedFields: [],
+      })),
+      tx
+    )
+    await updateReviewRequestStatusMany(caseReviews.map((c) => c.review_request_id), newCaseStatus, tx)
+    await updateTestCaseStatusMany(caseReviews.map((c) => c.test_case_id), outcome.testCaseStatus, tx)
   })
 
   await logActivity({
@@ -319,10 +318,8 @@ export async function changeModuleReviewer(
     if (changed === 0) {
       throw ApiError.conflict('This module review was just completed — it can no longer be reassigned.')
     }
-    for (const caseReview of openCaseReviews) {
-      // Guarded per case: a verdict landing mid-flight wins over the swap.
-      await updateReviewRequestReviewerIfOpen(caseReview.review_request_id, input.reviewerId, tx)
-    }
+    // One guarded statement: a verdict landing mid-flight (completed) wins over the swap.
+    await updateReviewRequestsReviewerIfOpen(openCaseReviews.map((c) => c.review_request_id), input.reviewerId, tx)
   })
 
   await logActivity({

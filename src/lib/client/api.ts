@@ -305,8 +305,21 @@ export const usersApi = {
 /** Optimistic lock (B2): send the `updatedAt` you loaded; a stale save gets 409. */
 type Guarded = { expectedUpdatedAt?: string }
 
+/** Builds the nested tree from the flat list the API sends (each module once). */
+function buildModuleTree(flat: Module[]): { tree: Module[]; flat: Module[] } {
+  const nodes = flat.map((m) => ({ ...m, children: [] as Module[] }))
+  const byId = new Map(nodes.map((n) => [n.moduleId, n]))
+  const tree: Module[] = []
+  for (const node of nodes) {
+    const parent = node.parentId ? byId.get(node.parentId) : undefined
+    if (parent) parent.children.push(node)
+    else tree.push(node)
+  }
+  return { tree, flat: nodes }
+}
+
 export const modulesApi = {
-  tree: () => request<{ tree: Module[]; flat: Module[] }>('/api/modules'),
+  tree: async () => buildModuleTree((await request<{ flat: Module[] }>('/api/modules')).flat),
   get: (id: string, caseOffset = 0) =>
     request<{ module: Module & { createdBy?: UserRef; updatedBy?: UserRef; permissions?: unknown[] }; testCases: TestCase[]; subtreeTestCases: TestCase[]; submodules: Module[]; casePage: { limit: number; offset: number; total: number; directTotal: number; hasMore: boolean } }>(`/api/modules?id=${id}&caseOffset=${caseOffset}`),
   create: (body: { name: string; description?: string; parentId?: string | null }) =>
@@ -334,7 +347,12 @@ export interface TestCaseFilters {
   pageSize?: number
 }
 
+/** Light picker rows (GET ?action=options): id + title only. */
+export type TestCaseOption = { testCaseId: string; title: string }
+export type BugOption = { bugId: string; title: string }
+
 export const testCasesApi = {
+  options: () => request<TestCaseOption[]>('/api/test-cases?action=options'),
   list: (filters: TestCaseFilters = {}) =>
     request<Paginated<TestCase>>(`/api/test-cases?${qs(filters)}`),
   get: (id: string) => request<TestCase>(`/api/test-cases?id=${id}`),
@@ -414,6 +432,7 @@ export const moduleReviewsApi = {
 
 // ---------- Bugs ----------
 export const bugsApi = {
+  options: () => request<BugOption[]>('/api/bugs?action=options'),
   list: (filters: Record<string, string> = {}) =>
     request<Paginated<Bug>>(`/api/bugs?${qs(filters)}`),
   get: (id: string) => request<Bug>(`/api/bugs?id=${id}`),

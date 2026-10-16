@@ -87,6 +87,32 @@ export async function updateReviewRequestStatus(
     WHERE review_request_id = ${reviewRequestId}`
 }
 
+/** Batch form of updateReviewRequestStatus — ONE statement (module bulk verdict). */
+export async function updateReviewRequestStatusMany(
+  reviewRequestIds: string[],
+  status: string,
+  tx: SqlExecutor = db
+): Promise<void> {
+  if (reviewRequestIds.length === 0) return
+  await tx.$executeRaw`
+    UPDATE review_requests SET status = ${status}, updated_at = UTC_TIMESTAMP(3)
+    WHERE review_request_id IN (${Prisma.join(reviewRequestIds)})`
+}
+
+/** Batch form of updateReviewRequestReviewerIfOpen (module change-reviewer): ONE
+ *  guarded statement; completed reviews are left alone. Returns rows changed. */
+export async function updateReviewRequestsReviewerIfOpen(
+  reviewRequestIds: string[],
+  reviewerId: string,
+  tx: SqlExecutor = db
+): Promise<number> {
+  if (reviewRequestIds.length === 0) return 0
+  const affected = await tx.$executeRaw`
+    UPDATE review_requests SET reviewer_id = ${reviewerId}, status = 'pending', updated_at = UTC_TIMESTAMP(3)
+    WHERE review_request_id IN (${Prisma.join(reviewRequestIds)}) AND status <> 'completed'`
+  return Number(affected)
+}
+
 /** Closes every still-open review of these test cases (a resubmit supersedes the old
  *  cycle, deep-test R2-1). Returns the number of reviews closed. */
 export async function closeOpenReviewsForTestCases(testCaseIds: string[], tx: SqlExecutor = db): Promise<number> {
@@ -229,6 +255,19 @@ export interface ReviewEventInsert {
   verdict: string
   comment: string | null
   flaggedFields: string[]
+}
+
+/** Batch insert of verdict events — ONE multi-row INSERT, no read-back (module
+ *  bulk verdict needs no rows back). */
+export async function insertReviewEventsMany(inputs: ReviewEventInsert[], tx: SqlExecutor = db): Promise<void> {
+  if (inputs.length === 0) return
+  const values = inputs.map(
+    (input) => Prisma.sql`(${newId()}, ${input.reviewRequestId}, ${input.reviewerId}, ${input.verdict}, ${input.comment},
+      CAST(${JSON.stringify(input.flaggedFields)} AS JSON), UTC_TIMESTAMP(3))`
+  )
+  await tx.$executeRaw`
+    INSERT INTO review_events (review_event_id, review_request_id, reviewer_id, verdict, comment, flagged_fields, created_at)
+    VALUES ${Prisma.join(values)}`
 }
 
 /** Creates a verdict event; the JSON column is the camelCase

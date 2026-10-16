@@ -6,7 +6,7 @@
 // are swallowed and logged instead of rethrown.
 
 import { logger } from './logger'
-import { invalidateCache } from './server/cache'
+import { REFERENCE_CACHE_PREFIX, invalidateCache } from './server/cache'
 import { insertActivityLog } from './server/activity-log.repository'
 
 /** Plain client metadata extracted by the controller (src/lib/api.ts).
@@ -67,6 +67,9 @@ export async function logActivity(input: ActivityLogInput): Promise<void> {
     // insert itself failed the main operation failed too, so no invalidation
     // is correct in that path; the 5s stats TTL remains the safety net.
     invalidateCache('stats:')
+    // Same hook for the cached reference data (module tree with case counts,
+    // user picker rows): any write may change them.
+    invalidateCache(REFERENCE_CACHE_PREFIX)
   } catch (err) {
     // Activity logging must never break the main operation.
     logger.error('Failed to write activity log', err, { action: input.action, entityType: input.entityType })

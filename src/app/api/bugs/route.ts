@@ -11,10 +11,12 @@ import {
   getBug,
   getBugTestCaseLinks,
   linkTestCaseToBug,
+  listBugOptions,
   listBugsPaginated,
   updateBugFields,
 } from './bugs.service'
 import {
+  validateBugOptionsQuery,
   validateCreateBugBody,
   validateLinkTestCaseBody,
   validateUpdateBugBody,
@@ -22,12 +24,14 @@ import {
 
 /** GET /api/bugs                     -> paginated list (filters + search)
  *  GET /api/bugs?id=...              -> single bug (with its test-case links)
- *  GET /api/bugs?id=...&action=links -> the test cases linked to this bug */
+ *  GET /api/bugs?id=...&action=links -> the test cases linked to this bug
+ *  GET /api/bugs?action=options      -> light picker list (id + title) */
 export async function GET(req: NextRequest) {
   return withApi(req, async () => {
     await requireUser()
     const q = getQueryParams(req)
     if (q.id && q.action === 'links') return ok(await getBugTestCaseLinks(q.id))
+    if (q.action === 'options') return ok(await listBugOptions(validateBugOptionsQuery(q)))
     if (q.id) return ok(await getBug(q.id))
     return ok(await listBugsPaginated(q))
   })

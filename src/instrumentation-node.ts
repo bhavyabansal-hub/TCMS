@@ -84,5 +84,9 @@ export async function registerNode() {
   const { startBackupHealthMonitor } = await import('./lib/server/backup-health')
   startBackupHealthMonitor()
 
+  // Effective pool size (numbers only — the URL is never logged).
+  const { describePool } = await import('./lib/db')
+  logger.info('DB pool', describePool())
+
   logger.info('Instrumentation registered: process-level error capture + graceful shutdown active')
 }

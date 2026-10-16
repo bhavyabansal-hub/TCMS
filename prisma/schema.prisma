@@ -174,6 +174,7 @@ model TestCase {
   @@index([moduleId])
   @@index([authorId])
   @@index([status])
+  @@index([updatedAt]) // list sort / queue lookups (perf audit 2026-10-17)
   @@map("test_cases")
 }
 
@@ -190,6 +191,7 @@ model TestCaseHistory {
   changedBy User?    @relation(fields: [changedById], references: [userId])
 
   @@index([testCaseId])
+  @@index([testCaseId, version]) // list sort / queue lookups (perf audit 2026-10-17)
   @@map("test_case_history")
 }
 
@@ -216,6 +218,8 @@ model ModuleReviewRequest {
   @@index([reviewerId])
   @@index([moduleId])
   @@index([status])
+  @@index([reviewerId, status, createdAt]) // list sort / queue lookups (perf audit 2026-10-17)
+  @@index([createdAt])
   @@map("module_review_requests")
 }
 
@@ -241,6 +245,8 @@ model ReviewRequest {
   @@index([reviewerId])
   @@index([status])
   @@index([moduleReviewId])
+  @@index([reviewerId, status, createdAt]) // list sort / queue lookups (perf audit 2026-10-17)
+  @@index([createdAt])
   @@map("review_requests")
 }
 
@@ -288,6 +294,8 @@ model Bug {
   @@index([status])
   @@index([severity])
   @@index([assignedToId])
+  @@index([createdAt]) // list sort / queue lookups (perf audit 2026-10-17)
+  @@index([updatedAt])
   @@map("bugs")
 }
 
@@ -365,6 +373,7 @@ model ActivityLog {
   @@index([userId])
   @@index([action])
   @@index([createdAt]) // dashboard recent-activity sort (perf task 2026-10)
+  @@index([userId, createdAt]) // list sort / queue lookups (perf audit 2026-10-17)
   @@map("activity_logs")
 }
 

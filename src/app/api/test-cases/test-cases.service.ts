@@ -22,9 +22,11 @@ import {
   countTestCases,
   findTestCaseById,
   hardDeleteTestCase,
+  hardDeleteTestCases,
   insertTestCase,
   insertTestCaseHistory,
   listTestCaseHistory,
+  listTestCaseOptionRows,
   listTestCases,
   listTestCasesByIds,
   updateTestCaseIfVersion,
@@ -41,6 +43,12 @@ import {
 } from '../reviews/reviews.repository'
 
 // ---------- Queries ----------
+
+/** Light picker list (id + title) — e.g. linking a work-log line to a test case. */
+export async function listTestCaseOptions(input: { limit: number }): Promise<{ testCaseId: string; title: string }[]> {
+  const rows = await listTestCaseOptionRows(input.limit)
+  return rows.map((r) => ({ testCaseId: r.test_case_id, title: r.title }))
+}
 
 export async function listTestCasesPaginated(
   q: Record<string, string>
@@ -385,13 +393,8 @@ export async function deleteTestCasesPermanently(
     )
   }
 
-  const deleted = await db.$transaction(async (tx) => {
-    let count = 0
-    for (const tc of deletable) {
-      count += await hardDeleteTestCase(tc.test_case_id, tx)
-    }
-    return count
-  })
+  // One DELETE for the whole selection (cascades history, reviews, bug links).
+  const deleted = await hardDeleteTestCases(deletable.map((tc) => tc.test_case_id))
 
   await logActivity({
     userId: me.userId,

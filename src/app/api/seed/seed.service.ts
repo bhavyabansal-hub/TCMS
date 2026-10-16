@@ -20,6 +20,7 @@
 
 import { hashPassword } from '@/lib/auth'
 import { logger } from '@/lib/logger'
+import { REFERENCE_CACHE_PREFIX, invalidateCache } from '@/lib/server/cache'
 import {
   countUsers,
   insertSeedBug,
@@ -50,7 +51,7 @@ export async function seedDemoData(): Promise<SeedResult> {
     return { seeded: false, message: 'Database already has users; skipping seed.' }
   }
 
-  return runSeedInTransaction(async (tx) => {
+  const result: SeedResult = await runSeedInTransaction(async (tx): Promise<SeedResult> => {
     // 7 demo accounts covering the full 6-role hierarchy (VP -> Viewer);
     // admin@tcms.com remains the top admin (now the VP role).
     const admin = await insertSeedUser(
@@ -332,4 +333,9 @@ export async function seedDemoData(): Promise<SeedResult> {
       taskReports: 2,
     }
   })
+  // Seed writes bypass logActivity: drop the cached reference data and stats
+  // after the commit so the new rows show at once.
+  invalidateCache(REFERENCE_CACHE_PREFIX)
+  invalidateCache('stats:')
+  return result
 }

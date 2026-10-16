@@ -25,6 +25,7 @@ import {
   insertBug,
   insertBugTestCaseLinks,
   listBugTestCaseLinks,
+  listBugOptionRows,
   listBugs,
   updateBugIfUnchanged,
   type BugFilters,
@@ -55,6 +56,12 @@ export interface BugTestCaseLinkView {
 export type BugWithLinks = SerializedBug & { testCaseLinks: BugTestCaseLinkView[] }
 
 // ---------- Queries ----------
+
+/** Light picker list (id + title) — e.g. linking a work-log line to a bug. */
+export async function listBugOptions(input: { limit: number }): Promise<{ bugId: string; title: string }[]> {
+  const rows = await listBugOptionRows(input.limit)
+  return rows.map((r) => ({ bugId: r.bug_id, title: r.title }))
+}
 
 export async function listBugsPaginated(
   q: Record<string, string>

@@ -71,6 +71,12 @@ permission).
 
 **Server**
 - Dashboard aggregates: `withCache('stats:aggregates', 5 s)`, cleared by `logActivity`.
+- Reference data: module tree rows (`ref:module-tree`) and user-picker rows
+  (`ref:user-options`), `REFERENCE_CACHE_TTL_MS` (30 s); `logActivity` clears the whole `ref:`
+  prefix after every write (seed clears it too). A load that overlapped an invalidation is
+  returned but not stored (generation counter in `cache.ts`).
+- The session check (`GET /api/auth`) reads permissions from the 3 s matrix cache; login and
+  register re-read the table.
 - Permission matrix: in-memory, 3 s TTL, reloaded after a toggle on this instance.
 - Crew Desk user list: ~10 min TTL + refresh once on miss.
 - Pool bounded by `DATABASE_URL` (`connection_limit`, `pool_timeout`): a busy instance
@@ -83,6 +89,13 @@ permission).
   (5 min); mutations invalidate the owning keys.
 - Boot prefetch: `['stats','dashboard']` + `['modules','tree']` in parallel with the session check.
 - Paged lists use `placeholderData: keepPreviousData`.
+- Pickers use light endpoints (`GET /api/test-cases?action=options`, `/api/bugs?action=options`:
+  id + title only); `/api/modules` sends each module once (the client builds the tree).
+- Boot prefetch only for the dashboard stats, and only when `/dashboard` is opened; the
+  cross-account cache clear runs only when one real user changes to another.
+- Checked per page and role by `scripts/verify-page-apis.mjs`: no duplicate call, no 401/403
+  call, at most 2 loading phases, p95 < 300 ms per call (run it against a production build —
+  dev mode adds 100–900 ms per request).
 - Polling only where needed and permission-gated (dashboard stats; review-queue badges
   only for users who can review).
 - The whole cache is cleared when the signed-in user changes (`providers.tsx`).
@@ -94,7 +107,9 @@ permission).
   files (`logs/app-YYYY-MM-DD.log`, `logs/error-YYYY-MM-DD.log`, kept `LOG_RETENTION_DAYS`
   = 14) and optionally a Telegram logs bot (`TELEGRAM_LOG_*`, batched). Logging never
   breaks a request.
-- `withApi` logs one line per request with its latency, and every unexpected error.
+- `withApi` logs every request with its latency: fast successful reads at `debug` (dev only),
+  writes at `info`, requests slower than `TCMS_SLOW_REQUEST_MS` (1 s) at `warn`, and every error.
+  Info/debug lines are written to the files asynchronously in batches; error lines synchronously.
 - `prisma:query` lines only with `TCMS_LOG_SQL=true`.
 - `src/instrumentation-node.ts` sends `unhandledRejection` / `uncaughtException` to the
   same logger (crash behaviour kept).

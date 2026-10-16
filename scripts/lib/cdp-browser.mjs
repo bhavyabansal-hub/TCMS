@@ -100,10 +100,13 @@ export class RolePage {
     page.sessionId = sessionId
     page.listener = (msg) => {
       if (msg.sessionId !== sessionId) return
+      // t0 / t1 (ms, monotonic) let suites measure parallelism and network idle.
       if (msg.method === 'Network.requestWillBeSent') {
-        page.requests.push({ id: msg.params.requestId, url: msg.params.request.url, method: msg.params.request.method, status: null })
+        page.requests.push({ id: msg.params.requestId, url: msg.params.request.url, method: msg.params.request.method, status: null, t0: msg.params.timestamp * 1000, t1: null })
       } else if (msg.method === 'Network.responseReceived') {
         for (const r of page.requests) if (r.id === msg.params.requestId) r.status = msg.params.response.status
+      } else if (msg.method === 'Network.loadingFinished' || msg.method === 'Network.loadingFailed') {
+        for (const r of page.requests) if (r.id === msg.params.requestId) r.t1 = msg.params.timestamp * 1000
       }
     }
     cdp.on(page.listener)

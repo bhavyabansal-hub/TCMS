@@ -4,7 +4,7 @@ import { QueryCache, QueryClient, QueryClientProvider, useQueryClient } from '@t
 import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { ThemeProvider } from 'next-themes'
 import { useAuthStore } from '@/store'
-import { REFERENCE_STALE_TIME_MS, getStoredUser, hasSessionHint, modulesApi, statsApi, usersApi } from '@/lib/client/api'
+import { getStoredUser, hasSessionHint, statsApi } from '@/lib/client/api'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -73,9 +73,12 @@ function AuthGate({ children }: { children: ReactNode }) {
   // then a parent clear() orphaned them mid-flight, leaving skeletons forever).
   // (Owner report 2026-10-09: a product login still saw the previous account's
   // reviews — stale client cache, the SERVER was correctly scoped all along.)
+  // Only a change AWAY from a real user (logout, or another account) clears:
+  // the boot transition null -> user must keep the boot prefetch, otherwise
+  // every page fetched its data twice (page-API audit 2026-10-17).
   const lastUserIdRef = useRef<string | null>(null)
   if (lastUserIdRef.current !== (user?.userId ?? null)) {
-    queryClient.clear()
+    if (lastUserIdRef.current !== null) queryClient.clear()
     lastUserIdRef.current = user?.userId ?? null
   }
 
@@ -102,35 +105,18 @@ function AuthGate({ children }: { children: ReactNode }) {
   }, [user])
 
   useEffect(() => {
-    // Warm the dashboard cache in parallel with the session check so the
-    // first dashboard paint is instant instead of a second round trip.
-    // The query key matches DashboardView's, so its useQuery resolves
-    // straight from cache. A failed prefetch (stale token) is harmless —
-    // prefetchQuery swallows the error and the view refetches normally.
-    // Session hint = the local display profile exists. The httpOnly cookies
-    // are invisible to JS; a stale hint is harmless because a failed
-    // prefetch is swallowed and the boot /me check drives the real gate.
-    if (hasSessionHint()) {
+    // Warm the dashboard stats in parallel with the session check, ONLY when
+    // the dashboard is the page being opened (the query key matches
+    // DashboardViewV2's). Other pages fetch their own data on mount — a boot
+    // prefetch there would load data the page does not show.
+    // Session hint = the local display profile exists; a stale hint is
+    // harmless because a failed prefetch is swallowed.
+    const path = window.location.pathname
+    if (hasSessionHint() && (path === '/' || path === '/dashboard')) {
       queryClient.prefetchQuery({
         queryKey: ['stats', 'dashboard'],
         queryFn: statsApi.dashboard,
         staleTime: 30_000,
-      })
-      // The modules tree is reference data for test-cases, bugs, tasks and
-      // the import panel — warming it here makes the first visit to each of
-      // those pages render without a skeleton flash.
-      queryClient.prefetchQuery({
-        queryKey: ['modules', 'tree'],
-        queryFn: modulesApi.tree,
-        staleTime: REFERENCE_STALE_TIME_MS,
-      })
-      // The user picker (submit-review / change-reviewer / bug assignment)
-      // is reference data too — warm it once so the first dialog opens
-      // without a network wait.
-      queryClient.prefetchQuery({
-        queryKey: ['users', 'options'],
-        queryFn: usersApi.options,
-        staleTime: REFERENCE_STALE_TIME_MS,
       })
     }
     initialize().finally(() => setBooted(true))

@@ -775,6 +775,7 @@ function BugEditForm({
   const { data: options } = useQuery({
     queryKey: ['users', 'options'],
     queryFn: usersApi.options,
+    staleTime: REFERENCE_STALE_TIME_MS,
   })
 
   async function handleSave() {

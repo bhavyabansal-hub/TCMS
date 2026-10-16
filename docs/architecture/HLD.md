@@ -192,12 +192,32 @@ login lock (MySQL tables), CSRF checks (stateless), all repositories (one databa
 Nothing else changes: sessions, CSRF, login lock, repositories, schema and the four layers
 are already multi-instance safe.
 
-### 7.3 Measured headroom
+### 7.3 Measured headroom (one instance)
 
-Load-test numbers (single instance) are in §7.4, kept current by `scripts/loadtest*.mjs`.
+Measured 2026-10-17 on the owner's laptop (Intel i5-1335U, Windows 11; MySQL, the dev server and
+the load generator on the same machine), production build (`next start`), demo data, pool
+`connection_limit=40`. Script: `scripts/loadtest-1000.mjs`.
+
+- **API speed, single user:** page-load calls answer in 5–13 ms (p95); every call a page makes
+  has p95 < 60 ms (`scripts/verify-page-apis.mjs`).
+- **Capacity of one Node process here:** ~670 req/s for a trivial route, 440–720 req/s for real
+  endpoints — CPU-bound in one process; the DB peaked at 51 connections and was never the limit.
+- **1000 real users** (one page every ~20 s ≈ 350 API req/s): served completely, 0 errors,
+  p50 605 ms, p95 764 ms.
+- **1000 always-busy clients** (1000 requests in flight at every moment — a stress test, not a
+  user model): the single process saturates at ~500 req/s, latency queues up to seconds and
+  Windows refuses part of the new connections. That load needs the scaling path (§7.2): several
+  app instances behind nginx, or a server CPU with more single-core speed.
+
+Levers already applied: one Prisma pool per process (default 40), cache-aside for the module
+tree, user picker and dashboard aggregates, light picker endpoints, batched module-review writes,
+list-sort indexes, buffered async log writes, fast successful reads logged at debug level.
 
 ### 7.4 Load test results
 
-| Run | Users | p50 | p95 | Errors | Notes |
-|---|---|---|---|---|---|
-| 2026-10-14 sandbox (`loadtest-200.mjs`) | 200 VU | — | — | 0 | ~33k requests, read paths |
+| Run | Load | Requests | p50 | p95 | Errors | DB conn peak |
+|---|---|---|---|---|---|---|
+| 2026-10-17 realistic, pool 40 | 1000 users, 350 req/s, 60 s | 21 001 | 605 ms | 764 ms | 0 | 51 |
+| 2026-10-17 realistic, pool 20 | 1000 users, 350 req/s target (253 reached), 60 s | 15 164 | 854 ms | 2 491 ms | 0 | 31 |
+| 2026-10-17 stress, pool 40 | 1000 always-busy clients, 60 s | 30 750 | 10.1 s | 44.8 s | 24 845 refused connections | 51 |
+| 2026-10-17 warm-up | 20 VU, 5 s | 1 824 | 54 ms | 82 ms | 0 | 21 |

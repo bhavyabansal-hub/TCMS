@@ -94,3 +94,13 @@ export function validateBulkDeleteBody(body: unknown) {
 }
 
 export type BulkDeleteInput = z.infer<typeof bulkDeleteSchema>
+
+// GET ?action=options — the light picker list (id + title only).
+export const OPTIONS_MAX_LIMIT = 500
+const optionsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(OPTIONS_MAX_LIMIT).default(OPTIONS_MAX_LIMIT),
+})
+
+export function validateTestCaseOptionsQuery(query: unknown) {
+  return parseOrThrow(optionsQuerySchema, query)
+}

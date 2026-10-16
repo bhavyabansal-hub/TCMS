@@ -41,6 +41,12 @@ function buildWhere(filters: BugFilters): Prisma.Sql {
   return parts.length ? Prisma.sql`WHERE ${Prisma.join(parts, ' AND ')}` : Prisma.empty
 }
 
+/** Light picker rows (id + title), newest first — no JSON columns, no joins. */
+export async function listBugOptionRows(limit: number): Promise<{ bug_id: string; title: string }[]> {
+  return db.$queryRaw<{ bug_id: string; title: string }[]>`
+    SELECT bug_id, title FROM bugs ORDER BY created_at DESC LIMIT ${limit}`
+}
+
 export async function countBugs(filters: BugFilters): Promise<number> {
   const rows = await db.$queryRaw<{ total: number | bigint }[]>`
     SELECT COUNT(*) AS total FROM bugs b ${buildWhere(filters)}`

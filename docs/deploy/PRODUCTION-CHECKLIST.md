@@ -69,6 +69,8 @@ startup guard refuses shorter, placeholder or sandbox values and names the varia
 | `SMTP_HOST` `SMTP_PORT` `SMTP_SECURE` `SMTP_USER` `SMTP_PASS` `SMTP_FROM` | unset | Email channel. Test: `node scripts/send-test-notification.mjs --email=<you>` |
 | `TELEGRAM_BOT_TOKEN` | unset | Telegram channel. Test: `node scripts/send-test-notification.mjs --chat=<id>` |
 | `TELEGRAM_LOG_BOT_TOKEN` `TELEGRAM_LOG_CHAT_ID` `TELEGRAM_LOG_LEVEL` `TELEGRAM_LOG_MIN_INTERVAL_MS` | unset / `error` / `2000` | Ops log mirror to a Telegram chat. |
+| `TCMS_DB_CONNECTION_LIMIT` `TCMS_DB_POOL_TIMEOUT` | URL value, else `40` / `10` | Pool per process; the boot log prints the effective numbers (`DB pool {...}`). `TCMS_DB_CONNECTION_LIMIT` overrides the URL. |
+| `TCMS_SLOW_REQUEST_MS` | `1000` | Requests slower than this are logged as warnings (fast successful reads are not logged in production). |
 | `LOG_DIR` `LOG_RETENTION_DAYS` | `logs` / `14` | Rotating `app-*.log` / `error-*.log`. Use `/var/log/tcms`. |
 | `TCMS_LOGIN_IP_MAX_FAILURES` `TCMS_LOGIN_IP_WINDOW_SECONDS` | `30` / `900` | Per-IP failed sign-in limit → 429. |
 | `TCMS_EXTRA_ALLOWED_HOSTS` | unset | Only if a gateway rewrites the Host header. |

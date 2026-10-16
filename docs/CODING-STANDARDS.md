@@ -186,7 +186,8 @@ starts empty + `scripts/create-first-vp.mjs` (D2).
 7. `node scripts/verify-review-matrix.mjs` → `36 passed, 0 failed`.
 
 Also run `node scripts/audit-standards.mjs` (report only). UI changes: also
-`verify-ui-gates.mjs`. Linux-only suites (`scripts/*.sh`, infra `*-test.mjs`) are reported
+`verify-ui-gates.mjs`; page data or API changes: also `verify-page-apis.mjs` (against a
+production build in a folder copy, `TCMS_BASE_URL`). Linux-only suites (`scripts/*.sh`, infra `*-test.mjs`) are reported
 as **NOT RUN ON WINDOWS** (backlog B11).
 
 **And for every change:** endpoints checked for 200/400/401/403/404 (incl. no session, no

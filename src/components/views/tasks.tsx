@@ -9,9 +9,9 @@ import {
 } from 'lucide-react'
 
 import { useAuthStore } from '@/store'
-import { REFERENCE_STALE_TIME_MS, bugsApi, modulesApi, taskReportsApi, testCasesApi, usersApi } from '@/lib/client/api'
+import { REFERENCE_STALE_TIME_MS, bugsApi, modulesApi, taskReportsApi, testCasesApi, usersApi, type BugOption, type TestCaseOption } from '@/lib/client/api'
 import { invalidateAfterMutation } from '@/lib/client/invalidate'
-import type { TaskItem, TaskReport, Module, TestCase, Bug } from '@/types'
+import type { TaskItem, TaskReport, Module } from '@/types'
 import { minutesToHuman, todayISO } from '@/lib/format'
 import { handleApiError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
@@ -147,24 +147,24 @@ export function TasksView() {
     staleTime: REFERENCE_STALE_TIME_MS,
     queryFn: () => modulesApi.tree(),
   })
+  // Light picker lists (id + title) — the full rows were never shown here.
   const testCasesQuery = useQuery({
-    queryKey: ['test-cases', 'list', 'all-light'],
-    queryFn: () => testCasesApi.list({ pageSize: 200 }),
+    queryKey: ['test-cases', 'options'],
+    queryFn: testCasesApi.options,
+    staleTime: REFERENCE_STALE_TIME_MS,
   })
   const bugsQuery = useQuery({
-    queryKey: ['bugs', 'list', 'all-light'],
-    queryFn: () => bugsApi.list({ pageSize: '200' }),
+    queryKey: ['bugs', 'options'],
+    queryFn: bugsApi.options,
+    staleTime: REFERENCE_STALE_TIME_MS,
   })
 
   const flatModules: Module[] = useMemo(
     () => (modulesQuery.data?.flat ?? []) as Module[],
     [modulesQuery.data]
   )
-  const testCases: TestCase[] = useMemo(
-    () => testCasesQuery.data?.data ?? [],
-    [testCasesQuery.data]
-  )
-  const bugs: Bug[] = useMemo(() => bugsQuery.data?.data ?? [], [bugsQuery.data])
+  const testCases: TestCaseOption[] = useMemo(() => testCasesQuery.data ?? [], [testCasesQuery.data])
+  const bugs: BugOption[] = useMemo(() => bugsQuery.data ?? [], [bugsQuery.data])
 
   // Pick the report for the chosen date
   const reportForDate: TaskReport | undefined = useMemo(() => {
@@ -373,8 +373,8 @@ interface TaskReportFormProps {
   initialNotes: string
   isReadOnly: boolean
   flatModules: Module[]
-  testCases: TestCase[]
-  bugs: Bug[]
+  testCases: TestCaseOption[]
+  bugs: BugOption[]
 }
 
 function TaskReportForm({
@@ -705,8 +705,8 @@ function TaskRowCard({
   task: TaskRow
   isReadOnly: boolean
   flatModules: Module[]
-  testCases: TestCase[]
-  bugs: Bug[]
+  testCases: TestCaseOption[]
+  bugs: BugOption[]
   onRemove: () => void
   onUpdate: (patch: Partial<TaskRow>) => void
 }) {

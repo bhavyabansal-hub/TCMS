@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { ZodError } from 'zod'
 import { logger } from './logger'
-import { EXTRA_ALLOWED_HOSTS, READ_ONLY } from '@/lib/server/config'
+import { EXTRA_ALLOWED_HOSTS, READ_ONLY, SLOW_REQUEST_MS } from '@/lib/server/config'
 import { READ_ONLY_MESSAGE, isBlockedInReadOnly } from '@/lib/server/read-only'
 import type { RequestMeta } from './activity'
 import { mapDatabaseError, mysqlErrno } from '@/lib/server/db-errors'
@@ -241,9 +241,13 @@ export async function withApi(
       throw new ApiError(503, READ_ONLY_MESSAGE)
     }
     const res = await handler()
-    logger.info(`${req.method} ${url.pathname}${url.search} -> ${res.status}`, {
-      durationMs: Date.now() - startedAt,
-    })
+    // LOAD: a fast successful read is a debug line (shown in dev, not in production);
+    // writes stay info, slow requests warn, errors are logged below.
+    const durationMs = Date.now() - startedAt
+    const line = `${req.method} ${url.pathname}${url.search} -> ${res.status}`
+    if (durationMs >= SLOW_REQUEST_MS) logger.warn(`${line} (slow)`, { durationMs })
+    else if (req.method === 'GET') logger.debug(line, { durationMs })
+    else logger.info(line, { durationMs })
     // Belt-and-braces: even a handler that forgot the header can never
     // produce a cacheable API response (see NO_STORE_HEADERS / ok()).
     res.headers.set('Cache-Control', 'no-store, must-revalidate')

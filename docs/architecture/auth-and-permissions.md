@@ -188,7 +188,7 @@ Verified against the services on 2026-10-16 (deep test, `docs/qa/DEEP-TEST-2026-
 | `PUT /api/modules?id=` | ✓ | `edit_module` |
 | `PUT /api/modules?id=&action=submit-review` | ✓ | `submit_review`; only draft / needs_revision cases; closes their old open reviews |
 | `DELETE /api/modules?id=` | ✓ | module creator **or** `edit_module` (hard delete; submodules + module reviews cascade, cases/bugs keep the row with `module_id` NULL) |
-| `GET /api/test-cases` (list, `?id=`, history, reviews) | ✓ | any role |
+| `GET /api/test-cases` (list, `?action=options`, `?id=`, history, reviews) | ✓ | any role |
 | `POST /api/test-cases`, `?action=import`, `?action=import-template` | ✓ | `create_test_case` |
 | `PUT /api/test-cases?id=` | ✓ | `edit_any_test_case` **or** (author ∧ `edit_own_test_case`); 409 on a stale `expectedUpdatedAt` |
 | `PUT /api/test-cases?id=&action=submit-review` | ✓ | `submit_review`; 400 when the case is in_review or approved; closes the case's old open review |
@@ -201,7 +201,7 @@ Verified against the services on 2026-10-16 (deep test, `docs/qa/DEEP-TEST-2026-
 | `GET /api/module-reviews?action=all`, `?id=` | ✓ | `perform_review` |
 | `POST /api/module-reviews?id=&action=bulk-verdict` / `approve-all` | ✓ | `perform_review` ∧ assigned reviewer; 409 stale |
 | `POST /api/module-reviews?id=&action=change-reviewer` | ✓ | `perform_review` |
-| `GET /api/bugs` (list, `?id=`, `&action=links`) | ✓ | any role |
+| `GET /api/bugs` (list, `?action=options`, `?id=`, `&action=links`) | ✓ | any role |
 | `POST /api/bugs` | ✓ | `create_bug`; an `assignedToId` additionally needs `assign_bug` |
 | `PUT /api/bugs?id=` (fields, status) | ✓ | `create_bug` **or** `assign_bug`; 409 stale |
 | `PUT /api/bugs?id=` changing the assignee | ✓ | additionally `assign_bug` (re-sending the current assignee needs nothing extra) |

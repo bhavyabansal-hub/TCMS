@@ -46,6 +46,12 @@ function buildWhere(filters: TestCaseFilters): Prisma.Sql {
   return parts.length ? Prisma.sql`WHERE ${Prisma.join(parts, ' AND ')}` : Prisma.empty
 }
 
+/** Light picker rows (id + title), newest first — no JSON columns, no joins. */
+export async function listTestCaseOptionRows(limit: number): Promise<{ test_case_id: string; title: string }[]> {
+  return db.$queryRaw<{ test_case_id: string; title: string }[]>`
+    SELECT test_case_id, title FROM test_cases ORDER BY updated_at DESC LIMIT ${limit}`
+}
+
 export async function countTestCases(filters: TestCaseFilters): Promise<number> {
   const rows = await db.$queryRaw<{ total: number | bigint }[]>`
     SELECT COUNT(*) AS total FROM test_cases tc ${buildWhere(filters)}`
@@ -179,6 +185,27 @@ export async function updateTestCaseStatus(
   await tx.$executeRaw`
     UPDATE test_cases SET status = ${status}, updated_at = UTC_TIMESTAMP(3)
     WHERE test_case_id = ${testCaseId}`
+}
+
+/** Batch form of updateTestCaseStatus — ONE statement for any number of cases
+ *  (module submit / bulk verdict; no per-row round trips). */
+export async function updateTestCaseStatusMany(
+  testCaseIds: string[],
+  status: string,
+  tx: SqlExecutor = db
+): Promise<void> {
+  if (testCaseIds.length === 0) return
+  await tx.$executeRaw`
+    UPDATE test_cases SET status = ${status}, updated_at = UTC_TIMESTAMP(3)
+    WHERE test_case_id IN (${Prisma.join(testCaseIds)})`
+}
+
+/** Batch form of hardDeleteTestCase — ONE DELETE (cascades as below). Returns rows removed. */
+export async function hardDeleteTestCases(testCaseIds: string[], tx: SqlExecutor = db): Promise<number> {
+  if (testCaseIds.length === 0) return 0
+  const affected = await tx.$executeRaw`
+    DELETE FROM test_cases WHERE test_case_id IN (${Prisma.join(testCaseIds)})`
+  return Number(affected)
 }
 
 /** PERMANENT delete: removes the test_cases row. The schema's ON DELETE

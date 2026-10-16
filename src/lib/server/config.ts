@@ -91,6 +91,22 @@ export const LOG_DIR = str('LOG_DIR', 'logs')
 /** Days to keep log files; older files are purged once per day. */
 export const LOG_RETENTION_DAYS = int('LOG_RETENTION_DAYS', 14)
 
+// ---------- Database pool ----------
+
+/** The app's MySQL URL (app user, DML only). Never logged. */
+export const DATABASE_URL = str('DATABASE_URL')
+
+/** Pool size per process. Applied when DATABASE_URL has no connection_limit; an explicitly
+ *  set TCMS_DB_CONNECTION_LIMIT always wins. 40 serves 1000+ users on one instance (HLD §7). */
+export const DB_CONNECTION_LIMIT = int('TCMS_DB_CONNECTION_LIMIT', 40)
+export const DB_CONNECTION_LIMIT_SET = Boolean(str('TCMS_DB_CONNECTION_LIMIT'))
+
+/** Seconds a request waits for a free pooled connection before 503 "server busy". */
+export const DB_POOL_TIMEOUT_SECONDS = int('TCMS_DB_POOL_TIMEOUT', 10)
+
+/** A request slower than this is logged as a warning; faster successful reads are debug lines. */
+export const SLOW_REQUEST_MS = int('TCMS_SLOW_REQUEST_MS', 1_000)
+
 /** Prisma prints every SQL statement (`prisma:query`) only when this is true. Off by default. */
 export const LOG_SQL = str('TCMS_LOG_SQL').toLowerCase() === 'true'
 

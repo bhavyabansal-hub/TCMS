@@ -3,6 +3,13 @@
 Reverse-chronological list of user-visible and architectural changes. Task-level
 detail lives in [`worklog.md`](./worklog.md).
 
+## 2026-10-17 — PERF pages and APIs for 1000+ users
+
+- **Every page loads only what it shows:** no duplicate API calls any more (the boot cache clear wiped the prefetch), the boot prefetch only on the dashboard, no Crew Desk/module call for users who see "permission denied". Checked per page × role by the new `scripts/verify-page-apis.mjs`.
+- **Smaller, cheaper responses:** `/api/modules` sends each module once (14 KB → 5 KB on demo data; the client builds the tree); new light pickers `GET /api/test-cases?action=options` and `/api/bugs?action=options`; the dashboard activity feed no longer carries snapshots.
+- **Server:** cache-aside for the module tree and user picker (cleared by every write, no stale result after an invalidation), session check uses the permission cache, module review writes batched (3 statements per module instead of 3 per case), bulk delete is one statement, list-sort indexes (new migration), pool default 40 (`TCMS_DB_CONNECTION_LIMIT`), buffered async log writes, fast reads logged at debug.
+- **Measured (production build, laptop):** API calls p95 < 60 ms; 1000 realistic users (350 req/s) served with 0 errors, p95 764 ms (`scripts/loadtest-1000.mjs`, `docs/architecture/HLD.md` §7).
+
 ## 2026-10-16 — MAINT faster agents
 
 - Default for every job = the fast lane: one developer does the work, sdet runs the Definition of Done. The full 6-agent process only when the owner types `/new-requirement`.
