@@ -3,6 +3,11 @@
 Reverse-chronological list of user-visible and architectural changes. Task-level
 detail lives in [`worklog.md`](./worklog.md).
 
+## 2026-10-16 — MAINT faster agents
+
+- Default for every job = the fast lane: one developer does the work, sdet runs the Definition of Done. The full 6-agent process only when the owner types `/new-requirement`.
+- Every agent and command: the WORKING METHOD, read-first list (CLAUDE.md + CODING-STANDARDS + last 10 worklog entries + the task files only), reports max 15 lines, no re-review rounds unless a gate fails, waits only for data deletes, schema changes or a push.
+
 ## 2026-10-16 — MAINT docs: one docs folder, one standards file
 
 - Root keeps only README.md, CLAUDE.md, package files and configs. agent.md, CODEBASE-MAP.md, DEPLOYMENT.md, CHANGELOG.md and worklog.md moved into docs/.

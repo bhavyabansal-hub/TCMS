@@ -1,8 +1,13 @@
-# TCMS agent team — how to install
+# TCMS agent team — how to use it
 
-1. Unzip this into `C:\dev\tcms` (the project folder). It adds `.claude/` and `docs/process/`.
-   It does not overwrite any app code, `CLAUDE.md` or `.env`.
-2. Restart Claude Code in `C:\dev\tcms`, then type `/agents` — you should see 6 agents.
-3. Start a requirement with: `/new-requirement <describe what you want>`
-4. After you approve the BRD: `/build-requirement REQ-001`
-5. Fix a bug: `/fix-bug BUG-001`   ·   After release: `/retro REQ-001`
+The team is already in the repo: `.claude/agents/` (6 roles) and `.claude/commands/`.
+
+1. Open Claude Code in `C:\dev\tcms` and type `/agents` — you should see 6 agents.
+2. **Any normal job** (fix, change, cleanup, performance): just ask, or use
+   `/quick-fix <what>` — one developer does the work, sdet runs the Definition of Done, done.
+3. **A bug:** `/fix-bug <BUG id or description>`.
+4. **A new feature with the full 6-agent process:** `/new-requirement <what you want>`;
+   after you write "APPROVED": `/build-requirement REQ-<NNN>`; after release: `/retro REQ-<NNN>`.
+
+Every job follows the WORKING METHOD in `CLAUDE.md` and the rules in `docs/CODING-STANDARDS.md`.
+The team waits for you only before deleting data, a schema change, or a push.

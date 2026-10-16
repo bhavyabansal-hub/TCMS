@@ -1,27 +1,32 @@
 ---
-description: Fast lane for small jobs (few files, no schema change) - developer fixes, sdet runs the Definition of Done, done.
-argument-hint: <short description of the fix>
+description: Default lane for every job - one developer does the work, sdet runs the Definition of Done, done.
+argument-hint: <short description of the job>
 ---
 
-You are the **facilitator** of the TCMS team. Quick fix: **$ARGUMENTS**
+You are the **facilitator** of the TCMS team. Job: **$ARGUMENTS**
 
-Read first: `CLAUDE.md`, `docs/CODING-STANDARDS.md`, `docs/process/WORKFLOW.md` §3a (fast lane) and §4,
-and the last 3 entries of `docs/worklog.md`.
+This is the **default lane for every job**. The full 6-agent process runs only when the owner
+types `/new-requirement`.
 
-0. **Check the fast-lane rule** (`WORKFLOW.md` §3a). If the job needs a new page, route,
-   endpoint or permission, a schema/migration change, changes BRD-described behavior,
-   or touches real data, secrets or production: stop and tell me to use
-   `/new-requirement` (or `/fix-bug` for an S1/S2 bug). Otherwise continue.
-1. Call the owning developer (`developer-backend` for `src/app/api`, `src/lib`, `prisma`;
-   `developer-frontend` for `src/app/(app)`, `src/components`): state or reproduce the
-   problem, cite the root cause (`path:line`), fix it per `docs/CODING-STANDARDS.md`, add or extend an
-   automated check, run `npx tsc --noEmit`, list the changed files.
-   If the change grows beyond the fast-lane rule, the developer stops and reports.
-2. Call `sdet`: run the `docs/CODING-STANDARDS.md` §5 Definition of Done (tsc, eslint, verify-import,
-   verify-permissions, verify-notifications, verify-review-matrix; `npm run build` when
-   `src/` changed) and paste the raw counts.
-3. Commit once (`MAINT: <what>` or `BUG-<NNN>: <what>`), append `docs/worklog.md`
-   (what changed, evidence, NOT VERIFIED). Do not push.
-4. Show me: the fix, the files, the DoD counts, the commit id, NOT VERIFIED.
+**WORKING METHOD (`CLAUDE.md`):** read `CLAUDE.md`, `docs/CODING-STANDARDS.md`, `docs/CODEBASE-MAP.md`
+and the LAST 10 entries of `docs/worklog.md`, then only the files for this job. Create
+`TASK-CHECKLIST.txt` (git-ignored) with every step [PENDING]; mark each [DONE] / [BLOCKED: reason]
+as it finishes.
 
-Never rewrite git history, touch `.env` secrets, delete data or connect to port 3306.
+1. **Developer** (`developer-backend` for `src/app/api`, `src/lib`, `prisma`;
+   `developer-frontend` for `src/app/(app)`, `src/components`; both when needed): state or
+   reproduce the problem, root cause (`path:line`), fix per `docs/CODING-STANDARDS.md`, add or
+   extend an automated check, `npx tsc --noEmit`, list the changed files.
+2. **sdet:** `docs/CODING-STANDARDS.md` §5 Definition of Done (tsc, eslint, verify-import,
+   verify-permissions, verify-notifications, verify-review-matrix; `npm run build` in a folder
+   copy when `src/` changed; plus the suites for the touched area). Raw counts. Red → back to the
+   developer once; red again → stop and report.
+3. **Docs + log:** update every doc the change affects, append one `docs/worklog.md` entry
+   (what, why, files, test results, NOT VERIFIED), `docs/CHANGELOG.md` for user-visible changes.
+4. **Commit once** (`FIX:`, `PERF:`, `MAINT:` or `BUG-<NNN>:`). Do not push.
+5. **Report (max 15 lines):** what changed, files, DoD counts, commit id, NOT VERIFIED; show
+   the final checklist, then delete `TASK-CHECKLIST.txt`.
+
+Wait for the owner only before deleting data, a schema change (schema + new migration), or a
+push. No meetings, no BRD, no re-review rounds unless a gate fails. Never rewrite git history,
+touch `.env` or connect to port 3306.

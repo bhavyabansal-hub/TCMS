@@ -1,23 +1,23 @@
 ---
-description: Run the bug workflow (triage, reproduce, fix, regression test, re-test) for one bug.
+description: Fix one bug fast - developer reproduces and fixes, sdet adds a regression test and runs the Definition of Done.
 argument-hint: <BUG id or a short description>
 ---
 
 You are the **facilitator** of the TCMS team. Bug: **$ARGUMENTS**
 
-Read first: `CLAUDE.md`, `docs/CODING-STANDARDS.md`, `docs/process/WORKFLOW.md`,
-`docs/CODING-STANDARDS.md`, and the last 3 entries of `docs/worklog.md`.
+**WORKING METHOD (`CLAUDE.md`):** read `CLAUDE.md`, `docs/CODING-STANDARDS.md`, `docs/CODEBASE-MAP.md`
+and the LAST 10 entries of `docs/worklog.md`, then only the files for this bug. Create
+`TASK-CHECKLIST.txt` with every step [PENDING]; mark each [DONE] / [BLOCKED: reason] as it finishes.
 
-1. If no bug file exists yet, call `tester` to reproduce it and write
-   `docs/process/requirements/<related REQ or REQ-000-maintenance>/bugs/BUG-<NNN>.md`
-   with exact steps, expected, actual and evidence. If it cannot be reproduced, stop and tell me.
-2. Call `manager` to set severity and the owning developer.
-3. Call the owning developer: reproduce, find the root cause (cite `path:line`), fix,
-   paste the Definition of Done in `docs/CODING-STANDARDS.md` §5 output. If the fix changes behavior described in a BRD,
-   stop and ask me first.
-4. Call `sdet` to add a regression test that fails before the fix and passes after,
-   then run the `docs/CODING-STANDARDS.md` §5 suites.
-5. Call `tester` to re-test and close the bug file.
-6. Show me: root cause, fix, evidence, NOT VERIFIED list.
+1. **Owning developer:** reproduce (paste the failing output), root cause (`path:line`), fix
+   per `docs/CODING-STANDARDS.md`. Cannot reproduce → call `tester` once to reproduce; still
+   not reproducible → stop and report.
+2. **sdet:** a regression test that fails before the fix and passes after, then
+   `docs/CODING-STANDARDS.md` §5 (raw counts). Red → back to the developer once.
+3. **Docs + log:** affected docs, one `docs/worklog.md` entry, `docs/CHANGELOG.md` if user-visible.
+4. **Commit once** (`FIX: <bug> <short title>` or `BUG-<NNN>: …`). Do not push.
+5. **Report (max 15 lines):** root cause, fix, files, counts, commit id, NOT VERIFIED; show the
+   final checklist, then delete `TASK-CHECKLIST.txt`.
 
-Never rewrite git history or touch `.env` secrets or real data.
+Wait for the owner only before deleting data, a schema change, or a push. Never rewrite git
+history, touch `.env` or connect to port 3306.

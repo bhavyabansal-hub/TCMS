@@ -4,8 +4,23 @@ Six agents build and maintain TCMS together: **manager**, **product-owner**,
 **developer-backend**, **developer-frontend**, **tester**, **sdet**.
 The human owner has the final say on scope, BRD approval and release.
 
-Every agent reads this file, `docs/CODING-STANDARDS.md`, `CLAUDE.md`,
-`docs/CODING-STANDARDS.md` and its own `docs/process/lessons/<role>.md` before doing anything.
+**WORKING METHOD (every job, every agent — `CLAUDE.md`):** read `CLAUDE.md`,
+`docs/CODING-STANDARDS.md`, the LAST 10 entries of `docs/worklog.md`, your lessons file and
+only the files for the task (via `docs/CODEBASE-MAP.md`); keep `TASK-CHECKLIST.txt` up to date;
+afterwards update the affected docs and append one worklog entry.
+
+## 0. Which lane (owner decision 2026-10-16)
+
+| Lane | When | Who |
+|---|---|---|
+| **Fast lane — the default** (`/quick-fix`, `/fix-bug`, or any plain request) | Every job, unless the owner typed `/new-requirement` | one developer does the work → `sdet` runs the Definition of Done → done |
+| **Full process** (`/new-requirement` → `/build-requirement`) | ONLY when the owner types `/new-requirement` | all six agents, phases 0–11 below |
+
+In both lanes:
+- reports are **at most 15 lines** per agent (STATUS block included);
+- **no re-review rounds** unless a gate fails;
+- **never wait for the owner** except before deleting data, a schema change, or a push
+  (plus the BRD approval in the full process, which the owner asked for by choosing it).
 
 ---
 
@@ -20,9 +35,9 @@ Every agent reads this file, `docs/CODING-STANDARDS.md`, `CLAUDE.md`,
 - Agents keep **no memory between runs**. Everything they need lives in files:
   the requirement folder, `docs/worklog.md`, `docs/process/decisions.md` and
   `docs/process/lessons/`. If it is not written down, it did not happen.
-- Commands: `/new-requirement <title>`, `/build-requirement <REQ-ID>`,
-  `/fix-bug <BUG-ID or description>`, `/quick-fix <description>` (fast lane, §3a),
-  `/retro <REQ-ID>` (see `.claude/commands/`).
+- Commands: `/quick-fix <description>` (default lane, §3a), `/fix-bug <BUG-ID or description>`,
+  `/new-requirement <title>` + `/build-requirement <REQ-ID>` (full process), `/retro <REQ-ID>`
+  (see `.claude/commands/`).
 
 ## 2. Requirement folder
 
@@ -30,12 +45,12 @@ Every requirement gets `docs/process/requirements/REQ-<NNN>-<slug>/`:
 
 | File | Written by | Phase |
 |---|---|---|
-| `REQ-001 kickoff (git history)` | manager | 1 |
-| `REQ-001 brd (git history)` | product-owner | 2 |
-| `REQ-001 review (git history)` | all six, one section each; manager closes it | 3 |
-| `REQ-001 design (git history)` (LLD) | developer-backend + developer-frontend | 5 |
-| `REQ-001 test-plan (git history)` | tester (manual) + sdet (automated) | 5 |
-| `REQ-001 dev-report (git history)` | developers | 6 |
+| `01-kickoff.md` | manager | 1 |
+| `02-brd.md` | product-owner | 2 |
+| `03-review.md` | all six, one section each; manager closes it | 3 |
+| `04-design.md` (LLD) | developer-backend + developer-frontend | 5 |
+| `05-test-plan.md` | tester (manual) + sdet (automated) | 5 |
+| `06-dev-report.md` | developers | 6 |
 | `07-test-report.md` | tester + sdet | 7 |
 | `08-uat.md` | product-owner | 8 |
 | `bugs/BUG-<NNN>.md` | tester / sdet (found), developers (fix notes) | 7–9 |
@@ -48,11 +63,11 @@ Templates: `docs/process/templates/`.
 
 | # | Phase | Who | Gate to pass before the next phase |
 |---|---|---|---|
-| 0 | Intake | facilitator | Owner's request copied verbatim into `REQ-001 kickoff (git history)` |
+| 0 | Intake | facilitator | Owner's request copied verbatim into `01-kickoff.md` |
 | 1 | Kickoff meeting | manager | Scope in/out written; affected files verified by reading them |
 | 2 | BRD | product-owner | Every requirement has acceptance criteria; every page has a route + permission |
 | 3 | BRD review meeting | all six | Each role wrote APPROVE or CHANGES with reasons; manager resolved every CHANGES |
-| 4 | **Owner approval** | human owner | Owner writes "APPROVED" in `REQ-001 review (git history)`. **No code before this.** |
+| 4 | **Owner approval** | human owner | Owner writes "APPROVED" in `03-review.md`. **No code before this.** |
 | 5 | Design (LLD) + test plan | developers, tester, sdet | Design maps every BRD item to files/layers; test plan maps every acceptance criterion to a test |
 | 6 | Development | developers | Definition of Done in `docs/CODING-STANDARDS.md` §5 passes (raw output pasted) |
 | 7 | Testing | tester + sdet | Every acceptance criterion tested; new automated tests added; `docs/CODING-STANDARDS.md` §5 suites green |
@@ -63,30 +78,21 @@ Templates: `docs/process/templates/`.
 
 **A gate fails if any item is missing evidence.** Missing evidence = "NOT VERIFIED", never "probably fine".
 
-## 3a. Fast lane — `/quick-fix` (owner decision 2026-10-16)
+## 3a. Fast lane — the default (owner decision 2026-10-16)
 
-The full phases 0–11 are for **new features** and **schema changes**. Small jobs take
-the fast lane: **developer fixes → sdet runs the Definition of Done → done.** No
-kickoff, BRD, review meeting, UAT or retro.
+Every job takes this lane unless the owner typed `/new-requirement`: **one developer does the
+work → sdet runs the Definition of Done → done.** No kickoff, BRD, review meeting, UAT or retro.
 
-| Fast lane allowed when ALL hold | Use the full process instead when ANY holds |
-|---|---|
-| Few files (guide: ≤ 5 source files, plus tests/docs) | A new page, route, endpoint or permission action |
-| No schema change, no new migration | `prisma/schema.prisma` or `prisma/migrations/` changes |
-| Fixes a bug, a doc, a test, a message or a small behavior the owner asked for | It changes behavior a BRD describes, or the owner has not asked for it |
-| No data deletion, no secrets, no production | It touches real data, `.env` secrets or production |
+1. **Developer** (backend or frontend, by area; both when needed): reproduce or state the
+   problem, fix it following `docs/CODING-STANDARDS.md`, add or extend an automated check, run
+   `npx tsc --noEmit`.
+2. **sdet**: runs `docs/CODING-STANDARDS.md` §5 (tsc, eslint, the DoD suites; build in a folder
+   copy when `src/` changed) and pastes the raw counts. Red → back to the developer once.
+3. **Done**: affected docs updated, one `docs/worklog.md` entry, one commit (`FIX:` / `PERF:` /
+   `MAINT:` / `BUG-NNN:`). Never push — the owner pushes.
 
-Flow:
-1. **Developer** (backend or frontend, by area): reproduce or state the problem, fix it
-   following `docs/CODING-STANDARDS.md`, add or extend an automated check, run `npx tsc --noEmit`.
-2. **sdet**: runs `docs/CODING-STANDARDS.md` §5 (tsc, eslint, the DoD suites; build when `src/` changed)
-   and pastes the raw counts.
-3. **Done**: one commit (`MAINT: …` or `BUG-NNN: …`), `docs/worklog.md` entry (what, evidence,
-   NOT VERIFIED). Never push — the owner pushes.
-
-If the job grows past the left column while working, **stop** and switch to
-`/new-requirement` (or `/fix-bug` for an S1/S2 bug that needs triage). The ground rules
-in §4 and the stop conditions in §7 apply unchanged.
+A schema change, a data delete or a push needs the owner's OK first — the job stays in the
+fast lane. The ground rules in §4 and the stop conditions in §7 apply unchanged.
 
 ## 4. Ground rules (no exceptions)
 
@@ -103,11 +109,11 @@ in §4 and the stop conditions in §7 apply unchanged.
 7. Each agent edits only the paths its agent file allows.
 
 ### Code and data safety
-8. Coding standards (`docs/CODING-STANDARDS.md`; owner's wording in `coding-standards.md`) are mandatory.
+8. Coding standards (`docs/CODING-STANDARDS.md`, owner's wording in its §1) are mandatory.
    A deviation needs the owner's written approval in `docs/process/decisions.md`.
 9. Never delete data, drop tables, edit `.env` secrets or touch production. Ask first.
 10. Never print secrets, passwords or tokens in docs, logs or output.
-11. Schema changes, commits and git history: `docs/CODING-STANDARDS.md` §4 and §4 (step 6).
+11. Schema changes: `docs/CODING-STANDARDS.md` §4; commits and git history: §6.
 12. Database, Windows and secrets rules: `docs/CODING-STANDARDS.md` §8 (port 5500 only, never 3306).
 
 ### Communication
@@ -136,7 +142,7 @@ in §4 and the stop conditions in §7 apply unchanged.
 
 ## 7. Stop conditions (any agent, any phase)
 
-Stop, write why, and hand back to the facilitator when:
+Stop, write why (max 15 lines), and hand back to the facilitator when:
 - a needed file is outside your allowed paths,
 - the BRD is ambiguous or contradicts the code,
 - a suite fails for a reason you did not cause,
