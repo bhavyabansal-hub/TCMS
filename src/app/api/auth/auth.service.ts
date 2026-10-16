@@ -19,6 +19,8 @@ import {
 } from '@/lib/auth'
 import { logActivity } from '@/lib/activity'
 import { logger } from '@/lib/logger'
+import { assertLoginAllowedForIp, clientIpKey, recordFailedLoginForIp } from '@/lib/server/login-rate-limit'
+import { LOGIN_IP_MAX_FAILURES } from '@/lib/server/config'
 import { createNotification } from '@/lib/notifications'
 import { serializeUser, type SerializedUser } from '@/lib/serializers'
 import { findUserById, findUserByEmail } from '@/lib/server/user.repository'
@@ -89,7 +91,12 @@ export async function loginUser(
   input: { email: string; password: string },
   meta: RequestMeta
 ): Promise<AuthSessionPayload> {
-  // Brute-force guard FIRST: 5 failed attempts -> 1 minute lock, then a
+  // Per-IP guard first (B6): too many failed sign-ins from one network -> 429,
+  // whatever emails were tried (in memory, src/lib/server/login-rate-limit.ts).
+  const ip = clientIpKey(meta.ip)
+  assertLoginAllowedForIp(ip)
+
+  // Brute-force guard per email: 5 failed attempts -> 1 minute lock, then a
   // fresh counter. The lock applies per email, before any password work.
   const attempt = await findLoginAttempt(input.email)
   const now = new Date()
@@ -107,6 +114,8 @@ export async function loginUser(
     // makes both branches cost the same. Failure counting is unchanged.
     if (!user) verifyPassword(input.password, DUMMY_BCRYPT_HASH)
     // Count every failed attempt (also for unknown emails: no user enumeration).
+    const ipFailures = recordFailedLoginForIp(ip)
+    if (ipFailures === LOGIN_IP_MAX_FAILURES) logger.warn('Login rate limit reached for an IP', { ip, failures: ipFailures })
     const failed = await registerFailedLoginAttempt(input.email)
     if (failed >= MAX_LOGIN_ATTEMPTS) {
       await lockLoginAttempts(input.email, LOGIN_LOCK_SECONDS)

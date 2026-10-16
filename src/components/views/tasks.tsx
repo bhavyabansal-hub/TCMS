@@ -15,6 +15,7 @@ import type { TaskItem, TaskReport, Module, TestCase, Bug } from '@/types'
 import { minutesToHuman, todayISO } from '@/lib/format'
 import { handleApiError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
+import { toCsv } from '@/lib/csv-export'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -83,9 +84,7 @@ function toTaskItem(t: TaskRow): TaskItem {
 const URL_PATTERN = /^https?:\/\/\S+$/i
 
 function downloadCsv(fileName: string, rows: string[][]): void {
-  const csv = rows
-    .map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\n')
+  const csv = toCsv(rows) // quoted + formula-injection safe (src/lib/csv-export.ts)
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

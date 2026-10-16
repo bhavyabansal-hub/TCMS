@@ -70,6 +70,19 @@ export const WS_NOTIFY_SECRET = str('WS_NOTIFY_SECRET')
  */
 export const ENABLE_SEED = str('TCMS_ENABLE_SEED').toLowerCase() === 'true'
 
+// ---------- Maintenance + abuse protection (backlog B5/B6) ----------
+
+/**
+ * Maintenance switch: TCMS_READ_ONLY=true answers every write (POST/PUT/PATCH/DELETE)
+ * with 503 except sign-in, token refresh and sign-out (src/lib/server/read-only.ts).
+ * Read at boot — restart the app to change it.
+ */
+export const READ_ONLY = str('TCMS_READ_ONLY').toLowerCase() === 'true'
+
+/** Per-IP login limit (in memory, single instance): failed sign-ins per window → 429. */
+export const LOGIN_IP_MAX_FAILURES = int('TCMS_LOGIN_IP_MAX_FAILURES', 30)
+export const LOGIN_IP_WINDOW_SECONDS = int('TCMS_LOGIN_IP_WINDOW_SECONDS', 900)
+
 // ---------- Logging ----------
 
 /** Directory for rotating log files (logs/app-*.log, logs/error-*.log). */

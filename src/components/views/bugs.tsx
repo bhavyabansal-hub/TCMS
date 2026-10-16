@@ -27,6 +27,7 @@ import { bugStatusColor, severityDot, formatDateTime, formatDate, timeAgo } from
 import { handleApiError } from '@/lib/errors'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { toCsv } from '@/lib/csv-export'
 import type { Bug, BugStatus, Severity } from '@/types'
 import { BUG_ASSIGNEE_ROLES } from '@/types'
 import { SeverityBadge, StatusBadge } from '@/components/shared/badges'
@@ -74,7 +75,8 @@ export function BugsView() {
   const activeBug = activeBugId ? bugs.find((b) => b.bugId === activeBugId) ?? null : null
 
   /** Export the currently loaded bugs to CSV — mirrors the test-cases export.
-   *  Exports what the user can see (the loaded page), quoted + escaped. */
+   *  Exports what the user can see (the loaded page); every cell quoted and
+   *  formula-injection safe (src/lib/csv-export.ts). */
   function exportCsv() {
     if (!bugs.length) {
       toast.error('No data to export')
@@ -83,7 +85,7 @@ export function BugsView() {
     const headers = ['ID', 'Title', 'Module', 'Severity', 'Status', 'Assignee', 'Reported By', 'Created', 'Updated']
     const rows = bugs.map((b) => [
       b.bugId,
-      `"${b.title.replace(/"/g, '""')}"`,
+      b.title,
       b.module?.name ?? '',
       b.severity,
       b.status,
@@ -92,7 +94,7 @@ export function BugsView() {
       formatDateTime(b.createdAt),
       formatDateTime(b.updatedAt),
     ])
-    const csv = [headers, ...rows].map((r) => r.join(',')).join('\n')
+    const csv = toCsv([headers, ...rows])
     downloadTextFile(`bugs-${new Date().toISOString().slice(0, 10)}.csv`, csv)
     toast.success('Exported CSV')
   }

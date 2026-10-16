@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { ZodError } from 'zod'
 import { logger } from './logger'
-import { EXTRA_ALLOWED_HOSTS } from '@/lib/server/config'
+import { EXTRA_ALLOWED_HOSTS, READ_ONLY } from '@/lib/server/config'
+import { READ_ONLY_MESSAGE, isBlockedInReadOnly } from '@/lib/server/read-only'
 import type { RequestMeta } from './activity'
 import { mapDatabaseError, mysqlErrno } from '@/lib/server/db-errors'
 
@@ -235,6 +236,10 @@ export async function withApi(
   const url = new URL(req.url)
   try {
     assertSameOrigin(req)
+    // Maintenance mode (TCMS_READ_ONLY=true): writes answer 503 before any work.
+    if (READ_ONLY && isBlockedInReadOnly(req.method, url.pathname, url.searchParams)) {
+      throw new ApiError(503, READ_ONLY_MESSAGE)
+    }
     const res = await handler()
     logger.info(`${req.method} ${url.pathname}${url.search} -> ${res.status}`, {
       durationMs: Date.now() - startedAt,

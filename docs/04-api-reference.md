@@ -23,7 +23,26 @@
 
 ## 1. `GET /api` 🔓
 
-Health check. Returns `{ "message": "Hello, world!" }`. No DB.
+Liveness check. Returns `{ "status": "ok", "service": "tcms-api" }`. No DB.
+
+### 1b. `GET /api/ready` 🔓 — readiness (`ready/route.ts`)
+
+200 `{ status: 'ready', database: 'ok', databaseLatencyMs, readOnly }` when the database
+answers within 3 s; otherwise **503** `{ error: 'Not ready: the database is not answering' }`.
+Use it for load-balancer / uptime checks and the go-live smoke test.
+
+### 1c. Maintenance mode (`TCMS_READ_ONLY=true`)
+
+Every API write (POST/PUT/PATCH/DELETE) answers **503** `{ error: 'TCMS is in read-only
+maintenance mode — changes are paused, try again later.' }` before any work. Still open:
+all GETs and `POST /api/auth?path=login|refresh|logout` (`src/lib/server/read-only.ts`).
+
+### 1d. Login limits
+
+Per email: 5 failures → 60 s lock (429, `login_attempts` table). Per client IP: 30 failed
+sign-ins per 15 min (`TCMS_LOGIN_IP_MAX_FAILURES` / `_WINDOW_SECONDS`) → 429 `Too many
+failed sign-ins from your network…` until the window ends, even with valid credentials
+(in memory, single instance).
 
 ## 2. `/api/auth` — authentication (`src/app/api/auth/route.ts`)
 
