@@ -22,7 +22,7 @@
  *   owner-approved D-EMPTY module reviews, deleted only if no case review is left after the
  *   main delete, together with exactly their module_review notifications.
  * Exit: 0 ok, 1 FAIL/rollback, 2 NOT RUN (guard, lock, bad arguments).
- * Forbidden as tools or evidence: cleanup-import-demo.mjs, check-overrides.mjs (R9.AC12).
+ * Forbidden as tools or evidence: cleanup-import-demo.mjs (R9.AC12).
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { GuardAbort, Prisma, openGuardedDb, sqlIn } from './lib/db-guard.mjs'
