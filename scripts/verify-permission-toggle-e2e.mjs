@@ -515,7 +515,7 @@ function buildDefs() {
       sig: async (t) => JSON.stringify(await q`SELECT assigned_to_id, updated_at FROM bugs WHERE bug_id = ${t.id}`),
     },
     create_task_report: {
-      ui: [{ path: () => '/tasks', probe: () => ({ markerSelector: '#report-date' }), buttons: ['Save report', 'Add task'], deniedText: D.tasksN1, deniedIsNotice: true }],
+      ui: [{ path: () => '/tasks', probe: () => ({ markerSelector: '#report-date', markerText: 'Export CSV' }), buttons: ['Save report', 'Add task'], deniedText: D.tasksN1, deniedIsNotice: true }],
       api: (s, t, role, phase) => req('POST', '/api/task-reports', { jar: s.jar, body: { reportDate: TODAY, tasks: [{ description: tag('task', role, phase), timeSpentMinutes: 30, status: 'done' }] } }),
       async verifyOn(res, t, uid, t0, t1, L) {
         const id = res.json?.taskReportId

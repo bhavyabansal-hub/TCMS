@@ -129,8 +129,14 @@ async function main() {
   check('viewer PUT bug status -> 403 (no bug rights)', vBug.status === 403, `got ${vBug.status}`)
   const dBug = await api(developer, 'PUT', `/api/bugs?id=${bugId}`, { status: 'in_progress' })
   check('developer PUT bug status -> 200 (create_bug participant)', dBug.status === 200, `got ${dBug.status} ${JSON.stringify(dBug.data).slice(0, 80)}`)
-  const dBugAssign = await api(developer, 'PUT', `/api/bugs?id=${bugId}`, { assignedToId: null })
-  check('developer reassign bug -> 403 (assign_bug withheld)', dBugAssign.status === 403, `got ${dBugAssign.status}`)
+  // T1-2: re-sending the current assignee is a no-op, so the check must
+  // request a real change (unassigned -> a real user) to hit assign_bug.
+  const devOpts = await api(developer, 'GET', '/api/users?action=options')
+  const assigneeId = (devOpts.data ?? []).find((u) => u.userId)?.userId
+  const dBugAssign = await api(developer, 'PUT', `/api/bugs?id=${bugId}`, { assignedToId: assigneeId })
+  check('developer reassign bug -> 403 (assign_bug withheld)', !!assigneeId && dBugAssign.status === 403, `got ${dBugAssign.status}`)
+  const dBugSame = await api(developer, 'PUT', `/api/bugs?id=${bugId}`, { assignedToId: null })
+  check('developer re-sends current assignee -> 200 (no-op, T1-2)', dBugSame.status === 200, `got ${dBugSame.status}`)
   const mBugAssign = await api(manager, 'PUT', `/api/bugs?id=${bugId}`, { assignedToId: null })
   check('manager reassign bug -> 200 (assign_bug granted)', mBugAssign.status === 200, `got ${mBugAssign.status}`)
 
