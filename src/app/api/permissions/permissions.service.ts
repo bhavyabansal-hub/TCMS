@@ -55,7 +55,8 @@ export async function togglePermission(
   const isDefault = (DEFAULT_PERMISSIONS[input.role as keyof typeof DEFAULT_PERMISSIONS] ?? []).includes(
     input.action as never
   )
-  if (input.enabled === isDefault) {
+  const isBackToDefault = input.enabled === isDefault
+  if (isBackToDefault) {
     await deleteRolePermissionOverride(input.role, input.action)
   }
 
@@ -86,6 +87,7 @@ export async function togglePermission(
     role: saved.role as PermissionToggle['role'],
     action: saved.action as PermissionToggle['action'],
     enabled: saved.enabled,
-    source: 'override',
+    // Matches GET /api/permissions: no override row left = default (T1-5).
+    source: isBackToDefault ? 'default' : 'override',
   }
 }
