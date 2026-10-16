@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Plus, Trash2, Pencil, Save, X, Send, History, ClipboardCheck,
-  MessageSquare, User as UserIcon, GitBranch, Activity,
+  MessageSquare, User as UserIcon, GitBranch, Activity, Flag,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -301,11 +301,23 @@ export function TestCaseDetailView() {
                       {r.events && r.events.length > 0 && (
                         <ul className="ml-3 space-y-0.5 border-l pl-2">
                           {r.events.map((e) => (
-                            <li key={e.reviewEventId} className="flex items-start gap-1.5">
-                              <Badge variant="outline" className={`text-[9px] ${verdictColor(e.verdict)}`}>
-                                {e.verdict.replace('_', ' ')}
-                              </Badge>
-                              <span className="text-muted-foreground line-clamp-2">{e.comment}</span>
+                            <li key={e.reviewEventId} className="space-y-1">
+                              <div className="flex items-start gap-1.5">
+                                <Badge variant="outline" className={`text-[9px] ${verdictColor(e.verdict)}`}>
+                                  {e.verdict.replace('_', ' ')}
+                                </Badge>
+                                <span className="text-muted-foreground line-clamp-2">{e.comment}</span>
+                              </div>
+                              {/* Flagged fields — the author needs them to fix the case (R2-5). */}
+                              {Array.isArray(e.flaggedFields) && e.flaggedFields.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                  {e.flaggedFields.map((f) => (
+                                    <Badge key={f} variant="secondary" className="text-[9px]">
+                                      <Flag className="h-2.5 w-2.5 mr-1" /> {f}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
                             </li>
                           ))}
                         </ul>
