@@ -241,6 +241,9 @@ export async function updateTestCaseFields(
   return serializeTestCase(updated)
 }
 
+/** Case statuses that refuse a new review submission. */
+const NOT_SUBMITTABLE_STATUSES = new Set(['in_review', 'approved'])
+
 export async function submitTestCaseForReview(
   me: SessionUser,
   testCaseId: string,
@@ -250,6 +253,11 @@ export async function submitTestCaseForReview(
   const tc = await findTestCaseById(testCaseId)
   if (!tc) throw ApiError.notFound('Test case not found')
   ensurePermission(me, 'submit_review')
+  // State machine (deep-test R2-4): a case already in review or approved cannot be
+  // submitted again — the UI only offers Submit for draft / needs_revision.
+  if (NOT_SUBMITTABLE_STATUSES.has(tc.status)) {
+    throw ApiError.badRequest(`This test case is ${tc.status.replace('_', ' ')} — it cannot be submitted for review again`)
+  }
 
   // Resolve the reviewer: explicit choice -> assignee -> first active lead/admin.
   let reviewerId = input.reviewerId
