@@ -56,6 +56,9 @@ npm run dev                               # scripts/dev-tcms.mjs — MySQL-only 
 
 ## 2. Production deployment on company IT (the planned cutover)
 
+**Step-by-step for the server: [`docs/deploy/PRODUCTION-CHECKLIST.md`](docs/deploy/PRODUCTION-CHECKLIST.md)**
+(every `.env` key, systemd units for both processes, backups cron, go-live steps).
+
 The full, ordered plan with rollback lives in `docs/migration/04-cutover-rollback.md`.
 Summary of the sequence:
 
@@ -78,7 +81,7 @@ Summary of the sequence:
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `DATABASE_URL` / `DIRECT_URL` | ✅ | MySQL 8.4 connection string (identical values) |
+| `DATABASE_URL` / `DIRECT_URL` | ✅ | MySQL 8.4: `DATABASE_URL` = app user (DML only), `DIRECT_URL` = migration user (DDL) — two different users |
 | `JWT_SECRET` | ✅ | Signs session tokens. Long random value in production (`openssl rand -hex 32`) |
 | `PG_SOURCE_URL` | optional | Read-only PG fallback source for the rollback window |
 | `TCMS_ENABLE_SEED` | sandbox only | Allows `/api/seed` on an empty DB — keep OFF in production |
@@ -102,8 +105,8 @@ guide, sections 4–5, and remain accurate.
 - [ ] `GET /api` → `{"status":"ok","service":"tcms-api"}`
 - [ ] `SELECT @@version` ≥ 8.4, `@@sql_mode` includes a STRICT mode, charset `utf8mb4`
 - [ ] Sign-in works; dashboard charts render
-- [ ] Seeded/admin passwords changed; `TCMS_ENABLE_SEED` unset in production
-- [ ] Register form shows the 6 roles; a Viewer account correctly gets 403s elsewhere
+- [ ] First VP created with `scripts/create-first-vp.mjs`; `TCMS_ENABLE_SEED` unset in production
+- [ ] Register tab hidden (signup off); a Viewer account correctly gets 403s elsewhere
 - [ ] Create a test case + assign a bug → recipient sees in-app notification (email/Telegram if configured)
 - [ ] `scripts/verify-battery.sh` green against the production DB
 - [ ] Backup scheduler running (`logs/backup.log`), one restore drill completed
