@@ -160,7 +160,10 @@ export async function updateBugFields(
   if (!canAny(me.role, ['create_bug', 'assign_bug'])) {
     throw ApiError.forbidden('Only roles with bug rights (create / assign) can edit bugs')
   }
-  if (input.assignedToId !== undefined) {
+  // assign_bug is needed only when the assignee really changes (deep-test T1-2):
+  // resending the current assignee (or null for an unassigned bug) is a no-op.
+  const isReassign = input.assignedToId !== undefined && (input.assignedToId ?? null) !== before.assigned_to_id
+  if (isReassign) {
     ensurePermission(me, 'assign_bug', 'Only roles with assign-bug rights (VP / Manager) can reassign bugs')
     // Fail fast: unknown assignee 404s instead of a raw FK 500 mid-update.
     if (input.assignedToId) {
@@ -183,7 +186,7 @@ export async function updateBugFields(
   if (input.expectedBehaviour !== undefined) fields.expectedBehaviour = input.expectedBehaviour
   if (input.actualBehaviour !== undefined) fields.actualBehaviour = input.actualBehaviour
   if (input.moduleId !== undefined) fields.moduleId = input.moduleId ?? null
-  if (input.assignedToId !== undefined) fields.assignedToId = input.assignedToId ?? null
+  if (isReassign) fields.assignedToId = input.assignedToId ?? null
   // Legacy rule, preserved exactly: whenever the update sets the status to
   // resolved/closed, resolved_at is stamped with now (any body value loses).
   if (input.status === 'resolved' || input.status === 'closed') {

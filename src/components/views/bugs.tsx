@@ -781,7 +781,8 @@ function BugEditForm({
       const updated = await bugsApi.update(bug.bugId, {
         status,
         severity,
-        assignedToId: assignedToId || null,
+        // Only a real reassignment is sent (assign_bug is required for it; T1-2).
+        ...((assignedToId || null) !== (bug.assignedToId ?? null) ? { assignedToId: assignedToId || null } : {}),
         expectedUpdatedAt: bug.updatedAt,
       })
       toast.success('Bug updated')
