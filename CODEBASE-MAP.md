@@ -10,9 +10,10 @@ Test Case Management System. Next.js 16 App Router · React 19 · TypeScript 5 �
 Tailwind v4 + shadcn/ui · Zustand 5 · TanStack React Query 5 · Prisma 6 (client only,
 **raw SQL everywhere**) · **MySQL 8.4** (utf8mb4_unicode_ci, strict, UTC, native JSON) ·
 JWT in httpOnly cookies · zod 4 · socket.io mini-service for realtime.
-PostgreSQL retired 2026-10-14 (kept read-only as rollback source; PG-era scripts live in
-`archive/postgres/` until 2 weeks after go-live, decision D1). Production cutover is **pending IT answers**
-(IT request: [`docs/deploy/it-request-mysql.md`](docs/deploy/it-request-mysql.md); plan in `docs/migration/04-cutover-rollback.md`).
+MySQL is the only database (decision D1). Production is a fresh start: empty MySQL +
+`scripts/create-first-vp.mjs` (decision D2).
+Production go-live is **pending IT answers** ([`docs/deploy/it-request-mysql.md`](docs/deploy/it-request-mysql.md);
+steps in [`docs/deploy/PRODUCTION-CHECKLIST.md`](docs/deploy/PRODUCTION-CHECKLIST.md)).
 
 ## 2. Top-level layout
 
@@ -22,21 +23,16 @@ CLAUDE.md           pointer to agent.md + this file
 .claude/            agents/ (6 team roles), commands/ (/new-requirement, /build-requirement,
                     /fix-bug, /quick-fix fast lane, /retro), settings.json (permission deny/ask rules)
 worklog.md          append-only engineering log (never overwrite)
-docs/               README.md index, 01–18 guides, LOCAL-SETUP-WINDOWS.md, migration/ (PG→MySQL
-                    dossier), deploy/, qa/, process/ (team workflow, decisions, backlog,
-                    lessons, templates), requirements/ (created per REQ), PDF guide,
-                    refactor reports, CHANGELOG
+docs/               README.md index, 01–18 guides, LOCAL-SETUP-WINDOWS.md, deploy/ (production
+                    checklist, IT request, reverse proxy, go-live data copy), qa/ (latest
+                    deep test), process/ (team workflow, decisions, backlog, lessons,
+                    templates), requirements/ (created per REQ), CHANGELOG
 prisma/             schema.prisma (mysql) + migrations/ (the ONLY DDL path)
 src/                application (see §3–§8)
 mini-services/      notifications (socket.io WS relay), crewdesk-mock (test double)
-scripts/            ~50 boot/verify/backup/migration scripts (see §10)
-archive/            moved-out files (see archive/README.md): postgres/ = PG-era scripts +
-                    schemas + old deploy guide (rollback plan until 2 weeks after go-live); scripts/ =
-                    one-off probes/repros; src/ = classic dashboard + /dashboard-preview
+scripts/            ~65 boot/verify/backup scripts + lib/ helpers (see §10)
 README.md DEPLOYMENT.md CHANGELOG.md   root docs (deploy guide = MySQL 8.4)
-archive/platform/   old cloud-sandbox files (start-dev.sh, Caddyfile, root bun.lock, vercel.json) — moved
-                    2026-10-16, unused by Windows dev and the Linux+nginx plan; .zscripts/ git-ignored
-(no download/ folder: the IT request is `docs/deploy/it-request-mysql.md`; the canonical zip is not recreated)
+(no archive/ and no download/ folder since 2026-10-16; .zscripts/ is git-ignored)
 ```
 
 ## 3. Request pipeline (every API call)
@@ -233,12 +229,7 @@ never `db push`): `20261015034822_init_mysql` (hand-edited collations + JSON def
   `mysql-baseline-test.mjs` (19), `mysql-correctness-test.mjs` (15), `backup-test.mjs` (26),
   `backup-app-staleness-test.mjs` (10), `ws-auth-probe.mjs` (10), `ws-reconnect-test.mjs` (5).
 - **Backups:** `backup-db-mysql.sh`, `backup-scheduler.mjs` (02:30 UTC, 14 kept), `restore-mysql.sh`.
-- **Migration one-offs:** `migration/migrate-pg-to-mysql.mjs`, `convert-schema-mysql.cjs`.
-- **PG-era → `archive/postgres/scripts/`** (keep until 2 weeks after go-live, never run on MySQL):
-  backup-db, restore-db, apply-indexes, add-load-indexes, migrate-rbac, db-qa-checks,
-  supabase-check, probe-rbac-state, check-tables, cleanup-probe-data, validate-db-setup,
-  verify-no-corruption, verify-rbac.sh, start-dev-fresh.sh, migration/schema.pg.prisma.
-- **One-offs → `archive/scripts/`** (45 unreferenced repro/probe/audit/round verifiers).
+- **Local MySQL:** `migration/mysql84-boot.sh` boots the local MySQL 8.4 test server.
 - Several scripts hard-code `/home/z/my-project/...` (sandbox-only paths).
 
 ## 11. Definition of Done (agent.md §3)
@@ -264,7 +255,7 @@ See agent.md §3 — the single source (not repeated here).
     `FLAGGABLE_FIELDS` is duplicated in `review-detail.tsx` and `module-review-detail.tsx`.
 11. Lists capped at 200 silently (bugs board, picker `all-light` queries).
 12. Unused deps: `react-hook-form`, `z-ai-web-dev-sdk`; `db:push --accept-data-loss` script contradicts migrate-only policy.
-13. Stale docs: docs 02/13 describe pre-restructure schema; docs 12 §3–§4 historical (PG era); `api/route.ts` mentions keep-alive; comments mention old roles admin/team_lead.
+13. Code comments still mention keep-alive (`api/route.ts`) and old roles admin/team_lead; the docs were brought up to date 2026-10-16.
 
 ## 13. Local machine state (Windows, checked 2026-10-15)
 

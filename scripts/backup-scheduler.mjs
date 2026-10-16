@@ -1,7 +1,5 @@
 // Daily database backup scheduler — runs scripts/backup-db-mysql.sh (mysqldump,
 // task mysql-backup-1) every day at BACKUP_AT (default 02:30 local time).
-// The PostgreSQL-era backup-db.mjs child spawn is RETIRED — this scheduler
-// must never invoke it again (it fails on every mysql:// URL by design).
 //
 // Started automatically by scripts/boot-tcms-autostart.sh (idempotent:
 // pgrep-guarded; output lands in /tmp/tcms-backup-scheduler.log). On boot it

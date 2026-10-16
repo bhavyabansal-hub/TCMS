@@ -48,9 +48,8 @@ desktop.ini
 *.swp
 *.swo
 
-# ---- Local databases & embedded PostgreSQL data (NEVER commit live data) ----
+# ---- Local databases (NEVER commit live data) ----
 /db/
-scripts/pg-sandbox/data/
 *.sqlite
 *.sqlite3
 
@@ -79,13 +78,9 @@ dev.log
 # DB backups contain full user data — never commit
 backups/
 
-# ---- Legacy staging copy: PG sandbox lives at scripts/pg-sandbox/ (no duplicates) ----
-scripts/tcms-package/scripts/pg-sandbox/
-
 # ---- Sandbox-side self-heal (untracked: contains local dev secret, not shippable) ----
 scripts/boot-selfheal.sh
 logs-start.log
 
 
-scripts/pg-sandbox/
-scripts/pg-client/
+

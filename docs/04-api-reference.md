@@ -16,8 +16,8 @@
 > responses through `src/lib/api.ts` (`ok`, `paginate`, `ApiError`, `withApi`)
 > and structured logging (`src/lib/logger.ts`). Entity keys in responses are
 > renamed end-to-end (`id` → `userId`/`moduleId`/`testCaseId`/`bugId`/...).
-> Unknown actions now consistently return 400; search is case-insensitive
-> (`ILIKE`). Details: `REFACTORING-REPORT.md`.
+> Unknown actions consistently return 400; search is case-insensitive
+> (`LIKE` on `utf8mb4_unicode_ci`).
 
 ---
 
@@ -80,10 +80,10 @@ deliberately while seeding; production keeps it off so a fresh deployment can
 never be seeded by a stranger. `GET` (browser-friendly) and `POST` behave
 identically. **Idempotent**: if `user.count() > 0` →
 `{ seeded: false, message: "Database already has users; skipping seed." }`.
-Otherwise inserts exactly: 4 users (admin/teamlead/qa1/qa2 with the documented
-passwords), 9 modules (3 roots × login+validation children), 5 test cases (one in each
-key status), 3 bugs, 2 task reports. Returns
-`{ seeded: true, users: […4 emails], modules: 9, testCases: 5, bugs: 3, taskReports: 2 }`.
+Otherwise inserts 7 users, one per role plus a second QA (`admin@tcms.com` vp,
+`teamlead@tcms.com` manager, `product@`, `developer@`, `qa1@`, `qa2@`, `viewer@tcms.com`,
+with the documented passwords), sample modules, test cases, bugs and task reports. Returns
+`{ seeded: true, users: […7 emails], modules, testCases, bugs, taskReports }` (counts).
 No activity logs / notifications are produced by the seed.
 
 ## 4. `/api/stats` — aggregates (`stats/route.ts`) 🛡 any role
@@ -106,12 +106,12 @@ returns **200** `{ error: 'Unknown action' }` (elsewhere it's 400).
 | `POST` 🛡 `create_module` | body `{ name(min 1), description?, parentId? }` | Root: `path=''`, depth 0. Child: parent 404-checked; `path=parent.path + '.' + parentId`, `depth+1`. **`ownerId` is never taken from the client — owner = creator.** Logs `CREATE/module` |
 | `PUT ?id=` 🛡 `edit_module` | body `{ name?, description?, ownerId? }` | Ownership transfer allowed; `createdById` immutable (governs delete rights). Sets `updatedById`. Logs `UPDATE/module` with before/after |
 | `PUT ?id=&action=submit-review` 🛡 `submit_review` | body `{ reviewerId?, dueDate?, includeSubmodules=true }` | **Module-level review** — see below |
-| `DELETE ?id=` 🛡 | `admin`/`team_lead` **or** creator; else 403 `Only the creator of this module or a senior manager (team lead / admin) can delete it.` | **Hard delete**; DB cascades children/permissions/module reviews; cases get `moduleId=null`. Logs `DELETE/module` |
+| `DELETE ?id=` 🛡 | creator **or** `edit_module`; else 403 `Only the creator of this module or a role with edit-module rights can delete it.` | **Hard delete**; DB cascades children/permissions/module reviews; cases get `moduleId=null`. Logs `DELETE/module` |
 
 ### `action=submit-review` step by step
 
-1. Resolve reviewer: body `reviewerId` → else first **active** user with role
-   `team_lead`/`admin` → none: 400 `No reviewer available. Please assign a team lead.`
+1. Resolve reviewer: body `reviewerId` → else the first **active** manager (then VP),
+   never the submitter → none: 400 `No reviewer available. Assign a VP or Manager.`
 2. Target set = module (+ all descendants when `includeSubmodules` — iterative stack walk).
 3. Eligible cases = in targets ∧ `status ∈ ['draft','needs_revision']`; none → 400
    `No eligible test cases (draft or needs_revision) found in this module.`
@@ -148,7 +148,9 @@ returns **200** `{ error: 'Unknown action' }` (elsewhere it's 400).
 ### `action=submit-review`
 
 Reviewer resolution: body `reviewerId` → case `assigneeId` → first active
-team_lead/admin (400 `No reviewer available. Assign a reviewer first.`).
+manager, then VP (400 `No reviewer available. Assign a reviewer first.`).
+Refused with 400 when the case is already `in_review` or `approved`; the case's old
+open review is closed in the same transaction (one open review per case).
 `cycle = max(case review cycles) + 1` → create `ReviewRequest(pending)`; case →
 **`in_review`** (version NOT bumped). Logs `REVIEW_SUBMITTED/test_case`; notifies
 reviewer (`review_assigned`, entityType `review`). Returns the review row.
@@ -158,9 +160,9 @@ reviewer (`review_assigned`, entityType `review`). Returns the review row.
 | Endpoint | Auth rules | Behaviour |
 |---|---|---|
 | `GET ?action=queue` 🛡 any | — | My open queue (`reviewerId = me`, status pending/in_progress), with testCase/author/module summary |
-| `GET ?id=` | any | Full detail: review + testCase + reviewer + requester + events |
-| `GET` (list) | any role | All reviews, paginated (pageSize 50), filters `status`, `reviewerId`, `testCaseId` — *no permission gate on this branch (see 03 §8)* |
-| `POST ?id=` 🛡 `perform_review` 👑 | assigned reviewer ∨ admin; else 403 `You are not the assigned reviewer` | **Verdict** — see below |
+| `GET ?id=` 🛡 `perform_review` | — | Full detail: review + testCase + reviewer + requester + events |
+| `GET` (list) 🛡 `perform_review` | — | All reviews, paginated (pageSize 50), filters `status`, `reviewerId`, `testCaseId` |
+| `POST ?id=` 🛡 `perform_review` 👑 | assigned reviewer only (no VP bypass); else 403 `Only the assigned reviewer can submit a verdict for this review`; 409 when `expectedUpdatedAt` is stale | **Verdict** — see below |
 
 ### Verdict (`POST ?id=`)
 
@@ -185,9 +187,9 @@ Rule: **comment required unless approved** → 400 `Comment is required when ver
 | Endpoint | Auth rules | Behaviour |
 |---|---|---|
 | `GET ?action=queue` | any | Mine, pending/in_progress, with `module` + `_count.caseReviews` |
-| `GET ?action=all` 🛡 `view_all_task_reports` | lead/admin | Latest 100 with module/reviewer/requester + counts; else 403 `Team lead or admin only` |
-| `GET ?id=` | any | Detail: module, reviewer, requester, **caseReviews[]** each embedding full serialized testCase + events |
-| `POST ?id=&action=approve-all` 🛡 `perform_review` 👑 | assigned ∨ admin | **Bulk approve** — see below |
+| `GET ?action=all` 🛡 `perform_review` | — | Latest 100 with module/reviewer/requester + counts; else 403 `Only roles with perform-review rights can view all module reviews` |
+| `GET ?id=` 🛡 `perform_review` | — | Detail: module, reviewer, requester, **caseReviews[]** each embedding full serialized testCase + events |
+| `POST ?id=&action=approve-all` 🛡 `perform_review` 👑 | assigned reviewer only; 409 stale | **Bulk approve** — see below. A bulk verdict notifies each person once (an author who also requested the review gets one notification) |
 
 ### Bulk approve
 
@@ -202,27 +204,27 @@ For each: `ReviewEvent(approved, comment)` → review `completed` → its case �
 
 | Endpoint | Auth rules | Behaviour |
 |---|---|---|
-| `GET` list | any | `page(1)`, `pageSize(100)`, filters `status`, `severity`, `moduleId`, `assignedToId`, `reportedById`, `search` (title contains, case-sensitive); sort `createdAt desc` |
+| `GET` list | any | `page(1)`, `pageSize(100)`, filters `status`, `severity`, `moduleId`, `assignedToId`, `reportedById`, `search` (title contains, case-insensitive); sort `createdAt desc` |
 | `GET ?id=` | any | Bug + module + reportedBy + assignedTo + testCaseLinks |
 | `GET ?id=&action=links` | any | `BugTestCaseLink[]` with testCase summaries |
-| `POST` 🛡 `create_bug` | body `{ title, description?, severity(default medium), environment?, stepsToReproduce?, expectedBehaviour?, actualBehaviour?, moduleId?, assignedToId?, testCaseIds[] }` | `reportedById = me`; optional `createMany` links. Logs `CREATE/bug`; if assigned → notify assignee (`bug_assigned`) |
-| `PUT ?id=` | any authenticated user for fields; **`assign_bug` required if payload contains `assignedToId`** (403 `Only team leads and admins can reassign bugs`) | Partial update. Status `resolved`/`closed` ⇒ server stamps `resolvedAt = now()`. Logs `UPDATE/bug` (full before/after); assignee change → `bug_assigned` notification |
-| `PUT ?id=&action=link-tc` | any | Body `{ testCaseId }` → create link (duplicate-safe); always `{ "success": true }` |
-| `DELETE ?id=` 👑 | **admin only** (403 `Admin only`) | **Hard delete** (links cascade). Logs `DELETE/bug` |
+| `POST` 🛡 `create_bug` | body `{ title, description?, severity(default medium), environment?, stepsToReproduce?, expectedBehaviour?, actualBehaviour?, moduleId?, assignedToId?, testCaseIds[] }` | `reportedById = me`; optional test-case links. An `assignedToId` additionally needs `assign_bug` (403 otherwise). Logs `CREATE/bug`; if assigned → notify assignee (`bug_assigned`) |
+| `PUT ?id=` | `create_bug` **or** `assign_bug` for fields; **`assign_bug` required only when `assignedToId` changes the assignee** (re-sending the current one is a no-op); 409 when `expectedUpdatedAt` is stale | Partial update: only the fields sent change (no defaults are re-applied). Status `resolved`/`closed` ⇒ server stamps `resolvedAt = now()`. Logs `UPDATE/bug` (full before/after); assignee change → `bug_assigned` notification |
+| `PUT ?id=&action=link-tc` | `create_bug` ∨ `assign_bug` | Body `{ testCaseId }` → create link (duplicate-safe); always `{ "success": true }` |
+| `DELETE ?id=` 🛡 `delete_bug` | vp + manager by default | **Hard delete** (links cascade). Logs `DELETE/bug` |
 
-The deliberately open field-edit rule is what lets any teammate drag a card across the
-Kanban board without role friction; only *assignment* and *deletion* are gated.
+Any bug participant (`create_bug` or `assign_bug`) can drag a card across the Kanban
+board; changing the assignee and deleting are gated separately.
 
 ## 10. `/api/task-reports` — daily work log (`task-reports/route.ts`)
 
 | Endpoint | Auth rules | Behaviour |
 |---|---|---|
 | `GET ?action=my` | self | All my reports (desc by date), serialized |
-| `GET ?action=summary` 🛡 `view_all_task_reports` | lead/admin | Per-user aggregates for a date range (default last 30 days): `{ users: [{ userId, userName, totalMinutes, days, hours }] }` |
+| `GET ?action=summary` 🛡 `view_all_task_reports` | — | Per-user aggregates for a date range (default last 30 days): `{ users: [{ userId, userName, totalMinutes, days, hours }] }` |
 | `GET ?id=` 👑 | owner ∨ `view_all_task_reports` | Single report; else 403 `You can only view your own reports` |
-| `GET` list | any | **Non-managers force-filtered to own rows**; managers may pass `userId`; filters `dateFrom`, `dateTo`, `moduleId` (substring match inside the tasks JSON — heuristic) |
+| `GET` list | any | Without `view_all_task_reports` force-filtered to own rows; holders may pass `userId`; filters `dateFrom`, `dateTo`, `moduleId` (substring match inside the tasks JSON — heuristic) |
 | `POST` 🛡 `create_task_report` | body `{ reportDate, tasks[] (default []), notes? }` | **Upsert by (me, reportDate)** — unique constraint; recomputes `totalMinutes`. Logs `CREATE` or `UPDATE/task_report` |
-| `PUT ?id=` 🛡 `create_task_report` + 👑 | `create_task_report` **and** owner only — even admins | Partial update, recomputes total. Logs `UPDATE/task_report`. 403 `Insufficient role` without `create_task_report` (checked first, any id), 404 `Report not found`, 403 `You can only edit your own reports` |
+| `PUT ?id=` 🛡 `create_task_report` + 👑 | `create_task_report` **and** owner only — even VPs | Partial update (only the fields sent change), recomputes total. Logs `UPDATE/task_report`. 403 `Insufficient role` without `create_task_report` (checked first, any id), 404 `Report not found`, 403 `You can only edit your own reports` |
 
 `tasks[]` item validation: `{ description(min 1), timeSpentMinutes(int ≥0), moduleId?,
 testCaseId?, bugId?, status: done|in_progress|blocked }`.
@@ -231,9 +233,9 @@ testCaseId?, bugId?, status: done|in_progress|blocked }`.
 
 | Endpoint | Auth rules | Behaviour |
 |---|---|---|
-| `GET` full list 🛡 `view_activity_logs` | lead/admin | `page(1)`, `pageSize(50)`, filters `userId`, `entityType`, `action`, `dateFrom`, `dateTo`; desc; snapshots/diff parsed |
-| `GET ?action=entity&type=&id=` 🛡 `view_activity_logs` | lead/admin (403 otherwise) | Latest 50 logs for one entity (used by the case-detail Activity card) |
-| `GET ?action=user&id=` | any authenticated *(same)* | Latest 50 logs by one user |
+| `GET` full list 🛡 `view_activity_logs` | — | `page(1)`, `pageSize(50)`, filters `userId`, `entityType`, `action`, `dateFrom`, `dateTo`; desc; snapshots/diff parsed |
+| `GET ?action=entity&type=&id=` 🛡 `view_activity_logs` | 403 otherwise | Latest 50 logs for one entity (used by the case-detail Activity card) |
+| `GET ?action=user&id=` 🛡 `view_activity_logs` | 403 otherwise | Latest 50 logs by one user |
 
 ## 12. `/api/notifications` — the bell (`notifications/route.ts`)
 
@@ -243,30 +245,29 @@ Everything is scoped to the logged-in user.
 |---|---|
 | `GET` | My notifications, paginated (pageSize 50), optional `isRead=true|false` filter |
 | `POST ?action=read-all` | `updateMany` my unread → read; `{ "success": true }` |
-| `PATCH ?id=` | Mark one read; owner check → 400 `Not your notification` |
+| `PATCH ?id=` | Mark one read; owner check → 403 `Not your notification` |
 | `DELETE ?id=` | Hard delete one of my notifications |
 
-## 13. `/api/users` — admin user management 👑 (`users/route.ts`)
+## 13. `/api/users` — user management 👑 (`users/route.ts`)
 
-**Every method** requires `manage_users` → admin only (403 `Admin only`).
+**Every method** requires `manage_users` (vp + manager by default). `GET ?action=options`
+(picker rows: names + roles, no emails) is open to every signed-in user.
+
+**Role rules:** only a VP may create an account with a role other than `viewer`
+(403 `Only a VP can create accounts with a role other than viewer`) or change a role
+(403 `Only a VP can change roles`); nobody changes their own role (403).
 
 | Endpoint | Behaviour |
 |---|---|
 | `GET` | Paginated `publicUser`s (pageSize 50), filters `role`, `isActive`; sort `createdAt asc` |
-| `POST` | Invite: `{ email, fullName(min 2), password(min 8), role (required) }`; duplicate email → 400. Logs `CREATE/user` |
+| `POST` | Invite: `{ email, fullName(min 2), password(min 8), role }`; duplicate email → 400 `Email already registered`. Logs `CREATE/user` |
 | `PUT ?id=` | `{ fullName?, role?, isActive?, avatarUrl? }`. Logs `UPDATE/user` (before/after role+active+name) |
 | `DELETE ?id=` | **Soft delete**: `isActive: false`; self-delete → 400 `Cannot delete yourself`. Logs `DELETE/user` |
 
-## 14. ~~`/api/keep-alive`~~ — REMOVED 2026-10-14 with the MySQL migration (health: `GET /api`) 🔓
+## 14. `/api` and `/api/ready` — health 🔓
 
-**Public by design** — Vercel Cron sends unauthenticated GETs, and the endpoint
-leaks nothing. `GET` runs `SELECT 1` through Prisma and answers
-`{ ok: true, message: …, pingedAt }`; on database failure 500 `{ ok: false }`.
-Purpose: free database providers pause idle projects. NOTE (2026-10-14): the keep-alive route was REMOVED with the MySQL migration — MySQL has no free-tier pause;
-activity). `vercel.json` schedules a daily cron — the Hobby plan's maximum
-frequency — to call this endpoint, so the database records activity every day and
-never pauses. Harmless with every provider; also callable manually from a browser.
-See doc 12 §3 and `archive/postgres/docs/DEPLOYMENT-GUIDE.md` Appendix E (historical).
+`GET /api` is the liveness check. `GET /api/ready` also checks the database
+(`SELECT 1`) and answers 503 when it is down — use it for load-balancer readiness.
 
 ## 14b. `/api/integrations/crewdesk` — Crew Desk link management 🔒 (`integrations/crewdesk/route.ts`)
 | Method + path | Who | Validation | Service |
@@ -364,11 +365,7 @@ errors raised in rolled-back transactions + live upsert race).
 ## 16. Known quirks (documented on purpose)
 
 1. `stats` unknown action → 200 with `{error}` (everywhere else 400).
-2. `GET /api/reviews` (all) and `activity-logs ?action=entity|user` have weaker gates
-   (see `03-authentication-and-permissions.md` §8).
-3. Notification ownership violations return **400** rather than 403.
-4. `search` filters were case-sensitive on PostgreSQL; on MySQL 8.4 they are case-insensitive (`LIKE` on utf8mb4_unicode_ci)
-   `mode: 'insensitive'`).
-5. Task-report date uniqueness is on the stored datetime — the client normalises dates
+2. `search` filters are case-insensitive (`LIKE` on `utf8mb4_unicode_ci`).
+3. Task-report date uniqueness is on the stored datetime — the client normalises dates
    to `YYYY-MM-DD` (timezone-safe `todayISO()`), so in practice one row per calendar day.
-6. The Reports view's date inputs are currently cosmetic (not sent to the API).
+4. The Reports view's date inputs are currently cosmetic (not sent to the API).

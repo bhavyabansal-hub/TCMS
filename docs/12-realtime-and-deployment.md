@@ -1,16 +1,17 @@
 # 12 · Realtime Service & Deployment Architecture
 
 > How the optional WebSocket mini-service works, and how the whole system maps onto
-> **2026-10-14 MySQL migration note:** TCMS now runs on **MySQL 8.4** (utf8mb4, strict mode). Sections written for the former Vercel + Neon/Supabase PostgreSQL hosting are kept for history; DB-specific facts below have been updated where they matter operationally. See `docs/migration/` for the migration and cutover plan.
-> Former target: Vercel + Neon (step-by-step in `archive/postgres/docs/DEPLOYMENT-GUIDE.md`). CURRENT: MySQL 8.4 — company server pending IT answers; sandbox rehearsal complete.
+> TCMS runs on **MySQL 8.4** (utf8mb4, strict mode), one app instance behind nginx.
+> Production steps: [`deploy/PRODUCTION-CHECKLIST.md`](./deploy/PRODUCTION-CHECKLIST.md);
+> local Windows setup: [`LOCAL-SETUP-WINDOWS.md`](./LOCAL-SETUP-WINDOWS.md).
 
 ---
 
 ## 1. The realtime problem & the graceful-degradation answer
 
-TCMS wants "bell badge increments the instant someone assigns you a review". Serverless
-platforms (Vercel functions) cannot hold persistent WebSocket connections, so the
-project splits delivery into two independent channels:
+TCMS wants "bell badge increments the instant someone assigns you a review". The
+WebSocket push is a separate, optional service, so the project splits delivery into
+independent channels:
 
 ```
                      createNotification()                [lib/notifications.ts]
@@ -31,8 +32,8 @@ project splits delivery into two independent channels:
 ```
 
 All channels are try/catch-isolated; ② and ③ failing merely logs. **The system is
-fully functional with the WS service switched off** — that is exactly what happens on
-Vercel, and why the deployment guide calls realtime "degraded to refresh-visible".
+fully functional with the WS service switched off** — realtime then degrades to
+"refresh-visible" (the row shows on the next list fetch).
 
 ## 2. mini-services/notifications — the WS relay
 
@@ -46,7 +47,7 @@ A deliberately tiny, **database-free** Bun/Node service (`socket.io ^4.8.1`, one
 | Room join | client emits `auth { userId, token }` where token is a 60-second HMAC ticket minted by `GET /api/auth?path=ws-ticket` (httpOnly-cookie session); the server verifies signature/exp/audience AND `claimed === sub` before joining room `user:<sub>`; anything else → `auth-error` + disconnect |
 | Push path | Next.js server (the only broadcaster) → per-user rooms → `notification` event → client store `addNotification` (cap 50, unread badge recompute) |
 | Resilience | client: transport drops → socket.io manager retry (1 s → 10 s backoff); server disconnects (`io server disconnect`, e.g. expired ticket) → hook-managed reconnect with backoff (1 s → 30 s cap); a fresh 60 s ticket is minted per connection attempt via socket.io's `auth` callback and is single-use (stale-guarded memo — never reused across attempts); client teardown (`io client disconnect`) never reconnects; a definitive session death (ticket endpoint 401) stops the machinery (logout flow owns it); plus offline catch-up list refetch on reconnect and on tab re-visible (**no polling timers**); server: SIGTERM/SIGINT graceful close |
-| Deploy | optional: Railway/Render/Fly (needs a long-running process). On Vercel it simply isn't deployed |
+| Deploy | its own systemd service (`tcms-ws`) next to the app, behind nginx at `/socket.io/` (`docs/deploy/PRODUCTION-CHECKLIST.md` §3) |
 
 Security note (updated 2026-10-14): the historical hole above is CLOSED. The `auth`
 handler requires a valid 60-second HMAC ticket (shared `WS_NOTIFY_SECRET`, audience
@@ -57,9 +58,7 @@ verifier: `node scripts/ws-auth-probe.mjs` (PASS=10 FAIL=0). Production CORS is
 fail-closed as well — the service refuses to start when `WS_CORS_ORIGIN` is unset or
 `*`. Reverse-proxy deployment recipes: `docs/deploy/reverse-proxy-websocket.md`.
 
-## 3. Production topology on Vercel + Neon
-
-> Historical (PostgreSQL era). Current: MySQL 8.4 — see [`../DEPLOYMENT.md`](../DEPLOYMENT.md).
+## 3. Production topology (Linux + nginx + MySQL 8.4)
 
 > ### ⚠️ SINGLE-INSTANCE ONLY — read this before running more than one server
 >
@@ -90,77 +89,40 @@ fail-closed as well — the service refuses to start when `WS_CORS_ORIGIN` is un
 > and scale vertically (bigger box, bigger `connection_limit`).
 
 ```
-                        ┌─────────────────────────────┐
-  browser ── HTTPS ────▶│ Vercel edge network         │
-                        │  └ Next.js build (static)   │
-                        │  └ serverless functions      │
-                        │     • page shell (/)         │
-                        │     • /api/** route handlers │
-                        └──────────┬──────────────────┘
-                                   │ pooled connection string (-pooler, 6543)
-                                   ▼
-                        ┌─────────────────────────────┐
-                        │ Neon PostgreSQL              │
-                        │  14 tables · 10 JSONB        │
-                        │  autosuspend after ~5 min    │
-                        └─────────────────────────────┘
-                                   ▲
-                                   │ direct string (5432) — schema tools only
-                        prisma db push / database-setup.sql / pgAdmin
+  browser ── HTTPS :443 ──▶ nginx (TLS, reverse proxy)
+                              ├─ /            ──▶ Next.js app   127.0.0.1:3000  (.next/standalone/server.js)
+                              └─ /socket.io/  ──▶ notifications 127.0.0.1:3003  (loopback broadcast :3004)
+                                                        │
+  Next.js app ── pooled connection (connection_limit) ──▶ MySQL 8.4 (company IT server)
 ```
 
-### Why two connection strings (recap)
-Serverless functions open many short-lived connections; Neon's **pooler** endpoint
-(`-pooler`, port 6543) is built for exactly that and is what `DATABASE_URL` points to.
-Operations that manage the schema (`db push`, pgAdmin) want the **direct** endpoint
-(`DIRECT_URL`, port 5432). Both are set as env vars at deploy time.
+Two systemd services (`tcms-app`, `tcms-ws`); the firewall allows only 80/443.
+Details, env file and go-live order: [`deploy/PRODUCTION-CHECKLIST.md`](./deploy/PRODUCTION-CHECKLIST.md);
+nginx block: [`deploy/reverse-proxy-websocket.md`](./deploy/reverse-proxy-websocket.md).
 
-### What Vercel runs
-| Step | Command / source | Notes |
-|---|---|---|
-| install | `npm install` | `postinstall: prisma generate` builds the typed client |
-| build | `next build` | verified: 16 routes, all `/api/**` dynamic, pages static — no DB at build time |
-| serve | Vercel functions | `PORT` managed by the platform |
+### Connection strings
+`DATABASE_URL` is the app user (DML only). `DIRECT_URL` is the migrate user used by
+`prisma migrate deploy` (DDL only). Both are `mysql://` URLs; the app refuses anything else.
 
-### Environment variables (the only three)
-`DATABASE_URL` (pooled) · `DIRECT_URL` (direct) · `JWT_SECRET` (long random). Changing
-them requires a **redeploy** to take effect.
+### Health and safety switches
+| | |
+|---|---|
+| `GET /api` | liveness |
+| `GET /api/ready` | readiness — 503 when MySQL is down |
+| `TCMS_READ_ONLY=true` | every write answers 503 (sign-in and reading keep working) |
+| `TCMS_DEPLOY_ENV=production` | turns on the startup guard (refuses unsafe settings) |
 
-### Behavioural differences vs local dev
-| | Local (`npm run dev`) | Vercel |
-|---|---|---|
-| Realtime WS push | works (if mini-service runs on :3003) | refresh-visible — DB row shows on the next list fetch (page load / reconnect / tab re-visible); NO polling |
-| Cold start | none | first request after ~5 min idle wakes Neon (3–8 s) |
-| `localhost:3003` notify fetch | succeeds | fails silently (by design) |
-| Seeding | `GET /api/seed` in browser | identical (`/api/seed`, idempotent) |
-| Free-tier DB pause | n/a | Neon: sleeps after ~5 min; Supabase: 7-day pause **prevented by the daily keep-alive**; Aiven: never sleeps |
 
-### The daily keep-alive cron — REMOVED 2026-10-14
-The `/api/keep-alive` route and its Vercel Cron were deleted with the MySQL migration (MySQL has no free-tier pause; health checks use `GET /api`). The notes below are historical.
-`vercel.json` schedules exactly one Vercel Cron job: a daily `GET /api/keep-alive`
-(the Hobby plan's maximum frequency — which is enough). The endpoint runs
-`SELECT 1` through Prisma, i.e. real database activity. Its purpose is free-tier
-pause policy: Neon's ~5-minute sleep cannot be prevented by a daily ping, but
-**Supabase** only pauses after 7 completely idle days — so the daily ping keeps a
-free Supabase database awake forever — and **Aiven** never sleeps at all. The
-endpoint is public because Vercel Cron sends unauthenticated GETs; it leaks nothing
-(no data, `SELECT 1` only) and is safe to call from a browser too. Full switch-over
-steps for Supabase/Aiven live in `archive/postgres/docs/DEPLOYMENT-GUIDE.md`, Appendix E.
-
-## 4. Local development topology (for completeness)
-
-> Historical (PostgreSQL era). Current: MySQL 8.4 — see [`LOCAL-SETUP-WINDOWS.md`](./LOCAL-SETUP-WINDOWS.md).
+## 4. Local development topology (Windows)
 
 ```
-npm run dev (Next.js :3000)  ←→  any PostgreSQL (DATABASE_URL = DIRECT_URL locally)
+npm run dev (scripts/dev-tcms.mjs → next dev :3000)  ←→  MySQL 8.4 at 127.0.0.1:5500 (tcms_test)
         │
-        └─ notify fetch → localhost:3003 (mini-services/notifications, `bun --hot index.ts`)
+        └─ notify fetch → localhost:3003 (mini-services/notifications, optional)
 ```
 
-Locally both Prisma URLs point at the same database, so `db push` and the app share one
-string. A clean local DB is brought up either by Docker (`.env.example` has the exact
-command) or by pointing at Neon and pasting `prisma/database-setup.sql` in the cloud
-console — the deployment guide's Part 2 does the latter with zero local tools.
+`npm run dev` refuses a non-MySQL `DATABASE_URL`. Schema: `npx prisma migrate deploy`.
+Full steps: [`LOCAL-SETUP-WINDOWS.md`](./LOCAL-SETUP-WINDOWS.md).
 
 ## 6. External notification delivery — email & Telegram
 
@@ -186,11 +148,12 @@ Verify with `TCMS_BASE_URL=http://localhost:3000 node scripts/verify-notificatio
 
 | Task | How |
 |---|---|
-| Deploy an app change | push to GitHub → Vercel auto-deploys |
-| Change a secret | Vercel → Settings → Environment Variables → **Redeploy** |
+| Deploy an app change | checkout the release tag → `npm ci` → `npm run build` → restart `tcms-app` (PRODUCTION-CHECKLIST §3) |
+| Change a secret | edit `/etc/tcms/tcms.env` → restart the service (`NEXT_PUBLIC_*` needs a rebuild) |
 | Create tables on a fresh DB | `npx prisma migrate deploy` (applies `prisma/migrations/`) |
-| Load demo data | open `https://your-app/api/seed` once |
-| Reset all data | `TRUNCATE … CASCADE` from the deployment guide FAQ Q7, then seed again |
-| Inspect data | pgAdmin 4 (direct string + SSL Require) or Neon SQL Editor (`SELECT * FROM "TestCase"`) |
-| Backups | Neon point-in-time (6 h free tier) / Neon branch / pgAdmin dump |
-| Logs | Vercel dashboard → Deployments → Runtime Logs (`console.*` from routes appears here) |
+| First admin | `scripts/create-first-vp.mjs` (doc 17 §6) |
+| Pause all writes | `TCMS_READ_ONLY=true` + restart |
+| Inspect data | MySQL Workbench / `mysql` client with a read-only user |
+| Backups | nightly `mysqldump` via `scripts/backup-scheduler.mjs` (doc 17 §2) |
+| Logs | `journalctl -u tcms-app` / `journalctl -u tcms-ws` |
+

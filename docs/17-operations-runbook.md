@@ -1,19 +1,16 @@
 # 17 · Operations Runbook — Backup, Rollback, Logging & Tests
 
-> **2026-10-15 MySQL backup note (task mysql-backup-1):** the nightly scheduler now runs
-> `scripts/backup-db-mysql.sh` (mysqldump) as the read-only **tcms_backup** user, verifies
-> every file it writes, and alerts every manage_users holder in-app when a backup fails or
-> the newest valid backup is > 26 h old. All commands below target **MySQL 8.4** via
-> `scripts/backup-db-mysql.sh` / `restore-mysql.sh` / `scripts/mysql-env.sh`. The old
-> PostgreSQL/Supabase procedures (archived in `archive/postgres/scripts/`: backup-db.mjs, restore-db.mjs, supabase-check.mjs,
-> hosted-pooler wiring) are historical — see `docs/migration/` for the migration and
-> cutover plan.
+> **Backups:** the nightly scheduler runs `scripts/backup-db-mysql.sh` (mysqldump) as the
+> read-only **tcms_backup** user, verifies every file it writes, and alerts every
+> manage_users holder in-app when a backup fails or the newest valid backup is > 26 h old.
+> All commands below target **MySQL 8.4** via `scripts/backup-db-mysql.sh` /
+> `restore-mysql.sh` / `scripts/mysql-env.sh`.
 
 
 > **Status:** verified 2026-10-02 (pre-launch checklist item 4). Every command below was
 > executed against the running stack as part of the go-live confirmation; results are quoted
 > inline. Companion documents: [16-single-instance-and-scaling.md](./16-single-instance-and-scaling.md)
-> (scaling limits + load-test numbers) and [DEPLOYMENT-GUIDE.md](../archive/postgres/docs/DEPLOYMENT-GUIDE.md) (historical)
+> (scaling limits + load-test numbers) and [PRODUCTION-CHECKLIST.md](./deploy/PRODUCTION-CHECKLIST.md)
 > (first-time deployment).
 
 ---
@@ -33,9 +30,6 @@
   failed check deletes the file, appends a line to `logs/error-<day>.log` and exits
   non-zero. Retention: files older than 14 days are removed here (age-based), and the
   scheduler additionally keeps only the newest 14 files (count-based).
-- **`archive/postgres/scripts/backup-db.mjs`** — HISTORICAL (PostgreSQL era): Prisma-JSON dump that
-  refuses every mysql:// URL by design. Not invoked by anything; removal is scheduled
-  with the separate PG-cleanup task.
 - **`scripts/restore-mysql.sh`** — restore drill into a scratch schema with per-table
   row-count verification against the live schema (see §2.1).
 - **Code artifact** — the project is a git-tracked tree plus a full zip snapshot
@@ -250,7 +244,7 @@ mysql -h <host> -P <port> -u <testuser> -p -e \
 # 2. Export the URL (mysql:// user:pass@host:port/<test_schema>) and boot:
 bash scripts/start-tcms.sh        # mysql-env.sh keeps a mysql:// caller URL as-is
 # 3. Schema is applied by the boot itself: npx prisma migrate deploy as the
-#    DDL-only migrate user (see docs/migration/04 — no db push, no fixups)
+#    DDL-only migrate user (decision D4 — no db push, no fixups)
 # 4. Run the full battery: bash scripts/verify-battery.sh  (67 checks)
 # 5. Tear down: kill the app; the TEST schema stays with IT.
 ```

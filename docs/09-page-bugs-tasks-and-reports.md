@@ -21,8 +21,8 @@ Bug"** (hidden for viewers). Data: `['bugs','list']` → `GET /api/bugs?pageSize
 - **`handleDragEnd`**: if the status changed → `bugsApi.update(bugId, { status })` →
   toast `Moved to "{status}"`; invalidate `['bugs']`; failures toast via
   `handleApiError(err, 'Failed to move')`. **This is the only "drag = mutation" in the
-  app** — and note it means any authenticated user can move any bug (deliberate; the
-  API gates only *assignment* and *deletion*).
+  app** — any bug participant (`create_bug` or `assign_bug`) can move any bug; changing
+  the assignee needs `assign_bug` and deleting needs `delete_bug`.
 
 ### Table view
 Columns: ID (last 6), Title, Severity badge, Status badge, Assigned, Module, Reported
@@ -30,19 +30,21 @@ Columns: ID (last 6), Title, Severity badge, Status badge, Assigned, Module, Rep
 
 ### CreateBugDialog ("Report a Bug")
 Fields: Title (required), Severity (default `medium`), Environment (default
-`staging`), Module select, **Assign To** (users filtered to team_lead/admin/
-qa_engineer), Description, Steps to Reproduce, Expected Behaviour, Actual Behaviour.
+`staging`), Module select, **Assign To** (users whose role is in `BUG_ASSIGNEE_ROLES`:
+vp, manager, product, qa_engineer; the picker is disabled without `assign_bug`), Description, Steps to Reproduce, Expected Behaviour, Actual Behaviour.
 `POST /api/bugs` → toast `Bug reported`, invalidate `['bugs']`. If an assignee was
 chosen the server notifies them (`bug_assigned`).
 
-### BugDetailSheet (right-side Sheet, max-w-lg)
+### BugDetailDialog (detail dialog)
 Shows everything: badges, `#{id6}`, reporter + timestamp, Description, Environment,
 Steps, Expected / Actual, module + assignee grid.
-- **Edit** toggles inline selects (Status / Severity / Assignee) + Save
-  (`bugsApi.update` → `Bug updated`). Moving status to resolved/closed makes the
+- **Edit** (`create_bug` or `assign_bug`) opens the edit form (Status / Severity / fields;
+  Assignee only with `assign_bug`) + Save (`bugsApi.update` → `Bug updated`). Only changed
+  fields are sent; the assignee is sent only when it changed, and a stale save answers 409
+  *"This item was changed by someone else — reload"*. Moving status to resolved/closed makes the
   **server** stamp `resolvedAt`.
-- **Delete** (red) → `DELETE /api/bugs?id=` — **admin only** server-side; no
-  confirmation dialog (known quirk), toasts `Bug deleted`.
+- **Delete** (red, shown with `delete_bug`) → `DELETE /api/bugs?id=`; no confirmation
+  dialog (known quirk), toasts `Bug deleted`.
 
 ---
 
@@ -55,10 +57,12 @@ link to module/test-case/bug, `status: done|in_progress|blocked`) + notes. Uniqu
 
 ### Who can edit whom
 ```
-isManager = admin || team_lead
-managers  → user switcher; viewing someone else = READ-ONLY
-            (banner: "You are viewing another user's report. Switch back to yourself to make edits.")
-everyone  → full editing of their own report for any date
+canViewAllReports = can('view_all_task_reports')
+canCreateReport   = can('create_task_report')
+view-all holders  → user switcher; viewing someone else = READ-ONLY
+                    (notice: "You are viewing another user's report. …")
+create holders    → full editing of their own report for any date
+others            → read-only notice: "Your role can view work logs but cannot log work. …"
 ```
 (The API mirrors this: upsert always owns the row; PUT is owner-only.)
 
@@ -95,8 +99,8 @@ everyone  → full editing of their own report for any date
 ## 3. Reports view (`'reports'`) — team analytics
 
 ### Access
-`admin`/`team_lead` only — the sidebar hides the item and the view renders a
-destructive *"Access restricted"* alert for others (API: `view_all_task_reports`).
+`view_all_task_reports` holders only — the sidebar hides the item and the view renders a
+destructive *"Access restricted"* alert for others (the API enforces the same permission).
 
 ### Data
 One query: `['stats','reports']` → `GET /api/stats?action=reports` →

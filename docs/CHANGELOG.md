@@ -5,9 +5,8 @@ Human/agent task-level detail lives in `worklog.md` (repo root).
 
 ## 2026-10-14 — PostgreSQL → MySQL 8.4 migration (MySQL-only)
 
-The database engine changed. Full narrative in `../CHANGELOG.md` and
-[`migration/`](./migration/) (01 audit → 02 schema conversion → 03 verification →
-04 cutover/rollback). Facts users and contributors must know:
+The database engine changed. Full narrative in `../CHANGELOG.md` (the migration
+dossier was removed 2026-10-16). Facts users and contributors must know:
 
 - **MySQL 8.4 only.** utf8mb4 / utf8mb4_unicode_ci (case-insensitive `LIKE`),
   strict mode (over-length or invalid values are REJECTED, not truncated),
@@ -26,11 +25,11 @@ The database engine changed. Full narrative in `../CHANGELOG.md` and
   sleeping). `GET /api` is the health endpoint now; the vercel.json cron is gone.
 - **Verification:** battery 63/63 · Crew Desk mock 5/5 · import 33/33 · 250-row
   import probe PASS · 200-VU load test 0 errors · mysqldump backup + scratch-
-  schema restore drill PASS. Numbers: [`migration/03-verification.md`](./migration/03-verification.md).
+  schema restore drill PASS (migration dossier removed 2026-10-16).
 - **Ops changes:** backups are `mysqldump`-based (`scripts/backup-db-mysql.sh`,
   14-day retention) with a restore drill (`scripts/restore-mysql.sh`);
   `scripts/mysql-env.sh` is the single source of DB wiring; production cutover
-  awaits IT answers ([`migration/04-cutover-rollback.md`](./migration/04-cutover-rollback.md)).
+  awaits IT answers ([`deploy/PRODUCTION-CHECKLIST.md`](./deploy/PRODUCTION-CHECKLIST.md)).
 
 ## 2026-10-14 — Phase 2 hardening (post-audit fixes)
 

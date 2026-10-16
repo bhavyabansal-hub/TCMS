@@ -24,9 +24,11 @@ submodule chips, its test cases, and module-level actions.
 `selectedId`, `expanded: Set<string>` (tree open/closed), `createOpen` +
 `createParent: string|null`, `deleteId`, `submitReviewModule: {id,name}|null`.
 
-### Derived permissions (inline role logic)
-- `canManage = admin || team_lead` → shows **"Submodule"** create button (and root create).
-- `canSubmit = role !== 'viewer'` → shows **"Submit for Review"**.
+### Derived permissions (permission matrix via `can()`)
+- `canCreateModule = can('create_module')` → shows **"Submodule"** create button (and root create);
+  `canEditModule = can('edit_module')` → edit.
+- `canSubmit = can('submit_review')` → shows **"Submit for Review"**.
+- `isSenior = can('edit_module')`.
 - `canDeleteSelected = isCreator || isSenior` → the delete button is **always visible but
   disabled** otherwise, with tooltip *"Only the creator or a senior manager can delete
   this module"* plus an inline amber warning (`ShieldAlert`).
@@ -37,7 +39,7 @@ submodule chips, its test cases, and module-level actions.
 | Click a tree row | selects module → right panel fetches detail |
 | Click a submodule chip | selects it and auto-expands the parent branch |
 | **Create Submodule / Root** dialog | fields Name (required — empty → `toast.error('Name is required')`), Description; info box *"Creator / Owner: {you}"* explaining the delete rule. `POST /api/modules` **without `ownerId`** (server forces creator=owner). Success: `Module created — you are the owner`; invalidate `['modules']` |
-| **Submit for Review** dialog | Reviewer select (team_leads/admins only; placeholder *"Auto-assign (first available team lead)"*), optional due date, checkbox **"Include submodules" (default true**; description notes approved/active cases are skipped). `PUT /api/modules?id=…&action=submit-review`. Success toast `Submitted {N} test case(s) for review`; invalidates `['modules','test-cases','reviews','module-reviews']`; **auto-navigates** to `module-review-detail { id }` |
+| **Submit for Review** dialog | Reviewer select (users whose role has `perform_review`; placeholder *"Auto-assign"* = first active manager, then VP), optional due date, checkbox **"Include submodules" (default true**; description notes approved/active cases are skipped). `PUT /api/modules?id=…&action=submit-review`. Success toast `Submitted {N} test case(s) for review`; invalidates `['modules','test-cases','reviews','module-reviews']`; **auto-navigates** to `module-review-detail { id }` |
 | **Delete** confirm (`AlertDialog`) | warns about cascade to submodules and orphaned cases. `DELETE /api/modules?id=…`; invalidate `['modules']`; clear selection if deleted |
 | Case row click / "View all →" | `navigate('test-case-detail', { id })` / `navigate('test-cases')` |
 
@@ -102,12 +104,12 @@ a submit-for-review dialog, soft delete, and three side panels.
 
 ### Derived permissions
 ```
-isAuthor   = tc.authorId === user.id
-isSenior   = admin || team_lead
-canEdit    = isSenior || (isAuthor && role === 'qa_engineer')
-canDelete  = (isAuthor || isSenior) && status !== 'deprecated'
-canSubmit  = role !== 'viewer' && (status === 'draft' || status === 'needs_revision')
+isAuthor           = tc.authorId === user.userId
+canEdit            = can('edit_any_test_case') || (isAuthor && can('edit_own_test_case'))
+canDelete          = isAuthor || can('delete_test_case')
+canSubmitForReview = can('submit_review') && (status === 'draft' || status === 'needs_revision')
 ```
+The API refuses a submit for a case that is `in_review` or `approved` (400).
 
 ### Main column (read mode)
 Badges: priority, status, `v{version}` · module name · tags · then sections
@@ -118,8 +120,8 @@ Expected Result. While under review the header additionally shows *Awaiting revi
 ### Buttons & flows
 | Button (when visible) | Flow |
 |---|---|
-| **Edit** (`canEdit`) | swaps the main column to the inline `TestCaseEditor` — Title, Module, Priority, **Reviewer (assignee)** select (team_lead/admin only, placeholder *Unassigned*), Tags, Description, Preconditions, Steps editor, Expected Result. Save → `PUT /api/test-cases?id=` → server snapshots old state into history and bumps `version`. Client invalidates detail + history + list, toasts `Test case updated`, exits edit mode |
-| **Delete** (`canDelete`) | `DELETE` → soft delete → toast `Test case deprecated` → navigate back to the list |
+| **Edit** (`canEdit`) | swaps the main column to the inline `TestCaseEditor` — Title, Module, Priority, **Reviewer (assignee)** select (users whose role has `perform_review`, placeholder *Unassigned*), Tags, Description, Preconditions, Steps editor, Expected Result. Save → `PUT /api/test-cases?id=` → server snapshots old state into history and bumps `version`. Client invalidates detail + history + list, toasts `Test case updated`, exits edit mode |
+| **Delete** (`canDelete`) | `DELETE` → hard delete → toast `Test case permanently deleted` → navigate back to the list |
 | **Submit for Review** (`canSubmit`) | dialog: Reviewer (pre-filled with `tc.assigneeId`, placeholder *Auto-assign*) + optional due date → `PUT …&action=submit-review` → toast `Submitted for review`, invalidates detail/reviews/queue |
 | **Back to Test Cases** | navigate |
 
@@ -130,7 +132,7 @@ Expected Result. While under review the header additionally shows *Awaiting revi
    the *previous* state of each version).
 3. **Review Cycles** — per ReviewRequest: `Cycle {n}` badge, review status badge,
    reviewer, and the nested ReviewEvent timeline with verdict badges + comments +
-   flagged-field chips.
+   flagged-field badges (the author sees exactly which fields the reviewer flagged).
 4. **Activity** — first 8 entity-scoped activity logs with `actionColor` badges.
 
 ### The versioning mental model (end to end)

@@ -180,7 +180,7 @@ Verified against the services on 2026-10-16 (deep test, `docs/qa/DEEP-TEST-2026-
 | `POST /api/auth?path=login` / `refresh` / `logout` | none | per-email lock (5 → 60 s) + per-IP failed-sign-in limit (429) |
 | `GET / PUT /api/auth` (me / profile / password), `?path=ws-ticket` | ✓ | self only; role/email immutable via this route |
 | `GET / POST /api/seed` | none | 403 unless `TCMS_ENABLE_SEED=true`; no-op once any user exists |
-| `GET /api/stats?action=dashboard` | ✓ | any role; the recent-activity part needs `view_activity_logs` |
+| `GET /api/stats?action=dashboard` | ✓ | any role; the recent-activity part is the full feed with `view_activity_logs`, otherwise own rows only |
 | `GET /api/stats?action=reports` | ✓ | `view_all_task_reports` |
 | `GET /api/search` | ✓ | any role |
 | `GET /api/modules` (tree, `?id=`) | ✓ | any role |

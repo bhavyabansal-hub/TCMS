@@ -70,8 +70,10 @@
  1. Author (qa1) on case (status draft) → "Submit for Review"
       dialog: reviewer (prefilled = case.assigneeId) + optional due date
       PUT /api/test-cases?id=…&action=submit-review
-        server: can('submit_review') → resolve reviewer (body → assigneeId →
-          first active lead/admin) → cycle = max+1 (say 1)
+        server: can('submit_review') → 400 if the case is in_review/approved
+          → resolve reviewer (body → assigneeId → first active manager, then VP)
+          → cycle = max+1 (say 1)
+        → close the case's old open review (same transaction)
         → ReviewRequest INSERT (pending, cycle 1)
         → TestCase UPDATE status='in_review' (version unchanged!)
         → logActivity(REVIEW_SUBMITTED/test_case)
@@ -85,7 +87,7 @@
  4. Reviewer clicks "Needs Revision" → dialog:
       flagged fields: [Steps unclear], comment required (client + server enforce)
       POST /api/reviews?id= body {verdict:'needs_revision', comment, flaggedFields}
-        server: can('perform_review') ∧ (assigned ∨ admin)
+        server: can('perform_review') ∧ assigned reviewer (409 if stale)
         → ReviewEvent INSERT
         → ReviewRequest: pending → in_progress   (stays open for the rework loop)
         → TestCase: in_review → needs_revision
@@ -156,11 +158,11 @@ nobody closes it manually.
         → assigned? → notification 'bug_assigned' to assignee
  2. Kanban board: assignee drags card open → in_progress
       DndContext onDragEnd → status changed?
-      PUT /api/bugs?id= body {status:'in_progress'}    (any authenticated user may)
+      PUT /api/bugs?id= body {status:'in_progress'}    (create_bug or assign_bug)
         → logActivity(UPDATE/bug, before/after full row → field diff)
  3. Later: drag to resolved → PUT {status:'resolved'}
       server stamps resolvedAt = now() (client value ignored)
- 4. Admin cleanup of a spam bug: sheet → Delete → DELETE (admin only, hard delete)
+ 4. Manager cleanup of a spam bug: dialog → Delete → DELETE (delete_bug, hard delete)
 ```
 
 **Tables:** `Bug` (insert, update, delete), `BugTestCaseLink` (optional),
@@ -208,8 +210,8 @@ server createNotification(user, type, …)     [lib/notifications.ts]
        WS service: io.to('user:'+userId).emit('notification', payload)
          client hook [use-notification-socket.ts]: store.addNotification
            → topbar bell badge increments immediately
-       (Vercel: fetch fails → console.warn ONLY. DB row remains; user sees it via
-        the 30s queue polls or on next navigation/refresh. Zero functional loss.)
+       (WS service down: fetch fails → console.warn ONLY. DB row remains; user sees it
+        on the next list fetch / navigation / refresh. Zero functional loss.)
   4. user clicks it (bell popover or Notifications view)
        → PATCH /api/notifications?id= (isRead=true) + store.markRead
        → navigate by entityType (test_case/bug/module/review)
@@ -223,13 +225,13 @@ business operation.
 
 ---
 
-## Flow 8 · Admin manages a user (invite → promote → offboard)
+## Flow 8 · VP manages a user (invite → promote → offboard)
 
 ```
-invite:  Users view → "Invite a new user" → POST /api/users (admin only)
-           duplicate email → 400; zod: password ≥ 8; role required (any role)
+invite:  Users view → "Invite a new user" → POST /api/users (manage_users)
+           duplicate email → 400; zod: password ≥ 8; a role other than viewer: VP only
            → logActivity(CREATE/user)
-promote: inline Role select → PUT /api/users?id= {role:'team_lead'}
+promote: inline Role select (VP only, never your own) → PUT /api/users?id= {role:'manager'}
            → effect: next request that user makes carries the new role in its JWT…
            NOTE: the old access token (≤15 min) still has the old role until expiry
            or refresh — document this when testing permissions!
@@ -244,11 +246,13 @@ self:     role/active/delete controls disabled for your own row ("Cannot delete 
 
 ## Cross-flow invariants (the "physics" of TCMS)
 
-1. **Only reviews change case status** (and soft-delete). Edits bump version, never status.
+1. **Only reviews change case status.** Edits bump version, never status.
 2. **Version up = history row written first.** You can always answer "what changed?".
 3. **Every mutation → ActivityLog; every human-relevant mutation → Notification.**
 4. **The UI hides forbidden actions; the API enforces them.** Bypassing the UI never bypasses a permission.
 5. **No optimistic writes.** Server confirms → toast → cache invalidation → UI updates.
+   Saves carry the loaded `updatedAt`; if someone else changed the row meanwhile the API
+   answers 409 *"This item was changed by someone else — reload"* instead of overwriting.
 6. **Audit and notifications never break the operation** (both fully try/catch-wrapped).
-7. **Deletes are deliberate per entity:** module hard (cascade), case soft (deprecated),
-   bug hard (admin), user soft (deactivated).
+7. **Deletes are deliberate per entity:** module hard (cascade), case hard, bug hard
+   (`delete_bug`), user soft (deactivated).

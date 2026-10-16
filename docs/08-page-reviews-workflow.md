@@ -23,13 +23,16 @@
 ```
 
 Key invariants:
-- Submitting is only possible from `draft`/`needs_revision` (UI) and is only *created*
-  by the API from those statuses' cases (eligible set).
-- **Verdicts may only be recorded by the assigned reviewer (or an admin)** —
+- Submitting is only possible from `draft`/`needs_revision`: the UI hides the button and
+  the API answers 400 for a case that is `in_review` or `approved`.
+- A case has **one open review at a time**: a resubmit (single case or module submit)
+  closes the case's old open review in the same transaction.
+- **Verdicts may only be recorded by the assigned reviewer** (no VP bypass) —
   `perform_review` permission + ownership check.
 - `needs_revision` keeps the ReviewRequest open (`in_progress`) so the same request
   carries the rework conversation; the **cycle** counter increments per resubmission.
-- A verdict always notifies the **author**; comments are mandatory unless `approved`;
+- A verdict always notifies the **author** (a bulk module verdict sends one notification
+  per person, even when the author is also the requester); comments are mandatory unless `approved`;
   flagged fields are structured labels chosen from a fixed list.
 
 ### Module (bulk) review
@@ -53,7 +56,7 @@ ALL children completed ──▶ parent → completed (+ notify requester)
 |---|---|---|
 | **Module Reviews** (default) | `['module-reviews','queue']` — mine, open | everyone |
 | **Single Test Cases** | `['reviews','queue']` **filtered to `!r.moduleReviewId`** (children of module reviews are handled on their parent's page) | everyone |
-| **All Reviews** | `['reviews','all']` (pageSize 100) + `['module-reviews','all']`, `enabled: tab==='all'` | **admin/team_lead only** — the tab isn't rendered otherwise; the API also enforces 403 |
+| **All Reviews** | `['reviews','all']` (pageSize 100) + `['module-reviews','all']`, `enabled: tab==='all'` | **`perform_review` holders only** — the tab isn't rendered otherwise; the API also enforces 403 |
 
 Both queue queries poll every 30 s and are the same keys the **sidebar badge** uses —
 one fetch feeds two UIs (badge count = standalone queue length + module queue length).
@@ -78,8 +81,9 @@ which embeds the full serialized test case + events.
 
 ### Who can act
 ```
-isReviewer = review.reviewerId === user.id || user.role === 'admin'
-canAct     = isReviewer && review.status !== 'completed'
+canDecide  = can('perform_review') && review.reviewerId === user.userId
+canAct     = canDecide && review.status !== 'completed'
+canForward = can('perform_review') && review.status !== 'completed'
 ```
 Non-reviewers (and everyone after completion) see the same page read-only — content
 plus history, but no verdict buttons.
@@ -128,7 +132,7 @@ where a reviewer can do everything without leaving the page).
 | Per-case **Approve** | immediate `reviewsApi.verdict(cr.id, { verdict: 'approved' })` — no dialog needed; toast `Test case approved`; invalidate detail + test-cases. (Server aggregation may complete the parent — surfaced on refetch) |
 | Per-case **Fail** / **Needs Revision** | `window.prompt` for the comment (required; toast error if empty) → verdict `failed` / `needs_revision`. *Quirk: prompt-based, unlike the rich dialog on review-detail.* |
 
-Permissions mirror review-detail exactly (`reviewerId === me || admin`, and the parent
+Permissions mirror review-detail exactly (`can('perform_review') && reviewerId === me`, and the parent
 must not be `completed`). After the last pending child is resolved anywhere, the
 parent flips to `completed` server-side; the header then renders fully read-only.
 

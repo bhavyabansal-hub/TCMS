@@ -73,12 +73,12 @@ export async function logActivity(input: ActivityLogInput): Promise<void> {
   }
 }
 
-// JSON helper for JSONB columns: PostgreSQL returns JSONB as already-parsed
+// JSON helper for JSON columns: MySQL JSON columns usually come back as parsed
 // JS objects, but legacy rows (or hand-edited data) may hold JSON strings.
 // parseJson() accepts both shapes and always returns a usable value.
 export function parseJson<T = unknown>(value: unknown, fallback: T): T {
   if (value === null || value === undefined) return fallback
-  // Already an object/array (JSONB column output) — return as-is.
+  // Already an object/array (JSON column output) — return as-is.
   if (typeof value === 'object') return value as T
   if (typeof value === 'string') {
     try {

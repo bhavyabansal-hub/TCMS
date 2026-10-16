@@ -5,14 +5,11 @@
 > that way. Apply `prisma/migrations/` (`npx prisma migrate deploy`) to create it.
 
 
-> **⚠️ SEPTEMBER 2026 RESTRUCTURE:** the database was renamed to strict SQL
-> conventions — snake_case tables/columns and **entity-named primary keys**
-> (`users.user_id`, `modules.module_id`, `test_cases.test_case_id`, ... — never a
-> generic `id`), DB-generated uuid PKs (`gen_random_uuid()`). This chapter's
-> prose still explains the SHAPE of every table correctly, but wherever you see
-> `id` or camelCase column names, read the new names from `prisma/schema.prisma`
-> (`@map`/`@@map`) or `prisma/migrations/`. Full mapping:
-> `REFACTORING-REPORT.md` §1.
+> **Naming:** SQL tables and columns are snake_case with **entity-named primary keys**
+> (`users.user_id`, `modules.module_id`, `test_cases.test_case_id`, … — never a generic
+> `id`). This chapter uses the Prisma model and field names (`TestCase.authorId`); the SQL
+> name of each is in `prisma/schema.prisma` (`@map` / `@@map`). Raw SQL in the
+> repositories always uses the snake_case names.
 
 ---
 
@@ -20,12 +17,12 @@
 
 | Convention | Detail |
 |---|---|
-| Primary keys | `id String @id @default(cuid())` — collision-safe string ids (except `BugTestCaseLink`, composite PK). |
-| Timestamps | `createdAt DateTime @default(now())` + `updatedAt DateTime @updatedAt` (Prisma sets it on every update). Some log-like tables deliberately omit `updatedAt`. |
+| Primary keys | `CHAR(36)` UUIDs named after the entity (`user_id`, …); the repositories supply app-generated UUIDs (`src/lib/server/id.ts`); `BugTestCaseLink` has a composite PK. |
+| Timestamps | `created_at` / `updated_at` `DATETIME(3)` in UTC; raw SQL writes `UTC_TIMESTAMP(3)`. Some log-like tables deliberately omit `updated_at`. `updated_at` also serves the optimistic lock (a save with a stale `expectedUpdatedAt` answers 409). |
 | Enums | Stored as plain `String` columns with documented value sets (roles, statuses, priorities). The TypeScript unions in `src/types/index.ts` mirror them. |
 | JSON columns | **10 columns are MySQL JSON** (Prisma `Json`): `TestCase.steps/tags/attachments`, `TestCaseHistory.snapshot`, `ReviewEvent.flaggedFields`, `Bug.attachments`, `TaskReport.tasks`, `ActivityLog.beforeSnapshot/afterSnapshot/diff`. Array-typed ones carry `@default("[]")`. |
-| Case sensitivity | Table names are quoted PascalCase (`"TestCase"`) — relevant when writing raw SQL in Neon/pgAdmin. |
-| Datasource | `DATABASE_URL` (pooled, app traffic) + `DIRECT_URL` (schema tools). Identical locally. |
+| Collation | `utf8mb4_unicode_ci` (case-insensitive `LIKE`); `utf8mb4_bin` for the password hash and refresh token. |
+| Datasource | `DATABASE_URL` (app user, DML) + `DIRECT_URL` (migrate user, DDL for `prisma migrate deploy`). |
 
 ### Entity relationship overview
 
@@ -59,7 +56,7 @@ The account table. One row per person.
 | `email` | String, **unique** | — | Login identifier, lowercase enforced by convention |
 | `fullName` | String | — | Display name |
 | `passwordHash` | String | — | bcrypt hash (10 rounds); never returned by any API |
-| `role` | String | `"qa_engineer"` | `admin` \| `team_lead` \| `qa_engineer` \| `viewer` |
+| `role` | String | `"qa_engineer"` | `vp` \| `manager` \| `product` \| `developer` \| `qa_engineer` \| `viewer` (only a VP sets or changes it) |
 | `telegramChatId` | String? | null | Reserved for future Telegram delivery (unused) |
 | `avatarUrl` | String? | null | Optional avatar image URL |
 | `isActive` | Boolean | `true` | `false` = soft-deleted user; login rejected |
@@ -241,7 +238,7 @@ color-coded verdict badges.
 | `attachments` | **Json** | `[]` | |
 | `resolvedAt` | DateTime? | null | Server stamps `now()` when status becomes `resolved`/`closed` |
 
-Indexes: `status`, `severity`, `assignedToId`. Bugs are **hard-deleted** (admin only).
+Indexes: `status`, `severity`, `assignedToId`. Bugs are **hard-deleted** (`delete_bug`: vp + manager by default).
 
 ## 12. BugTestCaseLink
 
@@ -313,10 +310,10 @@ page), `userId`, `action`. Activity rows are never deleted by the app.
 
 | Entity | Delete behaviour | Who may delete |
 |---|---|---|
-| Module | **Hard** — cascades to children, permissions, module reviews; test cases orphaned (`SetNull`) | Creator, team_lead, admin |
-| Test case | **Soft** — `status → 'deprecated'`, row kept | Author, team_lead, admin |
-| Bug | **Hard** — cascades links | **Admin only** |
-| User | **Soft** — `isActive: false`; login blocked; data preserved | Admin (not on self) |
+| Module | **Hard** — cascades to submodules and module reviews; test cases and bugs keep the row with `module_id` NULL | Creator, or `edit_module` |
+| Test case | **Hard** — row deleted (history and reviews cascade) | Author, or `delete_test_case` |
+| Bug | **Hard** — cascades links | `delete_bug` (vp + manager by default) |
+| User | **Soft** — `isActive: false`; login blocked; data preserved | `manage_users` (not on self) |
 | TaskReport / Notification / ActivityLog | Not deletable via dedicated business rules (notifications deletable by owner; reports editable only by owner) | — |
 
 ## 17. How MySQL JSON is read back (the parser contract)

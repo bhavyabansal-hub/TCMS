@@ -116,11 +116,11 @@ false**. Two polling loops exist: dashboard stats and the two sidebar review que
 | `['test-cases','list','all-light']` | tasks/bugs pickers | pageSize 200 |
 | `['test-cases','detail',id]` / `['test-cases','history',id]` / `['test-cases','reviews',id]` | case detail page | |
 | `['reviews','queue']` + `['module-reviews','queue']` | sidebar badge + reviews view | 30 s polling, `enabled: !!user` |
-| `['reviews','all']` / `['module-reviews','all']` | reviews "All" tab | `enabled: tab==='all'`; module-all is lead/admin gated |
+| `['reviews','all']` / `['module-reviews','all']` | reviews "All" tab | `enabled: tab==='all'`; both need `perform_review` |
 | `['reviews','detail',id]` / `['module-reviews','detail',id]` | detail pages | |
 | `['bugs','list']` | bugs board/table | pageSize 200 |
-| `['users','all']` / `['users','list',params]` | pickers, Users admin, activity filter | |
-| `['task-reports','my']` / `['task-reports','user',userId,date]` | tasks view | manager vs self variants |
+| `['users','all']` / `['users','list',params]` | pickers, Users page, activity filter | |
+| `['task-reports','my']` / `['task-reports','user',userId,date]` | tasks view | `view_all_task_reports` vs self variants |
 | `['notifications']` | — (store is primary) | invalidated after read/delete |
 | `['activity-logs',params]` / `['activity','test_case',id]` | activity log, case detail | |
 
@@ -167,8 +167,8 @@ simplicity — a few extra refetches — is negligible at this data scale.
 - **lib/format.ts** — every color map and formatter the views use (exact mappings):
   `statusColor` (draft slate, in_review amber, needs_revision orange, approved emerald,
   active green, deprecated zinc), `priorityColor` (P0 red, P1 orange, P2 yellow, P3
-  sky), `bugStatusColor`, `severityColor`, `verdictColor`, `roleColor` (admin purple,
-  team_lead indigo, qa teal, viewer slate), `actionColor` (by prefix: CREATE emerald,
+  sky), `bugStatusColor`, `severityColor`, `verdictColor`, `roleColor` (vp purple,
+  manager indigo, product amber, developer cyan, qa teal, viewer slate), `actionColor` (by prefix: CREATE emerald,
   UPDATE amber, DELETE rose, STATUS sky, LOGIN slate, REVIEW purple),
   `reviewStatusColor`; formatters `formatDateTime`, `formatDate`, `timeAgo`,
   `minutesToHuman`, `truncate` (all `en-US`).

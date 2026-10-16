@@ -1,4 +1,4 @@
-# 10 · Pages — Activity Log, Notifications, Users (admin), Profile
+# 10 · Pages — Activity Log, Notifications, Users, Profile
 
 > Files: `views/activity-log.tsx` (463), `views/notifications.tsx` (253),
 > `views/settings-users.tsx` (522), `views/settings-profile.tsx` (322).
@@ -10,7 +10,7 @@
 ## 1. Activity Log (`'activity-log'`) — the audit trail UI
 
 ### Access
-`admin`/`team_lead` (sidebar-hidden for others; API enforces `view_activity_logs`).
+`view_activity_logs` holders (vp, manager, product by default; sidebar-hidden for others; the API enforces the same permission).
 
 ### Data
 `['activity-logs',params]` → `GET /api/activity-logs?page&pageSize=50&userId&entityType&action&dateFrom&dateTo`.
@@ -93,11 +93,17 @@ blocks the business action that produced the notification. When IT provides SMTP
 settings and a bot token, set them in `.env` and test ONLY to the owner's own
 account (admin@tcms.com + own chat id) — never to colleagues.
 
-## 3. Users (`'settings-users'`) — admin console
+## 3. Users (`'settings-users'`) — user management
 
 ### Access
-`admin` only: sidebar-gated, view renders *"Admins only"* alert otherwise, and every
-`/api/users` method returns 403 for non-admins regardless of the UI.
+`manage_users` holders (vp + manager by default): sidebar-gated, the view renders an
+*"Admins only"* alert otherwise, and every `/api/users` method returns 403 without
+`manage_users` regardless of the UI.
+
+### Role rules (client + server agree)
+Only a **VP** may set or change a role (`canAssignRoles` in `src/lib/roles.ts`). For
+every other user manager the inline Role selects are disabled and invites are created
+as `viewer` (`DEFAULT_INVITE_ROLE`); the API answers 403 to anything else.
 
 ### Data & mutations
 `['users','list',params]` → `GET /api/users?page&pageSize=50&role&isActive`;
@@ -106,7 +112,7 @@ etc.; all invalidate `['users']`; toasts `User invited` / `User updated` /
 `User deactivated`.
 
 ### Filters & table
-Role select (All/Admin/Team Lead/QA Engineer/Viewer) and Status select (All/Active/
+Role select (All roles + the six roles) and Status select (All/Active/
 Inactive), both reset page. Table: avatar + name (**"(you)"** marker) + email ·
 **inline Role select** · **Active Switch** · Member since · trash button.
 
@@ -116,8 +122,8 @@ controls are disabled for the current user's row (`Cannot delete yourself` serve
 
 ### Invite dialog
 *"Invite a new user"* — Email, Full name, **Temporary password** (min 8, client-blocked
-otherwise), Role select (admin option **is** available here — admin-created users can
-be any role). They can sign in immediately.
+otherwise), Role select (enabled for a VP only; everyone else invites a `viewer`).
+They can sign in immediately.
 
 ### Delete dialog
 *"Delete user?"* — explains the soft-delete semantics verbatim: *"This will deactivate

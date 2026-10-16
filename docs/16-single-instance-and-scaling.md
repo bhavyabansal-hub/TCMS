@@ -2,7 +2,7 @@
 
 > **Status:** verified against the codebase 2026-10-02 (pre-launch checklist item 3).
 > **The one-line rule:** TCMS is **single-instance only** in its current form. Run exactly ONE
-> **2026-10-14 MySQL migration note:** TCMS now runs on **MySQL 8.4** (utf8mb4, strict mode). Sections written for the former Vercel + Neon/Supabase PostgreSQL hosting are kept for history; DB-specific facts below have been updated where they matter operationally. See `docs/migration/` for the migration and cutover plan.
+> TCMS runs on **MySQL 8.4** (utf8mb4, strict mode), one app instance behind nginx (decision D8).
 > Node server process (plus its one WebSocket relay and one MySQL 8.4 database). Running two
 > or more app servers today produces wrong-ish behavior — stale screens, missed notifications,
 > duplicated work — not an error page. This document explains exactly why, what keeps working,
@@ -25,8 +25,7 @@
 
 The app deliberately keeps two kinds of state **inside the server process** for speed and
 simplicity: a generic read-through TTL cache and the realtime fan-out registry. Both were
-reasonable choices for the deployment reality (one internal server, an internal QA team, or
-Vercel's serverless model where each function instance is ephemeral). They are the reason the
+reasonable choices for the deployment reality (one internal server and an internal QA team). They are the reason the
 system is not yet horizontally scalable. Nothing about the four-layer API architecture,
 raw-SQL repositories, or the database schema prevents scaling — the boundary is process-local
 state, and it is confined to the four components listed in §2.
@@ -111,7 +110,7 @@ Work through this list top-down; item 1 unblocks items 2–3.
 - Option A (recommended): publish an invalidation event on a Redis pub/sub channel
   (`tcms:permissions:changed`) from the toggle endpoint; every instance subscribes and calls
   `ensurePermissionsLoaded(force=true)`. Sub-second, removes the authorization caveat in §4.3.
-- Option B: keep the 3 s TTL and document the window (it already behaves this way on Vercel).
+- Option B: keep the 3 s TTL and document the window.
 
 ### 5.3 Fan the WebSocket relay out through Redis pub/sub
 - The relay currently receives events via loopback HTTP and pushes to its own sockets.

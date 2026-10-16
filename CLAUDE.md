@@ -14,8 +14,8 @@ Fast orientation:
   JWT auth, 6-role RBAC with a runtime-togglable permission matrix).
 - **Study hub:** `docs/README.md` — numbered docs 01–18 (architecture, database,
   permissions, API reference, frontend, per-page guides, end-to-end flows, file index,
-  CSV import, standards, scaling, runbook, Crew Desk) + `docs/migration/` (PG→MySQL)
-  plus the compiled `TCMS-ARCHITECTURE-GUIDE.pdf` and refactor reports.
+  CSV import, standards, scaling, runbook, Crew Desk) + `docs/deploy/` (production
+  checklist, IT request, one-time go-live data copy).
 - **Engineering log:** `worklog.md` (append-only).
 - **Definition of done:** `agent.md` §3 (the single source — not repeated here).
 - **Environment:** `agent.md` §6 — MySQL only at 127.0.0.1:5500 (never port 3306), Windows.

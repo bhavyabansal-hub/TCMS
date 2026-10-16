@@ -1,6 +1,0 @@
-date_utc=2026-10-15T18:00:22Z
-head=6a8e75fb70efaa79be5f6d0c48733123484e4f3e
-git_status_porcelain_src_and_audit_script=<empty>
-node=v24.22.0
-command=node scripts/audit-standards.mjs > r8-audit-baseline.txt 2>&1 (Git Bash)
-exit=1

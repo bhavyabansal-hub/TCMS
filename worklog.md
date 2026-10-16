@@ -1620,3 +1620,21 @@ Verification (2026-10-16, npm run dev on :3000):
 Stage Summary:
 - All 10 deep-test bugs fixed; both e2e green.
 - NOT VERIFIED: npm run build (dev server only); a manual UI pass by a person.
+
+---
+Task ID: cleanup-pg-docs-2026-10-16
+Agent: Main (Claude Code, Opus 5.5) — fast mode, no subagents, nothing committed
+Task: Delete junk (evidence, archive/, old reports, migration dossier), remove PostgreSQL (keep only the go-live copy script), bring every doc up to today's app.
+
+Work Log:
+- git rm: archive/ (74), REQ-001 evidence (44), docs/qa/MAINT-2026-10-16 (11), REFACTOR-CHARTER, REFACTORING-REPORT, CODE-QUALITY-ROADMAP, 3 old QA files, docs/migration (4), convert-schema-mysql.cjs, import-250-probe.mjs, verify-rollback-drill.mjs, TCMS-ARCHITECTURE-GUIDE.pdf + build-architecture-pdf.py (stale, PostgreSQL; Python not installed to rebuild).
+- PG removed from start-tcms.sh, boot-tcms-autostart.sh, mysql-env.sh, backup comments, .env.example (PG_SOURCE_URL), .gitignore, eslint ignores, agent.md, schema.prisma comment. New docs/deploy/go-live-data-migration.md. D1 updated (rollback window removed).
+- Docs 01-17, README, DEPLOYMENT, CODEBASE-MAP, docs/README, CLAUDE.md, PRODUCTION-CHECKLIST, backlog B7: six roles + matrix (old admin/team_lead text), MySQL topology (Vercel/Neon removed), dashboard-v2, hard deletes, 409 lock, read-only, /api/ready, deep-test fixes. Link check: 89 links, 0 broken.
+
+Verification (2026-10-16): tsc 0 · eslint 0 errors (1 old warning) · audit 0 violations · verify-permissions 37/0 · verify-ui-gates 159/0 · npm run build OK in a separate copy (deleted afterwards).
+
+Stage Summary:
+- NOT DONE (src/ off limits this task): PostgreSQL wording in src/instrumentation.ts, src/lib/activity.ts, src/lib/db.ts; docs/migration pointers in src/instrumentation.ts and src/lib/server/db-settings-guard.ts (one is a runtime error message). Migration SQL comments untouched (checksums).
+- Open question: decision D2 ("fresh start, no data copy") conflicts with the go-live copy; owner to confirm.
+- NOT VERIFIED: the go-live copy steps (pg-client generation, run against a real PostgreSQL); the 3 edited Linux shell scripts (not run on Windows).
+- Follow-up (owner, same day): D2 confirmed — fresh start, no data copy. Deleted scripts/migration/migrate-pg-to-mysql.mjs and the go-live copy doc + every link, pg-client ignores (no npm package was used only by them: none in package.json/lock). src/ comment/message text only (instrumentation.ts, activity.ts, db.ts, db-settings-guard.ts, + serializers.ts, server/id.ts): old-database wording and docs/migration pointers replaced; no logic change. tsc 0, eslint 0 errors, verify-permissions 37/0, links 0 broken. Remaining "postgres" hits: prisma/migrations, CHANGELOGs, worklog history, 2 lines in the approved REQ-001 records.

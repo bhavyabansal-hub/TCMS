@@ -5,7 +5,7 @@ import { IS_PRODUCTION } from '@/lib/server/config'
 // exactly ONE PrismaClient instance exists per runtime. In development the
 // instance is cached on globalThis so Next.js hot reload reuses the same
 // connection pool instead of opening a new one per code change (which would
-// exhaust PostgreSQL's max_connections). In production there is a single
+// exhaust MySQL's max_connections). In production there is a single
 // module registry, so the module-level export is the singleton.
 //
 // POOL SIZING (load principle): Prisma derives the per-process pool from the

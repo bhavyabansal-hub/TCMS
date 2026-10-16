@@ -113,10 +113,11 @@ What happens when a QA engineer clicks **Submit for Review** on a test case:
     → headers: Content-Type: application/json + Authorization: Bearer <jwt>
  3. Server route api/test-cases/route.ts, PUT handler
     a. getCurrentUser()            → reads cookie tcms-access, verifies JWT   (401 if bad)
-    b. can('submit_review')        → role check: not viewer                   (403 if bad)
-    c. case lookup                 → 404 if missing
+    b. can('submit_review')        → permission matrix check                  (403 if bad)
+    c. case lookup                 → 404 if missing; 400 if in_review/approved
     d. reviewer resolution         → body reviewerId, else case.assigneeId,
-                                     else first active team_lead/admin
+                                     else first active manager, then VP
+    d2. close the case's old open review (same transaction)
     e. cycle = max(cycle)+1        → create ReviewRequest, set case → in_review
     f. logActivity(REVIEW_SUBMITTED/test_case, after:{reviewerId, cycle})
     g. createNotification(reviewer, 'review_assigned') → insert Notification row
@@ -126,7 +127,7 @@ What happens when a QA engineer clicks **Submit for Review** on a test case:
     → queryClient.invalidateQueries(['reviews…'])  → queue/sidebar badges refetch
  6. Reviewer's browser (if WS connected): socket 'notification' event
     → zustand addNotification → bell badge increments instantly.
-      (If WS is unavailable — e.g. on Vercel — the row still exists in the DB and
+      (If the WS service is not running the row still exists in the DB and
        appears on next fetch/refresh; nothing breaks.)
 ```
 
@@ -165,7 +166,7 @@ Every flow in the system follows this same 6-step shape: **view → api client �
 
 ```
 ├── prisma/
-│   ├── schema.prisma          14 models, MySQL 8.4 (explicit VARCHAR/TEXT native types), 10 Json columns
+│   ├── schema.prisma          17 models, MySQL 8.4 (explicit VARCHAR/TEXT native types), native JSON columns
 │   └── migrations/            versioned MySQL migrations (`npx prisma migrate deploy`)
 ├── src/
 │   ├── app/
@@ -215,7 +216,7 @@ mini-service is configured by constant (`PORT = 3003` inside `mini-services/noti
 ## 8. Conventions used across the codebase
 
 - **String enums**: status/priority/role values are plain strings (`'draft'`, `'P2'`,
-  `'team_lead'`) mirrored in `src/types/index.ts` — the single source of truth for the UI.
+  `'manager'`) mirrored in `src/types/index.ts` — the single source of truth for the UI.
 - **MySQL JSON columns** are read through `parseJson()` (handles both native JSON objects and
   legacy JSON strings) and serialised exactly once per row via `lib/serializers.ts`.
 - **Auth transport**: the JWT access token travels in the `Authorization: Bearer` header
@@ -237,5 +238,5 @@ mini-service is configured by constant (`PORT = 3003` inside `mini-services/noti
 | The client machine: stores, cache keys, fetch layer | `05-frontend-architecture.md` |
 | How each page/screen works | `06`–`10-page-*.md` |
 | Complete click-to-database stories | `11-end-to-end-flows.md` |
-| Realtime service + Vercel/Neon deployment architecture | `12-realtime-and-deployment.md` |
+| Realtime service + production topology (nginx + MySQL 8.4) | `12-realtime-and-deployment.md` |
 | Any single file explained in one paragraph | `13-file-index.md` |

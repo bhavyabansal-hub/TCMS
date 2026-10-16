@@ -11,10 +11,9 @@
 | File | Lines | What it is |
 |---|---|---|
 | `package.json` | — | Scripts (`dev/build/start/lint`, `postinstall: prisma generate`, `db:*`), every dependency pin. → doc 01 §2 |
-| `package-lock.json` | — | Reproducible install for Vercel |
+| `package-lock.json` | — | Reproducible install (`npm ci`) |
 | `tsconfig.json` | — | TypeScript config (`@/*` → `src/*` path alias) |
 | `next.config.ts` | — | `output: "standalone"` (required by the deploy pipeline), `ignoreBuildErrors: false` (type errors never pass) |
-| ~~`vercel.json`~~ | — | Moved to `archive/platform/` 2026-10-16 (crons were empty since the keep-alive route was removed). |
 | `tailwind.config.ts` | — | Legacy-style theme mapping (v4 CSS-first lives in globals.css) |
 | `postcss.config.mjs` | — | Tailwind v4 postcss plugin |
 | `eslint.config.mjs` | — | Flat ESLint config (next/core-web-vitals) |
@@ -22,16 +21,17 @@
 | `agent.md` | — | **Canonical coding standards + agent contract** (layered API pattern, raw SQL rule, response helpers, naming, definition of done). Read before writing any code |
 | `CLAUDE.md` | — | Thin pointer to `agent.md` for AI coding assistants (kept so tooling that auto-reads it finds the standards) |
 | `.gitignore` | — | Keeps `.env*`, `/db/`, build output out of Git |
-| `.env.example` | — | Documented template for the 3 env vars |
+| `.env.example` | — | Annotated template for every env var (DB URLs, secrets, guards, backups, email/Telegram, realtime) |
 | `README.md` | — | Project overview + quick start |
 | `worklog.md` | — | Append-only engineering log: every task, decision and verification result |
-| `docs/` | — | Study hub: docs 01–14, compiled PDF guide, deployment + refactor reports (see `docs/README.md`) |
+| `CHANGELOG.md` / `DEPLOYMENT.md` | — | User-visible changes / deployment overview |
+| `docs/` | — | Study hub: docs 01–18, deploy guides, process, QA report (see `docs/README.md`) |
 
 ## prisma/
 
 | File | Lines | What it is |
 |---|---|---|
-| `schema.prisma` | 324 | The 14 models, relations, MySQL JSON columns, indexes. → doc 02 |
+| `schema.prisma` | 324 | The 17 models, relations, MySQL JSON columns, indexes. → doc 02 |
 | `migrations/` | — | Versioned MySQL migrations, applied with `npx prisma migrate deploy` (the only DDL path) |
 
 ## src/app — Next.js App Router
@@ -45,24 +45,32 @@
 | `not-found.tsx` | — | 404 screen |
 | `globals.css` | 163 | Tailwind v4 `@theme inline` tokens (oklch), light + "soft graphite" `.dark` palettes, recharts dark fixes |
 
-## src/app/api — 13 route handlers (→ doc 04)
+## src/app/api — route folders (→ doc 04)
 
-| File | Lines | Endpoints |
-|---|---|---|
-| `route.ts` | 4 | `GET /api` health check |
-| `auth/route.ts` | 199 | register / login / refresh / logout / me / profile / password |
-| `seed/route.ts` | 287 | Idempotent demo-data seeder (GET+POST; GET added for browser seeding) |
-| `keep-alive/route.ts` | REMOVED 2026-10-14 with the MySQL migration (MySQL has no free-tier pause; health is `GET /api`) |
-| `stats/route.ts` | 67 | `?action=dashboard` (6 parallel aggregates) / `?action=reports` (lead/admin) |
-| `modules/route.ts` | 332 | tree/detail/create/update/delete + `?action=submit-review` (module review orchestration) |
-| `test-cases/route.ts` | 84 | list/detail/history/reviews + create + versioned update + `?action=submit-review` + soft delete + **`?action=import-template` / `?action=import` (CSV bulk import)** → doc 14 |
-| `reviews/route.ts` | 227 | queue / all / detail + **verdict** (status machine + module aggregation) |
-| `module-reviews/route.ts` | 191 | queue / all / detail + `?action=approve-all` |
-| `bugs/route.ts` | 243 | list/detail/links + create + update (resolvedAt stamping) + link-tc + admin-only hard delete |
-| `task-reports/route.ts` | 227 | my / summary / list / upsert-by-date / owner-only update |
-| `activity-logs/route.ts` | 75 | filtered audit list + per-entity / per-user branches |
-| `notifications/route.ts` | 63 | list / read-all / read-one / delete (all user-scoped) |
-| `users/route.ts` | 146 | admin-only CRUD (invite, role, activate, soft delete) |
+Every folder follows the four layers of `agent.md` §1: `route.ts` (controller) →
+`<name>.validation.ts` (zod) → `<name>.service.ts` (rules, permissions) →
+`<name>.repository.ts` (raw SQL only).
+
+| Folder | Endpoints |
+|---|---|
+| `route.ts` (root) | `GET /api` liveness |
+| `ready/` | `GET /api/ready` readiness (database `SELECT 1`, 503 when down) |
+| `auth/` | register / login (per-email lock + per-IP limit) / refresh / logout / me / profile / password / ws-ticket |
+| `seed/` | Idempotent demo-data seeder, only with `TCMS_ENABLE_SEED=true` |
+| `stats/` | `?action=dashboard` / `?action=reports` (`view_all_task_reports`) |
+| `search/` | Global search |
+| `modules/` | tree / detail / create / update / delete + `?action=submit-review` (module review) |
+| `test-cases/` | list / detail / history / reviews + create + versioned update + submit-review + hard delete + CSV import → doc 14 |
+| `reviews/` | queue / all / detail + verdict + forward |
+| `module-reviews/` | queue / all / detail + bulk verdict / approve-all / change-reviewer |
+| `bugs/` | list / detail / links + create + update + link-tc + hard delete |
+| `task-reports/` | my / summary / list / export / upsert-by-date / owner-only update |
+| `activity-logs/` | filtered audit list + per-entity / per-user branches |
+| `notifications/` | list / read-all / read-one / delete (own rows only) |
+| `users/` | user management (`manage_users`; role changes VP only) + `?action=options` pickers |
+| `permissions/` | the runtime permission matrix (`manage_permissions`) |
+| `wiki/` | wiki documents + file upload / download |
+| `integrations/crewdesk/` | Crew Desk link management → doc 18 |
 
 ## src/components — app chrome
 
@@ -88,7 +96,7 @@ mounts its view component from `src/components/views/`; the URL↔view map lives
 
 | File | Lines | ViewKey | One-liner |
 |---|---|---|---|
-| `dashboard-v2.tsx` | — | `dashboard` | QA Command Center (live /dashboard); the classic `dashboard.tsx` is archived in `archive/src/` |
+| `dashboard-v2.tsx` | — | `dashboard` | QA Command Center (the /dashboard page) |
 | `modules.tsx` | 511 | `modules` | Module tree browser, create/delete, submit module for review |
 | `test-cases.tsx` | 411 | `test-cases` | Filterable table, create dialog (steps editor), CSV export |
 | `test-case-detail.tsx` | 626 | `test-case-detail` | Read/edit modes, steps table, submit for review, PERMANENT delete (confirm), history/reviews/activity panels |
@@ -98,7 +106,7 @@ mounts its view component from `src/components/views/`; the URL↔view map lives
 | `module-review-detail.tsx` | 415 | `module-review-detail` | Bulk workspace: stats, expandable cases, per-case verdicts, Approve All |
 | `bugs.tsx` | 492 | `bugs` | dnd-kit Kanban + table, create dialog, detail sheet with inline edit |
 | `tasks.tsx` | 546 | `tasks` | Daily report editor (task lines, entity links), manager user-switch, CSV export |
-| `reports.tsx` | 418 | `reports` | Team weekly hours + status/priority/bug charts (lead/admin), print-to-PDF |
+| `reports.tsx` | 418 | `reports` | Team weekly hours + status/priority/bug charts (`view_all_task_reports`), print-to-PDF |
 | `activity-log.tsx` | 463 | `activity-log` | Audit table, 6 filters, before/after diff dialog, cross-navigation |
 | `notifications.tsx` | 253 | `notifications` | Inbox over the Zustand store: icons, read/unread, deep links, delete |
 | `settings-users.tsx` | 522 | `settings-users` | VP console: invite dialog, inline role switch (6 roles), deactivate, filters |
@@ -139,6 +147,14 @@ mounts its view component from `src/components/views/`; the URL↔view map lives
 | `server/csv.ts` | 123 | Pure RFC-4180 CSV parser + `parseCsvSteps`/`parseCsvTags` (no I/O, no business logic) → doc 14 |
 | `server/delivery.ts` | 140 | Email (SMTP via nodemailer, env-gated) + Telegram (Bot API, env-gated) senders + `deliverNotification()` per-prefs dispatcher; never throws → doc 12 §6 |
 | `utils.ts` | 6 | `cn()` Tailwind class merger |
+| `roles.ts` | — | Role list/labels + `canAssignRoles` (VP only) and `DEFAULT_INVITE_ROLE` (`viewer`) |
+| `csv-export.ts` | — | Quoted CSV export with spreadsheet formula-injection guard (cases, bugs, work logs) |
+| `server/optimistic-lock.ts` | — | "Changed by someone else" check on the loaded `updatedAt` → 409 |
+| `server/db-errors.ts` | — | MySQL error codes → clean 400 / 409 / 503 (no SQL text to the client) |
+| `server/read-only.ts` | — | `TCMS_READ_ONLY=true`: every write answers 503 except login / refresh / logout |
+| `server/login-rate-limit.ts` | — | In-memory per-IP failed sign-in limit (429) |
+| `server/startup-guard.ts` / `db-settings-guard.ts` | — | Refuse to start with unsafe production settings / wrong MySQL server settings |
+| `server/backup-health.ts` | — | Daily stale-backup check → in-app alert to `manage_users` holders |
 
 ## src/store & src/types
 
@@ -147,25 +163,36 @@ mounts its view component from `src/components/views/`; the URL↔view map lives
 | `store/index.ts` | 142 | Zustand: `useAuthStore` (session), `useViewStore` (router replacement), `useNotificationsStore`. → doc 05 §2 |
 | `types/index.ts` | 245 | All domain types & string-enum unions shared by views (`TestCase`, `ReviewRequest`, `Paginated<T>`, …) |
 
-## scripts/ — verification battery & ops tooling
+## scripts/ — verification suites & ops tooling
+
+Definition-of-done suites are listed in `agent.md` §3. The suites clean up the rows they
+create (`scripts/lib/suite-cleanup.mjs`) and refuse any database other than
+`127.0.0.1:5500/tcms_test` (`scripts/lib/db-guard.mjs`).
 
 | File | What it is |
 |---|---|
-| `start-tcms.sh` | Idempotent stack launcher: MySQL 8.4 wiring via `scripts/mysql-env.sh` (repair-only .env self-heal) + WS mini-service (:3003) + Crew Desk mock (:3010) + Next.js (:3000, production build by default — `TCMS_DEV=1` for dev); PG :5499 stays bootable as READ-ONLY drill source |
-| `dev-with-pg.mjs` | `npm run dev` wrapper — boots/awaits the sandbox DB, then `next dev` |
-| `verify-battery.sh` | 23 checks — end-to-end API sweep (health, seed, auth, CRUD, reviews, bugs, reports, notifications, stats, leak scan) |
-| `verify-rbac.sh` | Archived (PG-era, uses psql): `archive/postgres/scripts/` |
-| `verify-permissions.mjs` | 29 checks — matrix defaults, override toggle round-trip, cache invalidation |
-| `verify-review-matrix.mjs` | 36 checks — review endpoints per role (participation gating included) |
-| `verify-import.mjs` | 32 checks — CSV template + import happy path, per-row errors, auth/permission/validation failures → doc 14 |
-| `verify-notifications.mjs` | 28 checks — Bearer auth, password-change validation + refresh-token revocation + security notification, channel prefs persistence, ownership scoping, bug-assign delivery |
-| `migrate-rbac.mjs` | Archived (PG-era): `archive/postgres/scripts/` |
-| `seed-open-reviews.mjs` | Seeds demo review queues for manual testing |
-| `cleanup-e2e-cases.mjs` / `cleanup-import-demo.mjs` | Remove test/demo artifacts after verification runs |
-| `clear-login-lock.mjs` | Reset the brute-force lock counter for a demo account |
-| `check-db-state.mjs` / `check-overrides.mjs` (`probe-rbac-state.mjs` archived in `archive/postgres/scripts/`) | Small read-only DB state probes used while debugging |
-| `pg-sandbox/` | Embedded PostgreSQL sandbox (git-ignored; exists only on the Linux sandbox, not in this repo); READ-ONLY rollback source — the app never connects to it |
-| `scan-dead-src.mjs` / `prune-deps.mjs` | Hygiene audits: unused src files / unused npm dependencies |
+| `dev-tcms.mjs` | `npm run dev` wrapper — MySQL-only (refuses a non-mysql URL), then `next dev` |
+| `start-tcms.sh` / `boot-tcms-autostart.sh` / `mysql-env.sh` | Linux stack launcher, boot worker, and the single source of DB env wiring |
+| `migration/mysql84-boot.sh` | Boots a local MySQL 8.4 test server (creates the app / migrate / backup users) |
+| `create-first-vp.mjs` (+ `create-first-vp-test.mjs`) | Creates the first VP on an empty production database → doc 17 §6 |
+| `backup-db-mysql.sh` / `backup-scheduler.mjs` / `restore-mysql.sh` | Nightly mysqldump, its scheduler, and the restore drill → doc 17 |
+| `send-test-notification.mjs` | Checks / sends one email + Telegram test message (`--check` sends nothing) |
+| `audit-standards.mjs` | Coding-standards auditor (`agent.md` §1) |
+| `verify-permissions.mjs` / `verify-permission-matrix.mjs` / `verify-review-matrix.mjs` / `verify-ui-gates.mjs` | Permission behaviour, the 126-cell matrix, review access per role, UI gates per role |
+| `verify-permission-toggle-e2e.mjs` / `verify-role-flows-e2e.mjs` | Browser e2e: every toggle ON/OFF per role; full role flows (UI + API + DB + notifications) |
+| `verify-concurrency.mjs` / `verify-db-errors.mjs` / `verify-safety.mjs` / `verify-flagged-fields.mjs` | Optimistic locking, MySQL error mapping, safety features, flagged fields |
+| `verify-import.mjs` / `verify-notifications.mjs` / `verify-wiki.mjs` / `verify-crewdesk.mjs` | CSV import, notifications + auth security, wiki, Crew Desk (mock only) |
+| `verify-battery.sh` / `audit-500-hunt.sh` / `verify-security-fixes.mjs` / `verify-review-ux-round.mjs` | Older API sweeps (Linux shell) and round verifiers |
+| `e2e-verify-routes-reviews-delete.mjs` | Browser e2e: routes, per-page permissions, review ownership, hard delete |
+| `mysql-baseline-test.mjs` / `mysql-correctness-test.mjs` / `startup-guard-test.mjs` / `db-settings-guard-test.mjs` / `backup-test.mjs` / `backup-app-staleness-test.mjs` | Permanent verifiers for the MySQL baseline, guards and backups |
+| `ws-auth-probe.mjs` / `ws-prod-path-test.mjs` / `ws-reconnect-test.mjs` | WebSocket auth, production path, reconnect |
+| `loadtest.mjs` / `loadtest-s6.mjs` / `loadtest-200.mjs` / `seed-load-volume.mjs` | Load tests + volume seeding → doc 16 |
+| `run-crewdesk-tests.sh` / `crewdesk-real-smoke.mjs` | Crew Desk driver (mock) / the one sanctioned real-API smoke test → doc 18 |
+| `cleanup-req001-testdata.mjs` / `check-suite-residue.mjs` | Dry-run-first test-data cleanup / leftover-row check |
+| `seed-open-reviews.mjs` / `cleanup-e2e-cases.mjs` / `cleanup-import-demo.mjs` / `clear-login-lock.mjs` | Demo review queues, demo cleanup, login-lock reset |
+| `check-db-state.mjs` / `check-overrides.mjs` | Small read-only DB state probes |
+| `scan-dead-src.mjs` / `prune-deps.mjs` / `warm-routes.mjs` | Hygiene audits / route warm-up after dev boot |
+| `lib/` | Shared helpers: db-guard, suite-cleanup, suite-harness, suite-data, fixture-users, cdp-browser, first-vp, r9-candidates |
 
 ## mini-services/notifications
 

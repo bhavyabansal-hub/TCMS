@@ -9,7 +9,7 @@
 // 2. GRACEFUL SHUTDOWN: on SIGTERM/SIGINT the Prisma connection pool is
 //    closed before exit, so the database never accumulates orphaned
 //    connections after a redeploy or container stop (a closed pool is also
-//    what lets PostgreSQL reclaim the slots immediately instead of waiting
+//    what lets MySQL reclaim the slots immediately instead of waiting
 //    for TCP keepalive).
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
@@ -36,7 +36,7 @@ export async function register() {
   // not UTC, or server/schema charset is not utf8mb4.
   // transaction_isolation is printed, never fails (concurrency task owns it).
   // Sandbox: one OFF line, nothing else. Full contract:
-  // src/lib/server/db-settings-guard.ts + docs/migration/02 + 04.
+  // src/lib/server/db-settings-guard.ts + docs/deploy/PRODUCTION-CHECKLIST.md §2.
   const { runDbSettingsGuard } = await import('./lib/server/db-settings-guard')
   await runDbSettingsGuard()
 

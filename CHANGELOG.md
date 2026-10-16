@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-16 — Cleanup: PostgreSQL removed, docs describe today's app
+
+- **Removed:** the whole `archive/` folder, the PostgreSQL scripts (schema converter, 250-row probe, rollback drill), the migration dossier `docs/migration/`, old one-time reports (REFACTOR-*, CODE-QUALITY-*, older QA prompts/reports), the stale PDF guide and its build script, and raw test evidence files.
+- **PostgreSQL:** fully removed — no rollback source (D1) and no data copy (D2: production starts empty with `scripts/create-first-vp.mjs`). The data-copy script, `PG_SOURCE_URL` and the `scripts/pg-client/` ignores are gone.
+- **Docs:** README, DEPLOYMENT, CODEBASE-MAP and guides 01–17 now describe MySQL 8.4, the six roles and the permission matrix, the Windows setup, the nginx production topology, the safety features (409 on concurrent edits, read-only mode, `/api/ready`, sign-in limit) and the deep-test fixes.
+
 ## 2026-10-16 — FIX deep-test bugs (docs/qa/DEEP-TEST-2026-10-16.md)
 
 - **Roles (R2-3):** only a VP can set or change a role, and never their own; other user managers can create viewer accounts only. Role pickers are disabled for non-VPs.
@@ -66,8 +72,8 @@
   utf8mb4 + strict-mode probes. PG source stays READ-ONLY.
 - Verification: battery 63/63, Crew Desk mock suite 5/5, import suite 33/33,
   250-row import probe PASS (cap enforced), 200-VU load test 0 errors.
-  Full numbers: docs/migration/03-verification.md.
-- Cutover + rollback plan: docs/migration/04-cutover-rollback.md.
+  (The migration dossier docs/migration/ was removed 2026-10-16; the PostgreSQL
+  rollback window was dropped, decision D1.)
 
 ## 2026-10-08 — Adopted baseline (zip lineage)
 

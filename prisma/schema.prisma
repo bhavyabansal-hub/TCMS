@@ -1,5 +1,5 @@
 // TCMS — Test Case Management System
-// MySQL 8.4 schema (utf8mb4). Migrated from PostgreSQL — see docs/migration/.
+// MySQL 8.4 schema (utf8mb4).
 //
 // DATABASE NAMING CONVENTION (strict):
 //   - Tables  : snake_case, plural        (users, test_cases, review_requests ...)

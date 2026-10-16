@@ -4,7 +4,8 @@
 > What IT must provide first: [`it-request-mysql.md`](./it-request-mysql.md).
 > Background: `.env.example` (every key, annotated), `docs/deploy/reverse-proxy-websocket.md`
 > (nginx/WS details), `docs/17-operations-runbook.md` (backup, restore, first admin),
-> `docs/16-single-instance-and-scaling.md` (why one instance), `docs/migration/04-cutover-rollback.md`.
+> `docs/16-single-instance-and-scaling.md` (why one instance). Production is a fresh start
+> (decision D2): empty MySQL + first VP (§4).
 
 Topology: **nginx (TLS, :443)** → **Next.js app** (`127.0.0.1:3000`) + **notifications WS
 service** (`127.0.0.1:3003`, loopback broadcast `127.0.0.1:3004`) → **MySQL 8.4** (IT).
@@ -39,7 +40,6 @@ startup guard refuses shorter, placeholder or sandbox values and names the varia
 | `TCMS_ALLOW_SIGNUP` | `false` (or unset) | Self-signup off — accounts are created by a VP in Settings → Users. |
 | `NEXT_PUBLIC_ALLOW_SIGNUP` | `false` (or unset) | Build-time twin: hides the Register tab. **Set before `npm run build`.** |
 | `TCMS_READ_ONLY` | unset / `false` | Set `true` only during maintenance (all writes → 503, sign-in still works). |
-| `PG_SOURCE_URL` | unset unless the PG rollback window is open | Read-only rollback source (decision D1). |
 
 ### 1.3 Realtime (WebSocket)
 
@@ -197,5 +197,5 @@ Settings → Users (docs/17 §6).
 10. [ ] One `--run-now` backup completed and one restore drill done (§5); cron installed.
 11. [ ] Maintenance switch known: set `TCMS_READ_ONLY=true` + `systemctl restart tcms-app`
         before risky operations; unset + restart afterwards.
-12. [ ] Rollback plan agreed (`docs/migration/04-cutover-rollback.md`); previous release
-        tag noted for an application rollback (docs/17 §2.2).
+12. [ ] Rollback plan agreed: previous release tag noted for an application rollback
+        (docs/17 §2.2); last verified mysqldump for a data rollback (docs/17 §2.1).

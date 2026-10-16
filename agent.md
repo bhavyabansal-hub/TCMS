@@ -14,10 +14,10 @@ RBAC user management, notifications, full audit log.
 Zustand 5 · TanStack React Query 5 · Prisma 6 (client only — all queries are raw SQL) ·
 MySQL 8.4 (utf8mb4, strict mode, native JSON columns) · JWT auth (jsonwebtoken +
 bcryptjs) · zod validation · optional socket.io mini-service for realtime notifications.
-PostgreSQL is retired (2026-10-14 migration) and kept READ-ONLY as rollback source
-until 2 weeks after go-live (`docs/process/decisions.md` D1).
+MySQL is the only database (`docs/process/decisions.md` D1). Production is a fresh start:
+empty MySQL + `scripts/create-first-vp.mjs` (D2).
 
-**Deep-dive documentation:** `docs/README.md` (study hub, docs 01–18 + PDF guide).
+**Deep-dive documentation:** `docs/README.md` (study hub, docs 01–18).
 **Team workflow (6 agents):** roles in `.claude/agents/`, process in `docs/process/WORKFLOW.md`.
 This file is the single source of the project rules; `docs/process/coding-standards.md`
 holds the owner's original wording and points here.
@@ -248,7 +248,7 @@ Also run and paste `node scripts/audit-standards.mjs` (report only, not blocking
   `/test-cases`, …); the root `/` redirects into the shell. Deep-link filters are
   part of the URL contract (`docs/07`) — never break them silently.
 - The old cloud-sandbox platform files (`start-dev.sh`, `Caddyfile`, root `bun.lock`,
-  `vercel.json`) were moved to `archive/platform/` on 2026-10-16 (owner): neither the
+  `vercel.json`) were deleted on 2026-10-16 (owner; `archive/` no longer exists): neither the
   Windows setup (npm + `package-lock.json`, `npm run dev`) nor the Linux + nginx
   production plan (`docs/deploy/PRODUCTION-CHECKLIST.md`) uses them. The WS service keeps
   its own `mini-services/notifications/bun.lock`. `.zscripts/` is git-ignored and exists
