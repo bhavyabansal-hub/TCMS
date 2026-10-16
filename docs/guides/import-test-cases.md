@@ -1,4 +1,4 @@
-# 14 · Import Test Cases (CSV) — feature guide
+# Import Test Cases (CSV) — feature guide
 
 > Added in Task 17. Lets any user with the **`create_test_case`** permission bulk-create
 > test cases by uploading a CSV file into a chosen module or submodule. This doc covers

@@ -12,7 +12,7 @@
  *
  * Target database = DATABASE_URL (Prisma loads .env):
  *   TCMS_DEPLOY_ENV=production  -> the production URL; refuses the local sandbox URL.
- *   otherwise                   -> only 127.0.0.1|localhost:5500/tcms_test (agent.md §6).
+ *   otherwise                   -> only 127.0.0.1|localhost:5500/tcms_test (`docs/CODING-STANDARDS.md` §8).
  * Refuses (exit 1) when an active VP already exists or the email is taken.
  * Exit: 0 created, 1 refused / invalid input, 2 wrong target or DB error.
  */

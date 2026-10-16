@@ -1,4 +1,4 @@
-# 06 · Pages — Login / Register & Dashboard
+# Pages — Login / Register & Dashboard
 
 > Screens: **AuthScreen** (`src/components/auth-screen.tsx`) and **Dashboard**
 > (`src/components/views/dashboard-v2.tsx`, the QA Command Center). These are the first two things every user

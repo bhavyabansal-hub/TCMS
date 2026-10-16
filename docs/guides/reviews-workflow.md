@@ -1,4 +1,4 @@
-# 08 · Pages — the Review workflow (queue → detail → verdicts)
+# Pages — the Review workflow (queue → detail → verdicts)
 
 > Files: `views/reviews.tsx` (253), `views/review-detail.tsx` (347),
 > `views/module-review-detail.tsx` (415). Together they implement the quality gate of
@@ -108,7 +108,7 @@ Opened by three buttons: **Approve** (green) / **Fail** (red) / **Needs Revision
 
 Submit → `reviewsApi.verdict(id, { verdict, comment, flaggedFields })` →
 `POST /api/reviews?id=` → server does the full state-machine step (event + statuses +
-module aggregation + notifications, see doc 04 §7). Client toasts
+module aggregation + notifications, see `docs/architecture/api-reference.md` §7). Client toasts
 `Verdict submitted: needs revision`, invalidates `['reviews']` + `['test-cases']`,
 navigates back to the queue.
 
@@ -140,5 +140,5 @@ parent flips to `completed` server-side; the header then renders fully read-only
 A module review is *one reviewer, one due date, one conversation* for up to dozens of
 cases: the umbrella row carries the deadline/cycle, the children carry the per-case
 verdicts, and aggregation (automatic completion + requester notification) removes the
-need to manually close anything. The All-Reviews tab (doc 08 §2) lets leads audit both
+need to manually close anything. The All-Reviews tab (`docs/guides/reviews-workflow.md` §2) lets leads audit both
 levels afterwards.

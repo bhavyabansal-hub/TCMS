@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Persistent CODING-STANDARDS auditor (agent.md §1) — the 14 user standards
+// Persistent CODING-STANDARDS auditor (`docs/CODING-STANDARDS.md` §2) — the 14 user standards
 // encoded as greppable rules over src/. Run from the project root:
 //   node scripts/audit-standards.mjs
 //   node scripts/audit-standards.mjs --self-test   (naming-rule check, reads no files)

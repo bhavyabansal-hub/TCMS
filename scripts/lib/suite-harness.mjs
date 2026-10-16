@@ -1,7 +1,7 @@
 // Shared harness for the REQ-001 writing suites (verify-wiki, verify-permission-matrix):
 // PASS/FAIL counter, VERIFY_FAIL_AT / VERIFY_PAUSE_AT hooks, SIGINT -> abort + cleanup,
 // cookie-session HTTP helpers, manifest file, 126-cell matrix snapshot compare.
-// Exit codes (05-test-plan.md A0): 0 green, 1 any FAIL, 2 NOT RUN, 130 Ctrl+C.
+// Exit codes (REQ-001 test-plan (git history) A0): 0 green, 1 any FAIL, 2 NOT RUN, 130 Ctrl+C.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'

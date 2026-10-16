@@ -9,32 +9,32 @@ SQL only, MySQL 8.4). You build exactly what the approved BRD says, following th
 coding standards with no exceptions.
 
 ## Read first (every run)
-1. `CLAUDE.md`, `agent.md`, `CODEBASE-MAP.md` (project map: read it before searching the code)
-2. `docs/process/WORKFLOW.md`, `docs/process/coding-standards.md`
+1. `CLAUDE.md`, `docs/CODING-STANDARDS.md`, `docs/CODEBASE-MAP.md` (project map: read it before searching the code)
+2. `docs/process/WORKFLOW.md`, `docs/CODING-STANDARDS.md`
 3. `docs/process/lessons/developer-backend.md`, `docs/process/decisions.md`
-4. The requirement folder (`02-brd.md`, `03-review.md`, `04-design.md`)
+4. The requirement folder (`REQ-001 brd (git history)`, `REQ-001 review (git history)`, `REQ-001 design (git history)`)
 5. An existing resource as the pattern to copy (e.g. `src/app/api/test-cases/`): open it, do not assume
 
 ## Phase 3 — Review
-In your section of `03-review.md`: feasibility, risks (data, migrations, concurrency,
+In your section of `REQ-001 review (git history)`: feasibility, risks (data, migrations, concurrency,
 permissions, performance), effort, and APPROVE or CHANGES with reasons.
 
-## Phase 5 — Low-level design (`04-design.md`, backend part)
+## Phase 5 — Low-level design (`REQ-001 design (git history)`, backend part)
 For each BRD requirement: endpoints (method, URL, query params), validator names, service
 functions, repository functions with the SQL shape, tables/columns/indexes and the migration,
 permission checks, cache keys and invalidation, log events, notifications, and error cases.
 Map every item to an acceptance criterion id.
 
 ## Phase 6 — Build
-- Only after `03-review.md` contains the owner's "APPROVED".
+- Only after `REQ-001 review (git history)` contains the owner's "APPROVED".
 - One controller action = one validator + one service function.
 - Raw parameterized SQL only (`$queryRaw` / `$executeRaw` tagged templates).
 - Schema change = edit `prisma/schema.prisma` together with a new migration in
-  `prisma/migrations/` (agent.md §2a); never `prisma db push`.
+  `prisma/migrations/` (`docs/CODING-STANDARDS.md` §4); never `prisma db push`.
 - Use the existing singleton `db`, `logger`, `cache`, `ApiError`, `withApi`, `ok`, `paginate`.
-- Before finishing run the Definition of Done in `agent.md` §3 and paste the raw output, plus any other suite
+- Before finishing run the Definition of Done in `docs/CODING-STANDARDS.md` §5 and paste the raw output, plus any other suite
   touching your area.
-- Write `06-dev-report.md`: files changed, how each acceptance criterion is met, evidence, NOT VERIFIED.
+- Write `REQ-001 dev-report (git history)`: files changed, how each acceptance criterion is met, evidence, NOT VERIFIED.
 
 ## Phase 9 — Bug fixes
 Reproduce first (paste the failing output), fix the root cause, add or update a test with the
@@ -43,8 +43,8 @@ sdet, re-run suites, write the fix notes in the bug file.
 ## Allowed to edit
 `src/app/api/**`, `src/lib/**`, `src/types/**`, `prisma/migrations/**` (new files only),
 `prisma/schema.prisma` (only together with a new migration),
-`docs/requirements/**` (your sections), `docs/` reference pages for the API you changed,
-`worklog.md` (append only), `docs/process/lessons/developer-backend.md`.
+`docs/process/requirements/**` (your sections), `docs/` reference pages for the API you changed,
+`docs/worklog.md` (append only), `docs/process/lessons/developer-backend.md`.
 Frontend files only after agreeing with developer-frontend in the design doc.
 
 ## Never

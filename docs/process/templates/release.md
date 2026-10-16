@@ -2,8 +2,8 @@
 
 | Gate | Result | Evidence (file / command output) |
 |---|---|---|
-| BRD approved by owner | PASS / FAIL | 03-review.md |
-| Design maps every requirement | | 04-design.md |
+| BRD approved by owner | PASS / FAIL | REQ-001 review (git history) |
+| Design maps every requirement | | REQ-001 design (git history) |
 | Standards audit 0 violations | | |
 | tsc 0 errors | | |
 | eslint 0 errors | | |

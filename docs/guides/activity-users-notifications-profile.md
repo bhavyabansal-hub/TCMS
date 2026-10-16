@@ -1,4 +1,4 @@
-# 10 · Pages — Activity Log, Notifications, Users, Profile
+# Pages — Activity Log, Notifications, Users, Profile
 
 > Files: `views/activity-log.tsx` (463), `views/notifications.tsx` (253),
 > `views/settings-users.tsx` (522), `views/settings-profile.tsx` (322).
@@ -168,6 +168,6 @@ every mutation ──▶ ActivityLog (audit)  ──▶ Activity Log view (leads
       └─▶ Notification row (inbox) ──▶ bell popover / Notifications view
                     │                        (click = deep link to the entity)
                     └─▶ WS push (instant) ── otherwise visible on next fetch
-Users view controls who can log in and with which role ──▶ every gate in docs 03/06–09
+Users view controls who can log in and with which role ──▶ every gate in `docs/architecture/auth-and-permissions.md`/06–09
 Profile keeps identity + delivery preferences truthful ──▶ notification skip logic
 ```

@@ -1,6 +1,6 @@
 // ID-scoped data helpers for the REQ-001 writing suites and check-suite-residue.mjs:
 // collect the entities a run created (by fixture user ids, before cascades erase them),
-// count residue per table, and the FK-ordered cleanup statements (04-design.md 2.3).
+// count residue per table, and the FK-ordered cleanup statements (REQ-001 design (git history) 2.3).
 // Raw SQL only, parameterized; writes via $executeRaw.
 import { Prisma } from '@prisma/client'
 import { sqlIn } from './db-guard.mjs'

@@ -52,7 +52,7 @@ export function useNotificationSocket() {
     manualAttempts.current = 0
 
     // Canonical list pull. Besides live WS push this is the ONLY delivery
-    // channel — there are NO polling timers in this app (docs/12 §1). It runs:
+    // channel — there are NO polling timers in this app (`docs/architecture/realtime-and-notifications.md` §1). It runs:
     //   1. once on mount,
     //   2. on every socket RE-connect (catch-up for downtime),
     //   3. whenever the tab becomes visible again.

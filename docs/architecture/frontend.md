@@ -1,4 +1,4 @@
-# 05 · Frontend Architecture — how the client is built
+# Frontend Architecture — how the client is built
 
 > The browser side is a single-page application: one URL, fourteen views, three state
 > systems with clear jobs. This document explains the machinery; documents 06–10 walk
@@ -96,7 +96,7 @@ A plain fetch client (no React Query code in it). Pieces:
    `testCasesApi`, `reviewsApi`, `moduleReviewsApi`, `bugsApi`, `taskReportsApi`,
    `notificationsApi`, `activityLogsApi`, `statsApi`, `seedApi`. One function per
    endpoint; they only build URLs and parse nothing. (Full inventory with routes:
-   `04-api-reference.md`.)
+   `docs/architecture/api-reference.md`.)
 
 ## 4. React Query conventions (live in the views)
 
@@ -218,6 +218,6 @@ Role gating always goes through the permission-matrix helpers — `can('action')
    approve-all flow and single review detail use rich dialogs — a UX inconsistency,
    not a bug (on the polish backlog).
 2. Bug delete inside the detail sheet has **no confirmation dialog**.
-3. The socket hook's WS auth sends `token: 'dev'` (server doesn't validate — see doc 12).
+3. The socket hook's WS auth sends `token: 'dev'` (server doesn't validate — see `docs/architecture/realtime-and-notifications.md`).
 4. The bugs board query key is intentionally filter-free (`['bugs','list']`): the board
    fetches a fixed page (pageSize=200) and filters client-side.

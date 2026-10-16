@@ -1,5 +1,5 @@
 // Stamped fixture users for the REQ-001 writing suites (R6, R7), created by raw SQL
-// (04-design.md 2.3, BE-R2): UTC_TIMESTAMP(3), notify_email = 0, notify_telegram = 0,
+// (REQ-001 design (git history) 2.3, BE-R2): UTC_TIMESTAMP(3), notify_email = 0, notify_telegram = 0,
 // passwords generated in memory and never printed. No ORM model call.
 import { randomBytes, randomUUID } from 'node:crypto'
 import bcrypt from 'bcryptjs'

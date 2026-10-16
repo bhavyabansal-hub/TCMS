@@ -7,7 +7,7 @@
 
 TCMS is one Next.js app (Node 20+) plus one small WebSocket service (bun), behind nginx,
 on **one** Linux server, using **one** MySQL 8.4 schema. It must run as a **single
-instance** (in-memory caches and socket registry; see `docs/16-single-instance-and-scaling.md`).
+instance** (in-memory caches and socket registry; see `docs/architecture/HLD.md`).
 
 ---
 
@@ -164,7 +164,7 @@ Details and Apache/IIS variants: `docs/deploy/reverse-proxy-websocket.md`.
 
 Please run exactly **one** copy of the app and one copy of the WebSocket service (no
 load-balancer pool, no autoscaling). Running two needs a Redis-backed redesign first
-(docs/16 §5). Planned restarts (patching) are fine; the app reconnects to MySQL.
+(`docs/architecture/HLD.md`). Planned restarts (patching) are fine; the app reconnects to MySQL.
 
 ## 9. Backups
 

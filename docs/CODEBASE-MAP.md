@@ -1,8 +1,8 @@
-# CODEBASE-MAP.md — fast orientation for TCMS
+# docs/CODEBASE-MAP.md — fast orientation for TCMS
 
-> Compact map of the repository, written 2026-10-15 from a full read of `agent.md`,
-> `docs/`, `worklog.md` and the source. **Read this before exploring; update it when
-> structure changes.** Binding rules live in `agent.md` — this file only points.
+> Compact map of the repository, written 2026-10-15 from a full read of `docs/CODING-STANDARDS.md`,
+> `docs/`, `docs/worklog.md` and the source. **Read this before exploring; update it when
+> structure changes.** Binding rules live in `docs/CODING-STANDARDS.md` — this file only points.
 
 ## 1. What it is
 
@@ -12,27 +12,29 @@ Tailwind v4 + shadcn/ui · Zustand 5 · TanStack React Query 5 · Prisma 6 (clie
 JWT in httpOnly cookies · zod 4 · socket.io mini-service for realtime.
 MySQL is the only database (decision D1). Production is a fresh start: empty MySQL +
 `scripts/create-first-vp.mjs` (decision D2).
-Production go-live is **pending IT answers** ([`docs/deploy/it-request-mysql.md`](docs/deploy/it-request-mysql.md);
-steps in [`docs/deploy/PRODUCTION-CHECKLIST.md`](docs/deploy/PRODUCTION-CHECKLIST.md)).
+Production go-live is **pending IT answers** ([`docs/deploy/it-request-mysql.md`](./deploy/it-request-mysql.md);
+steps in [`docs/deploy/PRODUCTION-CHECKLIST.md`](./deploy/PRODUCTION-CHECKLIST.md)).
 
 ## 2. Top-level layout
 
 ```
-agent.md            binding coding standards + Definition of Done   (READ FIRST)
-CLAUDE.md           pointer to agent.md + this file
-.claude/            agents/ (6 team roles), commands/ (/new-requirement, /build-requirement,
-                    /fix-bug, /quick-fix fast lane, /retro), settings.json (permission deny/ask rules)
-worklog.md          append-only engineering log (never overwrite)
-docs/               README.md index, 01–18 guides, LOCAL-SETUP-WINDOWS.md, deploy/ (production
-                    checklist, IT request, reverse proxy, go-live data copy), qa/ (latest
-                    deep test), process/ (team workflow, decisions, backlog, lessons,
-                    templates), requirements/ (created per REQ), CHANGELOG
+README.md           project overview + quick start
+CLAUDE.md           WORKING METHOD + pointer to docs/CODING-STANDARDS.md (READ FIRST)
+.claude/            agents/ (6 team roles), commands/ (/quick-fix default, /new-requirement,
+                    /build-requirement, /fix-bug, /retro), settings.json (permission rules)
+docs/               README.md index · CODING-STANDARDS.md (the one rules file) · CODEBASE-MAP.md
+                    (this file) · CHANGELOG.md · worklog.md (append-only)
+  architecture/     HLD, LLD, database, api-reference, auth-and-permissions, frontend,
+                    realtime-and-notifications, crewdesk-integration
+  guides/           page guides, end-to-end flows, CSV import
+  deploy/           local-setup-windows, DEPLOYMENT, PRODUCTION-CHECKLIST, IT request,
+                    reverse proxy, operations-runbook
+  process/          WORKFLOW, decisions, backlog, lessons/, templates/, requirements/ (per REQ)
+  qa/               latest deep test
 prisma/             schema.prisma (mysql) + migrations/ (the ONLY DDL path)
 src/                application (see §3–§8)
 mini-services/      notifications (socket.io WS relay), crewdesk-mock (test double)
 scripts/            ~65 boot/verify/backup scripts + lib/ helpers (see §10)
-README.md DEPLOYMENT.md CHANGELOG.md   root docs (deploy guide = MySQL 8.4)
-(no archive/ and no download/ folder since 2026-10-16; .zscripts/ is git-ignored)
 ```
 
 ## 3. Request pipeline (every API call)
@@ -214,7 +216,7 @@ never `db push`): `20261015034822_init_mysql` (hand-edited collations + JSON def
 
 - **Sandbox boot (Linux):** `start-tcms.sh`, `mysql-env.sh`, `dev-tcms.mjs` (`npm run dev`),
   `boot-tcms-autostart.sh`, `migration/mysql84-boot.sh` (MySQL 8.4.6 on :5500).
-- **DoD suites:** see agent.md §3 (Windows: verify-import, verify-permissions,
+- **DoD suites:** see `docs/CODING-STANDARDS.md` §5 (Windows: verify-import, verify-permissions,
   verify-notifications, verify-review-matrix). Linux-only: `verify-battery.sh`,
   `run-crewdesk-tests.sh` (5 phases). `audit-standards.mjs` (report only). Other feature verifiers (`verify-permission-matrix.mjs`,
   `verify-review-matrix.mjs`, `verify-permissions.mjs`, `verify-notifications.mjs`, `verify-wiki.mjs`…).
@@ -223,7 +225,7 @@ never `db push`): `20261015034822_init_mysql` (hand-edited collations + JSON def
   (headers, /api/ready, read-only, CSV, per-IP limit), `create-first-vp-test.mjs`, `verify-ui-gates.mjs`.
   Shared cleanup: `scripts/lib/suite-cleanup.mjs` (ID-scoped, DB guard + lock) — the DoD suites remove
   the rows they create (B16). R9 dry run: `cleanup-req001-testdata.mjs` (dry run by default).
-- **Ops scripts:** `create-first-vp.mjs` (first VP in production, docs/17 §6),
+- **Ops scripts:** `create-first-vp.mjs` (first VP in production, `docs/deploy/operations-runbook.md` §6),
   `send-test-notification.mjs` (one test email / Telegram message, `--check`).
 - **Infra verifiers:** `startup-guard-test.mjs` (17), `db-settings-guard-test.mjs` (11),
   `mysql-baseline-test.mjs` (19), `mysql-correctness-test.mjs` (15), `backup-test.mjs` (26),
@@ -232,14 +234,14 @@ never `db push`): `20261015034822_init_mysql` (hand-edited collations + JSON def
 - **Local MySQL:** `migration/mysql84-boot.sh` boots the local MySQL 8.4 test server.
 - Several scripts hard-code `/home/z/my-project/...` (sandbox-only paths).
 
-## 11. Definition of Done (agent.md §3)
+## 11. Definition of Done (`docs/CODING-STANDARDS.md` §5)
 
-See agent.md §3 — the single source (not repeated here).
+See `docs/CODING-STANDARDS.md` §5 — the single source (not repeated here).
 
 ## 12. Known deviations / tech debt (noted, NOT yet fixed)
 
 1. Services import `db` to open `db.$transaction` (test-cases, reviews, module-reviews);
-   docs/15 says transactions belong in repositories (seed/modules do it right).
+   `docs/architecture/LLD.md` says transactions belong in repositories (seed/modules do it right).
 2. `process.env` read outside config.ts: `auth.service.ts` (TCMS_ALLOW_SIGNUP),
    `backup-health.ts`, `db-settings-guard.ts` (startup-guard is deliberate).
 3. Raw SQL outside repositories: `backup-health.ts`, `db-settings-guard.ts`.

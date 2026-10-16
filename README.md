@@ -4,13 +4,13 @@ A test case management web application for QA teams: modules, test cases, bug tr
 
 - **App version:** 0.3.0 · **Framework:** Next.js 16 (App Router) + React 19 + TypeScript
 - **Database:** MySQL 8.4 (utf8mb4, strict mode) via Prisma — all queries are raw SQL · **UI:** Tailwind CSS 4 + shadcn/ui + React Query 5
-- **Status (2026-10-16):** runs on MySQL 8.4 locally (Windows) with all definition-of-done suites green. Production go-live on the company MySQL server is waiting for IT answers ([`docs/deploy/it-request-mysql.md`](docs/deploy/it-request-mysql.md)).
+- **Status (2026-10-16):** runs on MySQL 8.4 locally (Windows) with all definition-of-done suites green. Production go-live on the company MySQL server is waiting for IT answers ([`docs/deploy/it-request-mysql.md`](./docs/deploy/it-request-mysql.md)).
 
 ## Feature highlights
 
 | Area | What you get |
 |------|--------------|
-| Test cases | Full CRUD, rich editor, CSV/XLSX import (docs/14), bulk delete, hover preview, deep-linked filters (`?moduleId=&status=&priority=&q=`) |
+| Test cases | Full CRUD, rich editor, CSV/XLSX import (`docs/guides/import-test-cases.md`), bulk delete, hover preview, deep-linked filters (`?moduleId=&status=&priority=&q=`) |
 | Modules | Module tree, per-module detail, module review workflow |
 | Reviews | Case and module reviews, verdicts with flagged fields (shown to the author), forward / change reviewer; one open review per case |
 | Bugs & tasks | Bug tracker linked to test cases, Kanban drag & drop, daily work logs, monthly export |
@@ -22,7 +22,7 @@ A test case management web application for QA teams: modules, test cases, bug tr
 
 ## Quick start (Windows, local)
 
-Full steps: [`docs/LOCAL-SETUP-WINDOWS.md`](docs/LOCAL-SETUP-WINDOWS.md). In short:
+Full steps: [`docs/deploy/local-setup-windows.md`](./docs/deploy/local-setup-windows.md). In short:
 
 ```bash
 npm install                 # also runs prisma generate
@@ -35,8 +35,8 @@ Local MySQL is `127.0.0.1:5500` (schema `tcms_test`); never use port 3306 on the
 With `TCMS_ENABLE_SEED=true`, `POST /api/seed` once creates demo data and one account per
 role (for example **admin@tcms.com / Admin@123**, a VP). Local only — never seed a shared database.
 
-Production (Linux + nginx, one instance): [`docs/deploy/PRODUCTION-CHECKLIST.md`](docs/deploy/PRODUCTION-CHECKLIST.md)
-and [`DEPLOYMENT.md`](DEPLOYMENT.md). Production starts empty: `npx prisma migrate deploy` +
+Production (Linux + nginx, one instance): [`docs/deploy/PRODUCTION-CHECKLIST.md`](./docs/deploy/PRODUCTION-CHECKLIST.md)
+and [`docs/deploy/DEPLOYMENT.md`](./docs/deploy/DEPLOYMENT.md). Production starts empty: `npx prisma migrate deploy` +
 `scripts/create-first-vp.mjs` (decision D2).
 
 ### Environment variables
@@ -56,21 +56,21 @@ Full annotated list: `.env.example`.
 
 ## Verification suites (scripts/)
 
-The definition-of-done list is in [`agent.md`](agent.md) §3. Latest results (2026-10-16):
+The definition-of-done list is in [`docs/CODING-STANDARDS.md`](./docs/CODING-STANDARDS.md) §5. Latest results (2026-10-16):
 `tsc` 0 errors · `eslint` 0 errors · `audit-standards` 0 violations · verify-permissions 37/0 ·
 verify-review-matrix 36/0 · verify-ui-gates 159/0 · verify-concurrency 34/0 ·
 verify-role-flows-e2e 556/0 · verify-permission-toggle-e2e 1495/0. The suites only run against
 `127.0.0.1:5500/tcms_test` and delete the rows they create. Latest QA report:
-[`docs/qa/DEEP-TEST-2026-10-16.md`](docs/qa/DEEP-TEST-2026-10-16.md).
+[`docs/qa/DEEP-TEST-2026-10-16.md`](./docs/qa/DEEP-TEST-2026-10-16.md).
 
 ## Documentation
 
-Start at [`docs/README.md`](docs/README.md): numbered guides 01–18 (architecture, database,
-permissions, API, frontend, page guides, flows, deployment, file index, import, standards,
-scaling, runbook, Crew Desk), `docs/deploy/`, `docs/process/`. Code map: [`CODEBASE-MAP.md`](CODEBASE-MAP.md).
-Changes: [`CHANGELOG.md`](CHANGELOG.md). Engineering log: `worklog.md`.
+Start at [`docs/README.md`](./docs/README.md). Rules: [`docs/CODING-STANDARDS.md`](./docs/CODING-STANDARDS.md).
+Folders: `docs/architecture/` (HLD, LLD, database, API, auth, frontend), `docs/guides/` (pages, flows),
+`docs/deploy/`, `docs/process/`, `docs/qa/`. Code map: [`docs/CODEBASE-MAP.md`](./docs/CODEBASE-MAP.md).
+Changes: [`docs/CHANGELOG.md`](./docs/CHANGELOG.md). Engineering log: [`docs/worklog.md`](./docs/worklog.md).
 
 ## Repository hygiene
 
 - `.env` is git-ignored and never committed; rotate `JWT_SECRET` and Crew Desk credentials before any shared deployment.
-- Commit code, scripts and one summary report per task; raw test output and evidence files stay out of git (`agent.md` §4).
+- Commit code, scripts and one summary report per task; raw test output and evidence files stay out of git (`docs/CODING-STANDARDS.md` §6).

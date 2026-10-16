@@ -1,4 +1,4 @@
-# 17 · Operations Runbook — Backup, Rollback, Logging & Tests
+# Operations Runbook — Backup, Rollback, Logging & Tests
 
 > **Backups:** the nightly scheduler runs `scripts/backup-db-mysql.sh` (mysqldump) as the
 > read-only **tcms_backup** user, verifies every file it writes, and alerts every
@@ -9,8 +9,8 @@
 
 > **Status:** verified 2026-10-02 (pre-launch checklist item 4). Every command below was
 > executed against the running stack as part of the go-live confirmation; results are quoted
-> inline. Companion documents: [16-single-instance-and-scaling.md](./16-single-instance-and-scaling.md)
-> (scaling limits + load-test numbers) and [PRODUCTION-CHECKLIST.md](./deploy/PRODUCTION-CHECKLIST.md)
+> inline. Companion documents: [docs/architecture/HLD.md](../architecture/HLD.md)
+> (scaling limits + load-test numbers) and [PRODUCTION-CHECKLIST.md](./PRODUCTION-CHECKLIST.md)
 > (first-time deployment).
 
 ---
@@ -220,7 +220,7 @@ enforcement, import-template shape.
 
 ### 4.3 Load — `scripts/loadtest.mjs` (+ `loadtest-s6.mjs`)
 1×/2×/stretch mixed traffic, login storm, write path, per-endpoint breakdown; zero errors at
-every level. Numbers and analysis: [16-single-instance-and-scaling.md](./16-single-instance-and-scaling.md) §6.
+every level. Numbers and analysis: [docs/architecture/HLD.md](../architecture/HLD.md) §6.
 
 ### 4.4 Running the suite before any release
 ```
@@ -233,7 +233,7 @@ node scripts/loadtest.mjs                         # report; compare vs §6 basel
 ### 4.5 Certifying against the company MySQL TEST schema
 The app is MySQL-only; pointing it at a different MySQL server is just a `DATABASE_URL`
 change. **Never certify against production data** — ask IT for a dedicated TEST schema
-and a limited user (IT request: [`deploy/it-request-mysql.md`](./deploy/it-request-mysql.md)), then:
+and a limited user (IT request: [`deploy/it-request-mysql.md`](./it-request-mysql.md)), then:
 
 ```
 # 0. IT provides: host, port, TEST schema name, limited user (SELECT/INSERT/UPDATE/
@@ -262,7 +262,7 @@ Interpretation: with `connection_limit=40` the database sees at most ~45 connect
 |---|---|---|
 | 1 | httpOnly cookies + Secure/SameSite/CSRF; login, logout, expiry work | `auth-cookies.ts` contract; battery §4.1 sections all PASS (65/65); e2e 34/34; tokens absent from every response body and from localStorage |
 | 2 | Load test at expected + 2× users; response times, errors, slow points; fix what breaks | 25/50/100 VU runs: 0 errors, p99 ≤ 251 ms; slow points identified (login bcrypt, two JOIN lists) — nothing broke; fixes applied: reviewer self-assignment bug found & fixed during pre-launch verification |
-| 3 | Document single-instance only + Redis path | [16-single-instance-and-scaling.md](./16-single-instance-and-scaling.md) — in-process state inventory, failure modes, Redis checklist, acceptance tests |
+| 3 | Document single-instance only + Redis path | [docs/architecture/HLD.md](../architecture/HLD.md) — in-process state inventory, failure modes, Redis checklist, acceptance tests |
 | 4 | Backup/rollback plan, error logging, login & core-flow tests | This document: drill-verified backup+restore (§1.2/§2.1), two-axis rollback (§2), file+console structured logging verified (§3), 65/65 + 34/34 suites (§4) |
 
 ---
@@ -291,3 +291,16 @@ OK: VP created user_id=<uuid> email=it.admin@company.com
 
 Verifier (sandbox only, everything rolled back): `node scripts/create-first-vp-test.mjs`
 → `FIRST-VP RESULT: 15 passed, 0 failed` (2026-10-16).
+
+## 7. Operations quick reference
+
+| Task | How |
+|---|---|
+| Deploy an app change | checkout the release tag → `npm ci` → `npm run build` → restart `tcms-app` (PRODUCTION-CHECKLIST §3) |
+| Change a secret | edit `/etc/tcms/tcms.env` → restart the service (`NEXT_PUBLIC_*` needs a rebuild) |
+| Create tables on a fresh DB | `npx prisma migrate deploy` (applies `prisma/migrations/`) |
+| First admin | `scripts/create-first-vp.mjs` (`docs/deploy/operations-runbook.md` §6) |
+| Pause all writes | `TCMS_READ_ONLY=true` + restart |
+| Inspect data | MySQL Workbench / `mysql` client with a read-only user |
+| Backups | nightly `mysqldump` via `scripts/backup-scheduler.mjs` (`docs/deploy/operations-runbook.md` §2) |
+| Logs | `journalctl -u tcms-app` / `journalctl -u tcms-ws` |

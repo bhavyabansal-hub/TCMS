@@ -2,7 +2,7 @@
 // Counts FAILED sign-ins per client IP in a fixed window; at the limit the IP gets 429
 // until the window ends. Successful sign-ins neither count nor reset (an attacker with
 // one valid account cannot clear the counter). In memory → correct for the single app
-// instance (docs/16); a second instance would need a shared store (Redis).
+// instance (`docs/architecture/HLD.md`); a second instance would need a shared store (Redis).
 //
 // Client IP: the LAST X-Forwarded-For entry — the address nginx itself appends
 // ($proxy_add_x_forwarded_for), so a client-supplied prefix cannot spoof it.

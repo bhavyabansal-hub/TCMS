@@ -3,14 +3,14 @@
 > Written 2026-10-16. One page for the person who installs TCMS on the company server.
 > What IT must provide first: [`it-request-mysql.md`](./it-request-mysql.md).
 > Background: `.env.example` (every key, annotated), `docs/deploy/reverse-proxy-websocket.md`
-> (nginx/WS details), `docs/17-operations-runbook.md` (backup, restore, first admin),
-> `docs/16-single-instance-and-scaling.md` (why one instance). Production is a fresh start
+> (nginx/WS details), `docs/deploy/operations-runbook.md` (backup, restore, first admin),
+> `docs/architecture/HLD.md` (why one instance). Production is a fresh start
 > (decision D2): empty MySQL + first VP (§4).
 
 Topology: **nginx (TLS, :443)** → **Next.js app** (`127.0.0.1:3000`) + **notifications WS
 service** (`127.0.0.1:3003`, loopback broadcast `127.0.0.1:3004`) → **MySQL 8.4** (IT).
 Exactly **one** app instance and **one** WS service (in-memory caches, login limiter and
-socket registry are per process — docs/16).
+socket registry are per process — `docs/architecture/HLD.md`).
 
 ---
 
@@ -159,7 +159,7 @@ node scripts/create-first-vp.mjs --email=<it.admin@company> --name="<Full Name>"
 ```
 
 Refuses when an active VP already exists. Everyone else is added by that VP in
-Settings → Users (docs/17 §6).
+Settings → Users (`docs/deploy/operations-runbook.md` §6).
 
 ---
 
@@ -176,7 +176,7 @@ Settings → Users (docs/17 §6).
 - `--check-stale`: exit 1 + in-app alert to every `manage_users` holder when the newest
   valid dump is older than 26 h. The app runs the same check daily as a second net.
 - Restore drill before go-live: `bash scripts/restore-mysql.sh --file <dump>` into a
-  scratch schema (docs/17 §2.1). Requires the `mysql` / `mysqldump` 8.4 client binaries.
+  scratch schema (`docs/deploy/operations-runbook.md` §2.1). Requires the `mysql` / `mysqldump` 8.4 client binaries.
 
 ---
 
@@ -199,4 +199,4 @@ Settings → Users (docs/17 §6).
 11. [ ] Maintenance switch known: set `TCMS_READ_ONLY=true` + `systemctl restart tcms-app`
         before risky operations; unset + restart afterwards.
 12. [ ] Rollback plan agreed: previous release tag noted for an application rollback
-        (docs/17 §2.2); last verified mysqldump for a data rollback (docs/17 §2.1).
+        (`docs/deploy/operations-runbook.md` §2.2); last verified mysqldump for a data rollback (`docs/deploy/operations-runbook.md` §2.1).

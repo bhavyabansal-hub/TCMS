@@ -1,4 +1,4 @@
-# 04 · API Reference — every endpoint
+# API Reference — every endpoint
 
 > All endpoints live under `/api/*` in `src/app/api/**/route.ts`. Conventions:
 > **query-param addressing** (`?id=`, `?action=`, auth also accepts `?path=`), JSON

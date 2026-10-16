@@ -1,6 +1,6 @@
 /**
  * REQ-001 R9 — remove the QA-check test data from tcms_test, exactly as the owner approves.
- * SQL design: docs/requirements/REQ-001-qa-check-fixes/04-design.md section 2.2.
+ * SQL design: REQ-001 design (git history) section 2.2.
  *
  * DEFAULT = DRY RUN: SELECT only, writes nothing in the database, prints every candidate
  * row (groups A, B, C, D, E2, I + cascade children, crew_desk_links, entity notifications),

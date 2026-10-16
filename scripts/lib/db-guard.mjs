@@ -1,10 +1,10 @@
 // DB guard + serial lock for every DB-touching test script (REQ-001 R10.AC11, Q18, P8).
 //
-// Contract (04-design.md 2.3):
+// Contract (REQ-001 design (git history) 2.3):
 //   1. In-process DATABASE_URL check: host 127.0.0.1|localhost, port 5500,
 //      database tcms_test. Only the boolean is printed, never the URL.
 //      A missing or wrong URL aborts BEFORE any connection is opened
-//      (port 3306 must never be contacted, agent.md §6).
+//      (port 3306 must never be contacted, `docs/CODING-STANDARDS.md` §8).
 //   2. One PrismaClient with connection_limit=1, so the GET_LOCK session and
 //      every later statement share the same physical connection.
 //   3. First statement: SELECT @@port, DATABASE(). Proceed only when

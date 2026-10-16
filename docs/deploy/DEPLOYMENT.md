@@ -3,10 +3,10 @@
 Current as of **2026-10-16**. TCMS runs on **MySQL 8.4 only** (utf8mb4, strict mode).
 Two deployment realities are documented:
 
-- **Local (Windows)** — MySQL 8.4 on `127.0.0.1:5500`, schema `tcms_test`: [`docs/LOCAL-SETUP-WINDOWS.md`](docs/LOCAL-SETUP-WINDOWS.md).
+- **Local (Windows)** — MySQL 8.4 on `127.0.0.1:5500`, schema `tcms_test`: [`local-setup-windows.md`](./local-setup-windows.md).
 - **Company IT (production)** — Linux + nginx, one app instance, the real MySQL server operated by IT.
-  Step by step: [`docs/deploy/PRODUCTION-CHECKLIST.md`](docs/deploy/PRODUCTION-CHECKLIST.md);
-  the questions for IT: [`docs/deploy/it-request-mysql.md`](docs/deploy/it-request-mysql.md).
+  Step by step: [`docs/deploy/PRODUCTION-CHECKLIST.md`](./PRODUCTION-CHECKLIST.md);
+  the questions for IT: [`docs/deploy/it-request-mysql.md`](./it-request-mysql.md).
 
 ---
 
@@ -36,11 +36,11 @@ npm run dev                     # scripts/dev-tcms.mjs — refuses a non-mysql D
 
 ## 2. Production deployment on company IT
 
-**Step-by-step for the server: [`docs/deploy/PRODUCTION-CHECKLIST.md`](docs/deploy/PRODUCTION-CHECKLIST.md)**
+**Step-by-step for the server: [`docs/deploy/PRODUCTION-CHECKLIST.md`](./PRODUCTION-CHECKLIST.md)**
 (every env key, systemd units for both processes, nginx, backups cron, go-live steps).
 Summary of the sequence:
 
-1. **Send the IT request** ([`docs/deploy/it-request-mysql.md`](docs/deploy/it-request-mysql.md)): server/port + MySQL 8.4
+1. **Send the IT request** ([`docs/deploy/it-request-mysql.md`](./it-request-mysql.md)): server/port + MySQL 8.4
    version, TEST schema + limited app user (exact grant list included), TLS certs,
    `sql_mode` (STRICT_ALL_TABLES or STRICT_TRANS_TABLES), `utf8mb4` + timezone,
    `max_connections`, backup ownership + one-off restore drill permission,
@@ -49,12 +49,12 @@ Summary of the sequence:
    to the IT host, production `JWT_SECRET`, `TCMS_DEPLOY_ENV=production`,
    `TCMS_ENABLE_SEED` **off**.
 3. **Schema**: `npx prisma migrate deploy` (or hand IT the SQL in `prisma/migrations/`).
-4. **First VP**: `scripts/create-first-vp.mjs` (doc 17 §6).
+4. **First VP**: `scripts/create-first-vp.mjs` (`docs/deploy/operations-runbook.md` §6).
    Production is a fresh start: no data is copied (decision D2).
 5. **Certify and go live** per PRODUCTION-CHECKLIST §6; one backup + restore drill on IT hardware.
 
-Rollback of a release = redeploy the previous tag (doc 17 §2.2); data rollback = restore the
-last mysqldump (doc 17 §2.1).
+Rollback of a release = redeploy the previous tag (`docs/deploy/operations-runbook.md` §2.2); data rollback = restore the
+last mysqldump (`docs/deploy/operations-runbook.md` §2.1).
 
 ## 3. Environment variable reference
 
@@ -80,7 +80,7 @@ Full annotated list: `.env.example`; production values: PRODUCTION-CHECKLIST §1
 
 A channel that is not configured is **skipped with a log line** and never blocks a
 business action. Variable names are in `.env.example`; how delivery works is in
-[`docs/12-realtime-and-deployment.md`](docs/12-realtime-and-deployment.md) §6. Check the
+[`docs/architecture/realtime-and-notifications.md`](../architecture/realtime-and-notifications.md) §6. Check the
 setup without sending anything: `node scripts/send-test-notification.mjs --check`.
 
 ## 5. Go-live checklist (short)

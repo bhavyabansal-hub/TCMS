@@ -40,7 +40,7 @@ export interface CreateNotificationInput {
 // When the service is absent the app degrades to REFRESH-VISIBLE delivery:
 // the DB row below is the guaranteed channel and the client sees it on its
 // next list fetch (page load, socket reconnect, tab re-visible) — there are
-// NO polling timers anywhere in this app (docs/12 §1).
+// NO polling timers anywhere in this app (`docs/architecture/realtime-and-notifications.md` §1).
 // URL comes from the central config (WS_NOTIFY_URL, default 127.0.0.1:3004).
 
 async function broadcastToWs(payload: {

@@ -80,7 +80,7 @@ export async function registerNode() {
   // raising the same backup_failed alert when the newest VALID backup is
   // older than 26 h. Fire-and-forget — never throws into boot or requests;
   // OFF by itself when no backup dir exists. Full contract:
-  // src/lib/server/backup-health.ts + docs/17.
+  // src/lib/server/backup-health.ts + `docs/deploy/operations-runbook.md`.
   const { startBackupHealthMonitor } = await import('./lib/server/backup-health')
   startBackupHealthMonitor()
 

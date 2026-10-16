@@ -9,7 +9,7 @@ Append lessons below (format in README.md). Read this file at the start of every
 - Rule from now on: before filing a bug, confirm the failure is in the product, not the test harness.
 
 ## 2026-10-15 REQ-001
-- What happened: `verify-wiki.mjs:275` and other suites call `process.exit()` at the end of straight-line code, so a throw skips cleanup; a `finally` would also be skipped by an `exit()` inside the `try` and by Ctrl+C (03-review.md sdet §2).
+- What happened: `verify-wiki.mjs:275` and other suites call `process.exit()` at the end of straight-line code, so a throw skips cleanup; a `finally` would also be skipped by an `exit()` inside the `try` and by Ctrl+C (REQ-001 review (git history) sdet §2).
 - Rule from now on: every writing suite sets `process.exitCode` (never `process.exit()` inside `try`), registers a SIGINT handler that runs the same cleanup, prints its stamp first, and offers a `--cleanup-stamp=<n>` mode.
 - What happened: fixture rows in `verify-permission-matrix.mjs:105,148,216` carry no stamp, so title-based cleanup misses them.
 - Rule from now on: clean up by fixture user ids and collected entity ids, never by title alone; titles get the stamp only as a second key.

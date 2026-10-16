@@ -1,4 +1,4 @@
-# 09 · Pages — Bugs (Kanban), Tasks (daily log), Reports
+# Pages — Bugs (Kanban), Tasks (daily log), Reports
 
 > Files: `views/bugs.tsx` (492), `views/tasks.tsx` (546), `views/reports.tsx` (418).
 > Three working surfaces: triage by drag & drop, personal accountability per day, and
@@ -121,7 +121,7 @@ priority donut (`P0 #ef4444, P1 #f97316, P2 #eab308, P3 #0ea5e9`), bugs-by-statu
 The two date inputs in the *Weekly hours* card header (`dateFrom`, `dateTo`) are
 **cosmetic** — `statsApi.reports()` takes no parameters, so changing them refetches
 nothing. The API's `?action=summary` on task-reports *does* accept ranges; wiring the
-UI to it is a straightforward future improvement (file under "next steps", doc 13).
+UI to it is a straightforward future improvement (file under "next steps", `docs/CODEBASE-MAP.md`).
 
 ### Export
 **"Export PDF"** → `window.print()` with a `.print-area` class on the metrics grid —

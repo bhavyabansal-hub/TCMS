@@ -1,4 +1,4 @@
-# 02 · Database Schema — every table explained
+# Database Schema — every table explained
 
 > Source of truth: `prisma/schema.prisma` (MySQL 8.4 provider, utf8mb4). This document mirrors
 > every model, column, relation, default and index, then explains *why* it is shaped

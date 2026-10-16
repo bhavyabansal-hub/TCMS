@@ -1,4 +1,4 @@
-# 07 · Pages — Modules, Test Cases list, Test Case detail
+# Pages — Modules, Test Cases list, Test Case detail
 
 > Files: `views/modules.tsx` (511 lines), `views/test-cases.tsx` (411),
 > `views/test-case-detail.tsx` (626). These three screens cover the authoring core of

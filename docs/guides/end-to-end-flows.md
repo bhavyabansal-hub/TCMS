@@ -1,8 +1,8 @@
-# 11 · End-to-End Flows — click to database and back
+# End-to-End Flows — click to database and back
 
 > The complete stories behind the six things this system does. Each flow names every
 > file, function, endpoint, table and status change in order. These are the "movie
-> versions" of docs 04–10; use them to trace or debug any real interaction.
+> versions" of `docs/architecture/api-reference.md`–10; use them to trace or debug any real interaction.
 
 ---
 

@@ -1,4 +1,4 @@
-# 03 · Authentication, Sessions & Permissions
+# Authentication, Sessions & Permissions
 
 > How a user proves who they are, how the app remembers them, and exactly who is
 > allowed to do what. Server logic: `src/lib/auth.ts`; client logic:
@@ -245,4 +245,4 @@ double-checks the confirmation field and length before even sending.
 4. **CSRF**: `SameSite=Lax` httpOnly cookies + every state-changing request must carry a
    matching Origin or the `X-Requested-With: tcms` header (`assertSameOrigin`, `src/lib/api.ts`).
 5. Search filters use case-INSENSITIVE `LIKE` on MySQL 8.4 (utf8mb4_unicode_ci columns) — since the 2026-10-14 migration;
-   not a security one (documented in `04-api-reference.md`).
+   not a security one (documented in `docs/architecture/api-reference.md`).

@@ -1,9 +1,7 @@
-# 12 · Realtime Service & Deployment Architecture
+# Realtime & Notifications
 
-> How the optional WebSocket mini-service works, and how the whole system maps onto
-> TCMS runs on **MySQL 8.4** (utf8mb4, strict mode), one app instance behind nginx.
-> Production steps: [`deploy/PRODUCTION-CHECKLIST.md`](./deploy/PRODUCTION-CHECKLIST.md);
-> local Windows setup: [`LOCAL-SETUP-WINDOWS.md`](./LOCAL-SETUP-WINDOWS.md).
+> How in-app notifications are delivered: the database row, the optional WebSocket
+> mini-service, and email / Telegram.
 
 ---
 
@@ -58,73 +56,7 @@ verifier: `node scripts/ws-auth-probe.mjs` (PASS=10 FAIL=0). Production CORS is
 fail-closed as well — the service refuses to start when `WS_CORS_ORIGIN` is unset or
 `*`. Reverse-proxy deployment recipes: `docs/deploy/reverse-proxy-websocket.md`.
 
-## 3. Production topology (Linux + nginx + MySQL 8.4)
-
-> ### ⚠️ SINGLE-INSTANCE ONLY — read this before running more than one server
->
-> TCMS is engineered as a **single-instance application**. One Node process (one
-> Next.js server, one notifications mini-service) holds live state that a second
-> instance would not share:
->
-> | In-process state | Where | Why a second instance breaks it |
-> |---|---|---|
-> | TTL cache (`src/lib/server/cache.ts`) | globalThis Map | Each node caches its own copy of stats aggregates and permission matrices. Writes invalidate the cache **on the writing node only** → other nodes serve stale data until their TTL expires (up to 5 min for stats). |
-> | WebSocket hub (`notifications` mini-service) | in-memory socket map | A user connected to node A will never receive events emitted by node B — the event is only broadcast to A's local sockets. |
-> | In-flight refresh coalescing, single-flight permission cache | per-process | Benign (correctness holds), but cache-warming happens per node. |
-> | Session auth | **safe** | httpOnly-cookie JWT sessions are stateless for access tokens; refresh tokens live in MySQL 8.4 — any instance can validate/rotate them. |
->
-> **What must change before scaling horizontally (multi-server / multi-region):**
-> 1. **Redis** (or equivalent) replaces the in-process TTL cache — shared read-through
->    cache + shared invalidation events (pub/sub) so a write on any node invalidates
->    everywhere. `withCache()`/`invalidateCache()` are the only two call sites to swap.
-> 2. **Redis pub/sub fan-out for notifications** — the mini-service subscribes to a
->    channel instead of an in-memory queue, and every node's socket hub relays to its
->    own connected clients (`src/lib/server/delivery.ts` is the single seam).
-> 3. **Sticky sessions are NOT required** (cookie sessions are stateless), but the WS
->    gateway must allow any node to serve any socket.
-> 4. MySQL `max_connections` sizing × instance count (pool is `connection_limit`
->    per process; see `scripts/start-tcms.sh` / `src/lib/db.ts`).
->
-> Until then: run **one** Next.js instance (+ the one notifications mini-service)
-> and scale vertically (bigger box, bigger `connection_limit`).
-
-```
-  browser ── HTTPS :443 ──▶ nginx (TLS, reverse proxy)
-                              ├─ /            ──▶ Next.js app   127.0.0.1:3000  (.next/standalone/server.js)
-                              └─ /socket.io/  ──▶ notifications 127.0.0.1:3003  (loopback broadcast :3004)
-                                                        │
-  Next.js app ── pooled connection (connection_limit) ──▶ MySQL 8.4 (company IT server)
-```
-
-Two systemd services (`tcms-app`, `tcms-ws`); the firewall allows only 80/443.
-Details, env file and go-live order: [`deploy/PRODUCTION-CHECKLIST.md`](./deploy/PRODUCTION-CHECKLIST.md);
-nginx block: [`deploy/reverse-proxy-websocket.md`](./deploy/reverse-proxy-websocket.md).
-
-### Connection strings
-`DATABASE_URL` is the app user (DML only). `DIRECT_URL` is the migrate user used by
-`prisma migrate deploy` (DDL only). Both are `mysql://` URLs; the app refuses anything else.
-
-### Health and safety switches
-| | |
-|---|---|
-| `GET /api` | liveness |
-| `GET /api/ready` | readiness — 503 when MySQL is down |
-| `TCMS_READ_ONLY=true` | every write answers 503 (sign-in and reading keep working) |
-| `TCMS_DEPLOY_ENV=production` | turns on the startup guard (refuses unsafe settings) |
-
-
-## 4. Local development topology (Windows)
-
-```
-npm run dev (scripts/dev-tcms.mjs → next dev :3000)  ←→  MySQL 8.4 at 127.0.0.1:5500 (tcms_test)
-        │
-        └─ notify fetch → localhost:3003 (mini-services/notifications, optional)
-```
-
-`npm run dev` refuses a non-MySQL `DATABASE_URL`. Schema: `npx prisma migrate deploy`.
-Full steps: [`LOCAL-SETUP-WINDOWS.md`](./LOCAL-SETUP-WINDOWS.md).
-
-## 6. External notification delivery — email & Telegram
+## 3. External notification delivery — email & Telegram
 
 `src/lib/server/delivery.ts` fans every `createNotification()` call out to the
 recipient's configured channels. Delivery is **per-user opt-in** (Settings →
@@ -144,16 +76,4 @@ comments, bug assignment, test-case updates, module creation, and **password
 changed** (security alert — also revokes all of the user's refresh tokens).
 Verify with `TCMS_BASE_URL=http://localhost:3000 node scripts/verify-notifications.mjs`.
 
-## 7. Operations quick reference
-
-| Task | How |
-|---|---|
-| Deploy an app change | checkout the release tag → `npm ci` → `npm run build` → restart `tcms-app` (PRODUCTION-CHECKLIST §3) |
-| Change a secret | edit `/etc/tcms/tcms.env` → restart the service (`NEXT_PUBLIC_*` needs a rebuild) |
-| Create tables on a fresh DB | `npx prisma migrate deploy` (applies `prisma/migrations/`) |
-| First admin | `scripts/create-first-vp.mjs` (doc 17 §6) |
-| Pause all writes | `TCMS_READ_ONLY=true` + restart |
-| Inspect data | MySQL Workbench / `mysql` client with a read-only user |
-| Backups | nightly `mysqldump` via `scripts/backup-scheduler.mjs` (doc 17 §2) |
-| Logs | `journalctl -u tcms-app` / `journalctl -u tcms-ws` |
-
+Deployment topology and scaling: [`HLD.md`](./HLD.md) §6–§7.

@@ -4,8 +4,8 @@ Six agents build and maintain TCMS together: **manager**, **product-owner**,
 **developer-backend**, **developer-frontend**, **tester**, **sdet**.
 The human owner has the final say on scope, BRD approval and release.
 
-Every agent reads this file, `docs/process/coding-standards.md`, `CLAUDE.md`,
-`agent.md` and its own `docs/process/lessons/<role>.md` before doing anything.
+Every agent reads this file, `docs/CODING-STANDARDS.md`, `CLAUDE.md`,
+`docs/CODING-STANDARDS.md` and its own `docs/process/lessons/<role>.md` before doing anything.
 
 ---
 
@@ -18,7 +18,7 @@ Every agent reads this file, `docs/process/coding-standards.md`, `CLAUDE.md`,
 - A "meeting" = every required agent writes its own section into the same
   requirement document. Nobody edits another agent's section; they reply below it.
 - Agents keep **no memory between runs**. Everything they need lives in files:
-  the requirement folder, `worklog.md`, `docs/process/decisions.md` and
+  the requirement folder, `docs/worklog.md`, `docs/process/decisions.md` and
   `docs/process/lessons/`. If it is not written down, it did not happen.
 - Commands: `/new-requirement <title>`, `/build-requirement <REQ-ID>`,
   `/fix-bug <BUG-ID or description>`, `/quick-fix <description>` (fast lane, §3a),
@@ -26,16 +26,16 @@ Every agent reads this file, `docs/process/coding-standards.md`, `CLAUDE.md`,
 
 ## 2. Requirement folder
 
-Every requirement gets `docs/requirements/REQ-<NNN>-<slug>/`:
+Every requirement gets `docs/process/requirements/REQ-<NNN>-<slug>/`:
 
 | File | Written by | Phase |
 |---|---|---|
-| `01-kickoff.md` | manager | 1 |
-| `02-brd.md` | product-owner | 2 |
-| `03-review.md` | all six, one section each; manager closes it | 3 |
-| `04-design.md` (LLD) | developer-backend + developer-frontend | 5 |
-| `05-test-plan.md` | tester (manual) + sdet (automated) | 5 |
-| `06-dev-report.md` | developers | 6 |
+| `REQ-001 kickoff (git history)` | manager | 1 |
+| `REQ-001 brd (git history)` | product-owner | 2 |
+| `REQ-001 review (git history)` | all six, one section each; manager closes it | 3 |
+| `REQ-001 design (git history)` (LLD) | developer-backend + developer-frontend | 5 |
+| `REQ-001 test-plan (git history)` | tester (manual) + sdet (automated) | 5 |
+| `REQ-001 dev-report (git history)` | developers | 6 |
 | `07-test-report.md` | tester + sdet | 7 |
 | `08-uat.md` | product-owner | 8 |
 | `bugs/BUG-<NNN>.md` | tester / sdet (found), developers (fix notes) | 7–9 |
@@ -48,16 +48,16 @@ Templates: `docs/process/templates/`.
 
 | # | Phase | Who | Gate to pass before the next phase |
 |---|---|---|---|
-| 0 | Intake | facilitator | Owner's request copied verbatim into `01-kickoff.md` |
+| 0 | Intake | facilitator | Owner's request copied verbatim into `REQ-001 kickoff (git history)` |
 | 1 | Kickoff meeting | manager | Scope in/out written; affected files verified by reading them |
 | 2 | BRD | product-owner | Every requirement has acceptance criteria; every page has a route + permission |
 | 3 | BRD review meeting | all six | Each role wrote APPROVE or CHANGES with reasons; manager resolved every CHANGES |
-| 4 | **Owner approval** | human owner | Owner writes "APPROVED" in `03-review.md`. **No code before this.** |
+| 4 | **Owner approval** | human owner | Owner writes "APPROVED" in `REQ-001 review (git history)`. **No code before this.** |
 | 5 | Design (LLD) + test plan | developers, tester, sdet | Design maps every BRD item to files/layers; test plan maps every acceptance criterion to a test |
-| 6 | Development | developers | Definition of Done in `agent.md` §3 passes (raw output pasted) |
-| 7 | Testing | tester + sdet | Every acceptance criterion tested; new automated tests added; `agent.md` §3 suites green |
+| 6 | Development | developers | Definition of Done in `docs/CODING-STANDARDS.md` §5 passes (raw output pasted) |
+| 7 | Testing | tester + sdet | Every acceptance criterion tested; new automated tests added; `docs/CODING-STANDARDS.md` §5 suites green |
 | 8 | UAT | product-owner | Every acceptance criterion marked PASS with evidence |
-| 9 | Bug loop | all | No open S1/S2 bugs; every fix re-tested; `agent.md` §3 suites green again |
+| 9 | Bug loop | all | No open S1/S2 bugs; every fix re-tested; `docs/CODING-STANDARDS.md` §5 suites green again |
 | 10 | Release review | manager → owner | Every gate PASS with evidence; owner says "RELEASE" |
 | 11 | Retrospective | all | Lessons written; proposed process edits listed for owner approval |
 
@@ -78,10 +78,10 @@ kickoff, BRD, review meeting, UAT or retro.
 
 Flow:
 1. **Developer** (backend or frontend, by area): reproduce or state the problem, fix it
-   following `agent.md`, add or extend an automated check, run `npx tsc --noEmit`.
-2. **sdet**: runs `agent.md` §3 (tsc, eslint, the DoD suites; build when `src/` changed)
+   following `docs/CODING-STANDARDS.md`, add or extend an automated check, run `npx tsc --noEmit`.
+2. **sdet**: runs `docs/CODING-STANDARDS.md` §5 (tsc, eslint, the DoD suites; build when `src/` changed)
    and pastes the raw counts.
-3. **Done**: one commit (`MAINT: …` or `BUG-NNN: …`), `worklog.md` entry (what, evidence,
+3. **Done**: one commit (`MAINT: …` or `BUG-NNN: …`), `docs/worklog.md` entry (what, evidence,
    NOT VERIFIED). Never push — the owner pushes.
 
 If the job grows past the left column while working, **stop** and switch to
@@ -103,12 +103,12 @@ in §4 and the stop conditions in §7 apply unchanged.
 7. Each agent edits only the paths its agent file allows.
 
 ### Code and data safety
-8. Coding standards (`agent.md`; owner's wording in `coding-standards.md`) are mandatory.
+8. Coding standards (`docs/CODING-STANDARDS.md`; owner's wording in `coding-standards.md`) are mandatory.
    A deviation needs the owner's written approval in `docs/process/decisions.md`.
 9. Never delete data, drop tables, edit `.env` secrets or touch production. Ask first.
 10. Never print secrets, passwords or tokens in docs, logs or output.
-11. Schema changes, commits and git history: `agent.md` §2a and §4 (step 6).
-12. Database, Windows and secrets rules: `agent.md` §6 (port 5500 only, never 3306).
+11. Schema changes, commits and git history: `docs/CODING-STANDARDS.md` §4 and §4 (step 6).
+12. Database, Windows and secrets rules: `docs/CODING-STANDARDS.md` §8 (port 5500 only, never 3306).
 
 ### Communication
 13. Every agent ends its run with the STATUS block from its agent file.

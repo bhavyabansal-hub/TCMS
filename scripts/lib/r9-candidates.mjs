@@ -1,4 +1,4 @@
-// R9 candidate selection (04-design.md 2.2), shared by cleanup-req001-testdata.mjs and
+// R9 candidate selection (REQ-001 design (git history) 2.2), shared by cleanup-req001-testdata.mjs and
 // check-suite-residue.mjs --pattern. SELECT only. Raw SQL, parameterized; id lists via sqlIn.
 import { Prisma } from '@prisma/client'
 import { sqlIn } from './db-guard.mjs'

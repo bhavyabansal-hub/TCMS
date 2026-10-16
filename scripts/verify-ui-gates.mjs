@@ -1,5 +1,5 @@
 /**
- * REQ-001 Q7 — automated UI gate checks for R1–R3 (05-test-plan.md A6), read-only.
+ * REQ-001 Q7 — automated UI gate checks for R1–R3 (REQ-001 test-plan (git history) A6), read-only.
  *
  * Headless Chrome over the DevTools protocol (no new dependency: Node's global WebSocket),
  * own profile `--user-data-dir=<os.tmpdir()>\tcms-ui-gates-<stamp>` (never the owner's),
@@ -37,7 +37,7 @@ const INTEGRATIONS_DENIED = 'Integrations are only available to roles with the m
 const ACTIVITY_DENIED = 'The activity log is only available to roles with view-activity-log rights.'
 const CREWDESK_NOT_CONFIGURED = 'Crew Desk integration is not configured'
 
-// Default-matrix expectations (02-brd.md R2 table). Order: vp, manager, product, developer, qa_engineer, viewer.
+// Default-matrix expectations (REQ-001 brd (git history) R2 table). Order: vp, manager, product, developer, qa_engineer, viewer.
 const ROLES = ['vp', 'manager', 'product', 'developer', 'qa_engineer', 'viewer']
 const yes = (...flags) => Object.fromEntries(ROLES.map((r, i) => [r, flags[i]]))
 const HEADER_BUTTONS = {
