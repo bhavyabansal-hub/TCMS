@@ -4,6 +4,7 @@
 // Covers every fix from the permission-correctness pass.
 // Sandbox-only. Usage: node scripts/verify-permissions.mjs
 import { randomUUID } from 'node:crypto'
+import { cleanupRunEntities } from './lib/suite-cleanup.mjs'
 
 const BASE = 'http://localhost:3000'
 let pass = 0
@@ -41,6 +42,9 @@ async function api(token, method, path, body) {
   return { status: res.status, data }
 }
 
+// B16: every row this run creates is recorded here and removed at the end.
+const created = { cases: [], bugs: [], moduleReviews: [] }
+
 async function main() {
   const vp = await login('admin@tcms.com', 'Admin@123')
   const manager = await login('teamlead@tcms.com', 'Lead@123')
@@ -62,8 +66,11 @@ async function main() {
     steps: [{ stepNumber: 1, action: 'Run', expected: 'Pass' }],
   })
   check('fixture: qa created a draft case', !!tcCreate.data?.testCaseId, JSON.stringify(tcCreate.data).slice(0, 100))
+  if (tcCreate.data?.testCaseId) created.cases.push(tcCreate.data.testCaseId)
   const modSubmit = await api(qa, 'PUT', `/api/modules?id=${target?.moduleId}&action=submit-review`, { includeSubmodules: false })
   check('fixture: module review raised (manager auto-picked)', modSubmit.status === 200, JSON.stringify(modSubmit.data).slice(0, 140))
+  const raisedId = modSubmit.data?.moduleReview?.moduleReviewRequestId
+  if (raisedId) created.moduleReviews.push(raisedId)
 
   // ---- 1. GRANTED -> Manager SEES the raised reviews ----
   const mQueue = await api(manager, 'GET', '/api/reviews?action=queue')
@@ -106,14 +113,18 @@ async function main() {
   check('manager GET module-review detail -> 200', mMod.status === 200, `got ${mMod.status}`)
 
   // ---- 5. Bug triage: viewer read-only; developer (create_bug) can triage ----
+  // Runs on a bug this suite creates (B16: never touch seed bugs).
   const bugs = await api(developer, 'GET', '/api/bugs?pageSize=5')
   check('developer can list bugs', bugs.status === 200)
-  let bugId = bugs.data?.data?.[0]?.bugId
-  if (!bugId) {
-    const created = await api(developer, 'POST', '/api/bugs', { title: 'Permission battery temp bug', severity: 'low' })
-    bugId = created.data?.bugId
-    check('developer created a bug (create_bug granted)', !!bugId)
-  }
+  const tempBug = await api(developer, 'POST', '/api/bugs', {
+    title: `Permission battery temp bug ${Date.now()}`,
+    description: 'Fixture for the permissions suite',
+    severity: 'low',
+    moduleId: target?.moduleId,
+  })
+  const bugId = tempBug.data?.bugId
+  if (bugId) created.bugs.push(bugId)
+  check('developer created a bug (create_bug granted)', !!bugId, `got ${tempBug.status} ${JSON.stringify(tempBug.data).slice(0, 120)}`)
   const vBug = await api(viewer, 'PUT', `/api/bugs?id=${bugId}`, { status: 'in_progress' })
   check('viewer PUT bug status -> 403 (no bug rights)', vBug.status === 403, `got ${vBug.status}`)
   const dBug = await api(developer, 'PUT', `/api/bugs?id=${bugId}`, { status: 'in_progress' })
@@ -179,10 +190,16 @@ async function main() {
   const unknownRows = nonDefault.filter((t) => !KNOWN_GRANTS.has(`${t.role}:${t.action}`))
   check('only known seed overrides remain (or pristine defaults)', unknownRows.length === 0, `got ${JSON.stringify(nonDefault)}`)
 
+  await cleanupRunEntities(check, created)
+
   console.log('======================================')
   console.log(`PERMISSION-BEHAVIOR RESULT: ${pass} passed, ${fail} failed`)
   console.log('======================================')
   if (fail > 0) process.exit(1)
 }
 
-main().catch((e) => { console.error(e); process.exit(1) })
+main().catch(async (e) => {
+  console.error(e)
+  await cleanupRunEntities(check, created)
+  process.exit(1)
+})
