@@ -319,6 +319,29 @@ A malformed value → 400. The guarded UPDATE runs before any child insert (hist
 review events), so parallel saves wait for each other instead of deadlocking.
 Race test: `node scripts/verify-concurrency.mjs` → `34 passed, 0 failed` (2026-10-16).
 
+## 15c. Database errors → API errors (`src/lib/server/db-errors.ts`, used by `withApi`)
+
+The client never sees SQL text, table/column names or driver messages; the original
+error goes to the server log only (`logs/app-*` warn line with the MySQL errno, or
+`logs/error-*` for 503s).
+
+| MySQL / Prisma | Status | `error` |
+|---|---|---|
+| 1062 duplicate key (P2002) | 409 | This record already exists — one of its values must be unique. |
+| 1451 row still referenced | 409 | This item is still used by other records and cannot be removed. |
+| 1452 referenced row missing (P2003) | 400 | A referenced item does not exist — check the selected module, user or test case. |
+| 1406 data too long (P2000) | 400 | A value is too long for its field. |
+| 1048 NOT NULL · 1264 out of range · 1366/1292/3140 bad value | 400 | A required value is missing. / A value is out of range. / A value has the wrong format. |
+| 1213 deadlock · 1205 lock wait timeout | 409 | Someone else is saving the same item right now — try again. |
+| P2024 pool timeout | 503 | The server is busy — try again in a moment. |
+| P1001/P1002/P1017, 2002/2003/2006/2013, init error | 503 | The database is unavailable — try again shortly. |
+| anything else | 500 | Internal server error |
+
+`POST /api/task-reports` keeps its upsert contract under a race: the loser of the
+unique (user, date) insert is retried as an update (6 parallel saves → 6 × 200).
+Verifier: `node scripts/verify-db-errors.mjs` → `21 passed, 0 failed` (real MySQL
+errors raised in rolled-back transactions + live upsert race).
+
 ## 16. Known quirks (documented on purpose)
 
 1. `stats` unknown action → 200 with `{error}` (everywhere else 400).

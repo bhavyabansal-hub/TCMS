@@ -2,6 +2,7 @@
 
 ## 2026-10-16 — MAINT production run
 
+- **Database errors:** duplicate, foreign-key, too-long and similar MySQL errors now answer a clear 400/409 (DB down or busy: 503) instead of a generic 500; SQL text never reaches the client. Two saves of the same day's work log at once no longer fail.
 - **Concurrent edits:** saving a test case, bug, module, review verdict/forward or a module bulk verdict that someone else changed since you opened it now answers **409 "This item was changed by someone else — reload"** instead of silently overwriting (optimistic lock on the loaded updatedAt). Parallel test-case saves and parallel verdicts no longer fail with a 500 deadlock.
 
 ## 2026-10-14 — Owner 8-step plan (steps 1–3) + Phase 2 hardening (post-migration)

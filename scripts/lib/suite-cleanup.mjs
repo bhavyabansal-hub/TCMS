@@ -22,6 +22,7 @@ function deleteRunNotifications(tx, e, userIds) {
     OR (entity_type = 'review'        AND ${sqlIn('entity_id', e.reviews)})
     OR (entity_type = 'module_review' AND ${sqlIn('entity_id', e.moduleReviews)})
     OR (entity_type = 'bug'           AND ${sqlIn('entity_id', e.bugs)})
+    OR (entity_type = 'task_report'   AND ${sqlIn('entity_id', e.taskReports)})
     OR ${sqlIn('user_id', userIds)}`
 }
 
@@ -33,6 +34,7 @@ async function deleteRunRows(tx, e, users) {
   removed.module_review_requests = await tx.$executeRaw`DELETE FROM module_review_requests
     WHERE ${sqlIn('module_review_request_id', e.moduleReviews)}`
   removed.modules = await tx.$executeRaw`DELETE FROM modules WHERE ${sqlIn('module_id', e.modules)}`
+  removed.task_reports = await tx.$executeRaw`DELETE FROM task_reports WHERE ${sqlIn('task_report_id', e.taskReports)}`
   removed.refresh_tokens = await tx.$executeRaw`DELETE FROM refresh_tokens WHERE ${sqlIn('user_id', users.ids)}`
   removed.login_attempts = await tx.$executeRaw`DELETE FROM login_attempts WHERE ${sqlIn('email', users.emails)}`
   removed.activity_logs = await tx.$executeRaw`DELETE FROM activity_logs WHERE ${sqlIn('user_id', users.ids)}`
@@ -48,13 +50,15 @@ async function countLeft(tx, e, users) {
     module_review_requests: await n(tx.$queryRaw`SELECT COUNT(*) AS n FROM module_review_requests WHERE ${sqlIn('module_review_request_id', e.moduleReviews)}`),
     bugs: await n(tx.$queryRaw`SELECT COUNT(*) AS n FROM bugs WHERE ${sqlIn('bug_id', e.bugs)}`),
     modules: await n(tx.$queryRaw`SELECT COUNT(*) AS n FROM modules WHERE ${sqlIn('module_id', e.modules)}`),
+    task_reports: await n(tx.$queryRaw`SELECT COUNT(*) AS n FROM task_reports WHERE ${sqlIn('task_report_id', e.taskReports)}`),
     users: await n(tx.$queryRaw`SELECT COUNT(*) AS n FROM users WHERE ${sqlIn('user_id', users.ids)}`),
   }
 }
 
 /**
  * @param {(name: string, cond: boolean, detail?: string) => void} check  the suite's PASS/FAIL counter
- * @param {{ cases?: string[], bugs?: string[], moduleReviews?: string[], modules?: string[] }} created  ids from API responses
+ * @param {{ cases?: string[], bugs?: string[], moduleReviews?: string[], modules?: string[], taskReports?: string[] }} created
+ *   ids from API responses
  *   (modules: leaf modules the run created; their cases and bugs must be in the lists too)
  * @param {{ userIds?: string[], emails?: string[] }} [tempUsers]  fixture users the run registered
  */
@@ -64,6 +68,7 @@ export async function cleanupRunEntities(check, created, tempUsers = {}) {
     bugs: created.bugs ?? [],
     moduleReviews: created.moduleReviews ?? [],
     modules: created.modules ?? [],
+    taskReports: created.taskReports ?? [],
     reviews: [],
   }
   const users = { ids: tempUsers.userIds ?? [], emails: tempUsers.emails ?? [] }

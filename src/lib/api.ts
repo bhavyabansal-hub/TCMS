@@ -3,6 +3,7 @@ import { ZodError } from 'zod'
 import { logger } from './logger'
 import { EXTRA_ALLOWED_HOSTS } from '@/lib/server/config'
 import type { RequestMeta } from './activity'
+import { mapDatabaseError, mysqlErrno } from '@/lib/server/db-errors'
 
 // Standard API response helpers — the ONLY way routes produce responses.
 //
@@ -250,6 +251,15 @@ export async function withApi(
     if (err instanceof ZodError) {
       logger.warn(`${req.method} ${url.pathname}${url.search} -> 400: validation failed`)
       return badRequest('Invalid input', flattenZodError(err))
+    }
+    // Database failures get a clean status + fixed message (never SQL text);
+    // the original error stays in the server log only.
+    const dbError = mapDatabaseError(err)
+    if (dbError) {
+      const line = `${req.method} ${url.pathname}${url.search} -> ${dbError.status}: db ${dbError.kind}`
+      if (dbError.status === 503) logger.error(line, err)
+      else logger.warn(line, { errno: mysqlErrno(err), detail: String((err as Error).message ?? '').slice(-300) })
+      return NextResponse.json(errorBody(dbError.message), { status: dbError.status, headers: NO_STORE_HEADERS })
     }
     logger.error(`${req.method} ${url.pathname}${url.search} -> 500`, err)
     return NextResponse.json(errorBody('Internal server error'), { status: 500, headers: NO_STORE_HEADERS })

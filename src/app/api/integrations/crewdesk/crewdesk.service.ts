@@ -12,7 +12,7 @@
 
 import { ApiError, getPagination, paginate, type PaginatedResponse } from '@/lib/api'
 import { can } from '@/lib/auth'
-import { Prisma } from '@prisma/client'
+import { isDuplicateKeyError } from '@/lib/server/db-errors'
 import {
   CrewDeskError,
   crewDeskAccount,
@@ -38,15 +38,6 @@ import {
   type CrewDeskLinkSqlRow,
 } from './crewdesk.repository'
 import { sanitizeNote } from './crewdesk.validation'
-
-/** True when the error is PostgreSQL's unique-constraint violation surfaced
- *  through Prisma (P2002 for model writes, P2010 for raw SQL with the 23505
- *  detail in the message). Used to turn the duplicate-link race into a 409. */
-function isUniqueViolation(err: unknown): boolean {
-  if (!(err instanceof Prisma.PrismaClientKnownRequestError)) return false
-  if (err.code === 'P2002') return true
-  return err.code === 'P2010' && /duplicate key|unique constraint/i.test(String(err.message))
-}
 
 // ---------- Serialization ----------
 
@@ -330,7 +321,8 @@ export async function createCrewDeskLink(
     // guard: two teammates clicking "Link" at the same moment both pass the
     // pre-check, but only one INSERT can win. Surface that as the same
     // friendly 409 the pre-check produces instead of an opaque 500.
-    if (isUniqueViolation(err)) {
+    // MySQL duplicate key (1062): turns the duplicate-link race into a 409.
+    if (isDuplicateKeyError(err)) {
       throw ApiError.conflict(
         `This module is already linked to ticket ${input.ticketId}. Open the Integrations page to view or retry it.`
       )
