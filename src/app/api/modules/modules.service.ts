@@ -40,7 +40,7 @@ import {
   listTestCasesInModules,
   updateTestCaseStatus,
 } from '../test-cases/test-cases.repository'
-import { insertReviewRequestsForModuleReview } from '../reviews/reviews.repository'
+import { closeOpenReviewsForTestCases, insertReviewRequestsForModuleReview } from '../reviews/reviews.repository'
 import {
   findLatestModuleReviewCycle,
   insertModuleReviewRequest,
@@ -272,6 +272,9 @@ export async function submitModuleForReview(
     dueDate,
     cycle,
   })
+
+  // A resubmit supersedes each case's old open review cycle (R2-1).
+  await closeOpenReviewsForTestCases(testCases.map((tc) => tc.test_case_id))
 
   // One case review per eligible test case, linked to the module review.
   await insertReviewRequestsForModuleReview(

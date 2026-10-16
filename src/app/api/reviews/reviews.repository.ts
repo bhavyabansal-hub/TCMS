@@ -87,6 +87,16 @@ export async function updateReviewRequestStatus(
     WHERE review_request_id = ${reviewRequestId}`
 }
 
+/** Closes every still-open review of these test cases (a resubmit supersedes the old
+ *  cycle, deep-test R2-1). Returns the number of reviews closed. */
+export async function closeOpenReviewsForTestCases(testCaseIds: string[], tx: SqlExecutor = db): Promise<number> {
+  if (testCaseIds.length === 0) return 0
+  const closed = await tx.$executeRaw`
+    UPDATE review_requests SET status = 'completed', updated_at = UTC_TIMESTAMP(3)
+    WHERE test_case_id IN (${Prisma.join(testCaseIds)}) AND status <> 'completed'`
+  return Number(closed)
+}
+
 /** `AND updated_at = ?` when an optimistic-lock value is given (B2), else nothing. */
 function updatedAtGuard(expectedUpdatedAt?: Date): Prisma.Sql {
   return expectedUpdatedAt ? Prisma.sql`AND updated_at = ${expectedUpdatedAt}` : Prisma.empty

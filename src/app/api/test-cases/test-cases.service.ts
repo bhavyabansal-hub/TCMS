@@ -33,6 +33,7 @@ import {
   type TestCaseUpdateFields,
 } from './test-cases.repository'
 import {
+  closeOpenReviewsForTestCases,
   findLatestCycleForTestCase,
   insertReviewRequest,
   listEventsByRequestIds,
@@ -266,7 +267,10 @@ export async function submitTestCaseForReview(
   const cycle = (await findLatestCycleForTestCase(testCaseId)) + 1
   // Review request + status flip commit together: a crash can never leave a
   // pending review whose test case still reads "draft" (or vice versa).
+  // The old open cycle (e.g. after needs_revision) is closed in the same unit, so a
+  // late verdict on it is refused and the queue holds one open review (R2-1).
   const review = await db.$transaction(async (tx) => {
+    await closeOpenReviewsForTestCases([testCaseId], tx)
     const created = await insertReviewRequest(
       {
         testCaseId,
