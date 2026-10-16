@@ -145,7 +145,9 @@ manager (4) < vp (5)`. VP is the top admin.
 **Permissions** panel and flips any cell (e.g. "let Developers create test
 cases") — the change applies immediately: `PUT /api/permissions` upserts the
 override, invalidates the in-memory cache, and the next permission check
-everywhere uses the new value. 16 togglable actions × 6 roles.
+everywhere uses the new value. 21 togglable actions × 6 roles = 126 cells
+(`PERMISSION_ACTIONS` in `src/types/index.ts`; the `PUT` reply says `source: 'default'`
+when the toggle removed the override row).
 
 How checks resolve: `can(role, action)` (src/lib/permissions.ts) consults the
 override cache first, then falls back to defaults; services gate through
@@ -159,7 +161,7 @@ Two enforcement layers exist and both are always applied:
 1. **Permission matrix** — coarse capability check (above; overrides win).
 2. **Ownership checks** in the services — e.g. `edit_own_test_case` additionally
    verifies `case.authorId === me.userId`; review verdicts verify
-   `review.reviewerId === me.userId || role === 'vp'`.
+   `review.reviewerId === me.userId` (assigned reviewer only — no VP bypass).
 
 The UI mirrors these rules so forbidden controls simply don't render (sidebar
 items, action buttons, the Users and Permissions panels). **The UI checks are
@@ -168,50 +170,62 @@ directly gets 403.
 
 ## 6. Endpoint-by-endpoint protection map
 
+Verified against the services on 2026-10-16 (deep test, `docs/qa/DEEP-TEST-2026-10-16.md`).
+✓ = session required (401 without). "own" checks happen after the permission check.
+
 | Endpoint (method) | Auth | Permission / extra check |
 |---|---|---|
-| `POST /api/auth?path=register` | — | Self-signup → creates a `viewer` account + signs in (409 duplicate, 400 invalid) |
-| `POST /api/auth?path=login` | none | — |
-| `POST /api/auth?path=refresh` / `logout` | none | refresh: valid unrevoked token row |
-| `GET / PUT /api/auth` (me / profile / password) | ✓ | self only; role/email immutable via this route |
-| `GET /api/seed` / `POST /api/seed` | none | no-op once any user exists |
-| `GET /api/stats?action=dashboard` | ✓ | any role |
-| `GET /api/stats?action=reports` | ✓ | `view_all_task_reports` (403 `Team lead or admin only`) |
-| `GET /api/modules` (+`?id=`) | ✓ | any role |
+| `GET /api`, `GET /api/ready` | none | liveness / readiness |
+| `POST /api/auth?path=register` | none | only when `TCMS_ALLOW_SIGNUP=true` (else 403); creates a `viewer` |
+| `POST /api/auth?path=login` / `refresh` / `logout` | none | per-email lock (5 → 60 s) + per-IP failed-sign-in limit (429) |
+| `GET / PUT /api/auth` (me / profile / password), `?path=ws-ticket` | ✓ | self only; role/email immutable via this route |
+| `GET / POST /api/seed` | none | 403 unless `TCMS_ENABLE_SEED=true`; no-op once any user exists |
+| `GET /api/stats?action=dashboard` | ✓ | any role; the recent-activity part needs `view_activity_logs` |
+| `GET /api/stats?action=reports` | ✓ | `view_all_task_reports` |
+| `GET /api/search` | ✓ | any role |
+| `GET /api/modules` (tree, `?id=`) | ✓ | any role |
 | `POST /api/modules` | ✓ | `create_module` |
 | `PUT /api/modules?id=` | ✓ | `edit_module` |
-| `PUT /api/modules?id=&action=submit-review` | ✓ | `submit_review` |
-| `DELETE /api/modules?id=` | ✓ | `admin`/`team_lead` **or** module creator |
-| `GET /api/test-cases` (list/history/reviews/detail) | ✓ | any role |
-| `POST /api/test-cases` | ✓ | `create_test_case` |
-| `PUT /api/test-cases?id=` | ✓ | `edit_any_test_case` **or** (author ∧ `edit_own_test_case`) |
-| `PUT /api/test-cases?id=&action=submit-review` | ✓ | `submit_review` |
-| `DELETE /api/test-cases?id=` | ✓ | author **or** `delete_test_case` (PERMANENT delete — row + history + review links removed; confirm dialog client-side) |
-| `GET /api/reviews?id=` / `?action=queue` | ✓ | any role |
-| `GET /api/reviews` (all, paginated) | ✓ | any role *(weak spot — see §8)* |
-| `POST /api/reviews?id=` (verdict) | ✓ | `perform_review` ∧ (assigned reviewer ∨ admin) |
-| `GET /api/module-reviews` (`?action=queue`) | ✓ | any role |
-| `GET /api/module-reviews?action=all` | ✓ | `view_all_task_reports` |
-| `GET /api/module-reviews?id=` | ✓ | any role |
-| `POST /api/module-reviews?id=&action=approve-all` | ✓ | `perform_review` ∧ (assigned reviewer ∨ admin) |
-| `GET /api/bugs` (list/detail/links) | ✓ | any role |
-| `POST /api/bugs` | ✓ | `create_bug` |
-| `PUT /api/bugs?id=` (fields) | ✓ | any authenticated user *(by design: anyone can move a board card)* |
-| `PUT /api/bugs?id=` (with `assignedToId`) | ✓ | additionally `assign_bug`, else 403 |
-| `PUT /api/bugs?id=&action=link-tc` | ✓ | any authenticated user |
-| `DELETE /api/bugs?id=` | ✓ | **admin only** (hard delete) |
+| `PUT /api/modules?id=&action=submit-review` | ✓ | `submit_review`; only draft / needs_revision cases; closes their old open reviews |
+| `DELETE /api/modules?id=` | ✓ | module creator **or** `edit_module` (hard delete; submodules + module reviews cascade, cases/bugs keep the row with `module_id` NULL) |
+| `GET /api/test-cases` (list, `?id=`, history, reviews) | ✓ | any role |
+| `POST /api/test-cases`, `?action=import`, `?action=import-template` | ✓ | `create_test_case` |
+| `PUT /api/test-cases?id=` | ✓ | `edit_any_test_case` **or** (author ∧ `edit_own_test_case`); 409 on a stale `expectedUpdatedAt` |
+| `PUT /api/test-cases?id=&action=submit-review` | ✓ | `submit_review`; 400 when the case is in_review or approved; closes the case's old open review |
+| `DELETE /api/test-cases?id=`, `?action=bulk-delete` | ✓ | author **or** `delete_test_case` (hard delete) |
+| `GET /api/reviews?action=queue` | ✓ | any role, own queue only |
+| `GET /api/reviews` (all), `GET /api/reviews?id=` | ✓ | `perform_review` (403 otherwise) |
+| `POST /api/reviews?id=` (verdict) | ✓ | `perform_review` ∧ assigned reviewer; 400 when the review is completed; 409 stale |
+| `POST /api/reviews?id=&action=forward` | ✓ | `perform_review`; open reviews only |
+| `GET /api/module-reviews?action=queue` | ✓ | any role, own queue only |
+| `GET /api/module-reviews?action=all`, `?id=` | ✓ | `perform_review` |
+| `POST /api/module-reviews?id=&action=bulk-verdict` / `approve-all` | ✓ | `perform_review` ∧ assigned reviewer; 409 stale |
+| `POST /api/module-reviews?id=&action=change-reviewer` | ✓ | `perform_review` |
+| `GET /api/bugs` (list, `?id=`, `&action=links`) | ✓ | any role |
+| `POST /api/bugs` | ✓ | `create_bug`; an `assignedToId` additionally needs `assign_bug` |
+| `PUT /api/bugs?id=` (fields, status) | ✓ | `create_bug` **or** `assign_bug`; 409 stale |
+| `PUT /api/bugs?id=` changing the assignee | ✓ | additionally `assign_bug` (re-sending the current assignee needs nothing extra) |
+| `PUT /api/bugs?id=&action=link-tc` | ✓ | `create_bug` **or** `assign_bug` |
+| `DELETE /api/bugs?id=` | ✓ | `delete_bug` (hard delete; vp + manager by default) |
 | `GET /api/task-reports?action=my` | ✓ | self |
 | `GET /api/task-reports?action=summary` | ✓ | `view_all_task_reports` |
 | `GET /api/task-reports?id=` | ✓ | owner ∨ `view_all_task_reports` |
-| `GET /api/task-reports` (list) | ✓ | non-managers force-filtered to own rows |
-| `POST /api/task-reports` (upsert) | ✓ | `create_task_report`; row owned by caller |
-| `PUT /api/task-reports?id=` | ✓ | **owner only** (even admins can't edit others' reports) |
-| `GET /api/activity-logs` (full list) | ✓ | `view_activity_logs` |
-| `GET /api/activity-logs?action=entity` / `=user` | ✓ | any authenticated user *(check happens after these branches — see §8)* |
-| `GET /api/notifications` | ✓ | always scoped to `userId = me` |
-| `POST /api/notifications?action=read-all` | ✓ | self rows only |
-| `PATCH/DELETE /api/notifications?id=` | ✓ | owner only (400 `Not your notification` otherwise) |
-| `/api/users` **all methods** | ✓ | `manage_users` → effectively **admin only** (403 `Admin only`) |
+| `GET /api/task-reports` (list, `?action=export`) | ✓ | without `view_all_task_reports` force-filtered to own rows |
+| `POST /api/task-reports` (upsert) | ✓ | `create_task_report`; row owned by the caller |
+| `PUT /api/task-reports?id=` | ✓ | `create_task_report` ∧ owner (even VPs cannot edit others' reports) |
+| `GET /api/activity-logs` (all branches: list, `?action=entity`, `?action=user`) | ✓ | `view_activity_logs` |
+| `GET /api/notifications`, `POST ?action=read-all` | ✓ | own rows only |
+| `PATCH / DELETE /api/notifications?id=` | ✓ | owner only (403), unknown id 404 |
+| `GET /api/users?action=options` | ✓ | any role (names + roles, no emails) |
+| `GET / POST / PUT / DELETE /api/users` | ✓ | `manage_users`; **role rules:** only a VP may create a non-viewer account or change a role; nobody changes their own role; nobody deactivates themselves |
+| `GET / PUT /api/permissions` | ✓ | `manage_permissions` (vp by default) |
+| `GET /api/wiki` (list, `?id=`, `&action=download`) | ✓ | any role |
+| `POST /api/wiki`, `?action=upload` | ✓ | `create_wiki_doc` |
+| `PUT /api/wiki?id=` (+ `&action=upload`) | ✓ | author ∧ (`edit_own_wiki_doc` ∨ `edit_any_wiki_doc`), else `edit_any_wiki_doc` |
+| `DELETE /api/wiki?id=` | ✓ | author **or** `delete_wiki_doc` |
+| `/api/integrations/crewdesk` (all) | ✓ | `manage_integrations` |
+
+Maintenance: with `TCMS_READ_ONLY=true` every write above answers 503 except login / refresh / logout.
 
 ## 7. Password change
 
@@ -222,17 +236,13 @@ double-checks the confirmation field and length before even sending.
 
 ## 8. Honest security notes (worth knowing)
 
-1. **`JWT_SECRET` fallback**: if the env var is missing, a hardcoded dev secret is used.
-   The deployment guide's checklist makes setting it mandatory — on Vercel it is one of
-   the 3 required variables.
-2. **Weaker branches** (documented, by design acceptable for a team tool): `GET
-   /api/reviews` (all) has no role gate; `activity-logs?action=entity|user` run before
-   the permission check. Both still require a valid login.
-3. **WS mini-service does not validate tokens** (`token: 'dev'` placeholder) — it only
-   relays notification payloads to a `user:<id>` room; compromise impact is limited to
-   seeing your own notification stream early. Documented in `12-realtime-and-deployment.md`.
-4. No CSRF protection beyond `SameSite=Lax` cookie + Bearer-header requirement — the
-   API never relies on the cookie alone (a browser-initiated cross-site form post would
-   lack the `Authorization` header).
+1. **`JWT_SECRET`**: with `TCMS_DEPLOY_ENV=production` the startup guard refuses to boot
+   when it is missing, shorter than 32 characters or a placeholder (`src/lib/server/startup-guard.ts`).
+2. **Formerly weak branches are closed** (2026-10-16 check): `GET /api/reviews` (all) needs
+   `perform_review`; every `activity-logs` branch needs `view_activity_logs`.
+3. **WS mini-service** joins a socket to `user:<id>` only with a valid 60 s HMAC ticket
+   (`GET /api/auth?path=ws-ticket`, `WS_NOTIFY_SECRET`); without the secret it fails closed.
+4. **CSRF**: `SameSite=Lax` httpOnly cookies + every state-changing request must carry a
+   matching Origin or the `X-Requested-With: tcms` header (`assertSameOrigin`, `src/lib/api.ts`).
 5. Search filters use case-INSENSITIVE `LIKE` on MySQL 8.4 (utf8mb4_unicode_ci columns) — since the 2026-10-14 migration;
    not a security one (documented in `04-api-reference.md`).
