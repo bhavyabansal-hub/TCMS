@@ -241,7 +241,9 @@ export async function bulkCaseReviewVerdict(
       entityId: moduleReviewId,
     })
   }
-  if (moduleReview.requester_id !== me.userId) {
+  // One notification per person (R2-6): a requester who is also an author was
+  // already told above.
+  if (moduleReview.requester_id !== me.userId && !byAuthor.has(moduleReview.requester_id)) {
     await createNotification({
       userId: moduleReview.requester_id,
       type: outcome.notificationType,
