@@ -1600,3 +1600,23 @@ Verification (raw counts, 2026-10-16, evidence docs/qa/MAINT-2026-10-16/):
 Stage Summary:
 - Concurrent edits can no longer silently overwrite each other; DB errors answer clean 400/409/503; DoD suites leave no rows; the first production admin, the IT request and the production checklist exist.
 - NOT VERIFIED: create-first-vp.mjs against a real empty production DB (create path proven only inside a rolled-back transaction); send-test-notification.mjs actually delivering (no SMTP/Telegram configured); the 503 mapping for a real DB outage and pool timeout (synthetic error shapes only); systemd units, nginx block and cron lines never executed (no Linux server); HSTS production-only (next.config.ts unchanged, see item 5); the per-IP limit behind real nginx (tested with a direct X-Forwarded-For header); Linux-only suites NOT RUN ON WINDOWS (B11).
+
+---
+Task ID: fix-deep-test-2026-10-16
+Agent: Main (Claude Code, Opus 5.5) — fast mode, no subagents
+Task: Fix the bugs in docs/qa/DEEP-TEST-2026-10-16.md, one commit each.
+
+Work Log:
+- 23f937b R2-3 roles VP-only (never own; non-VP creates viewer only) · 287ee12 T1-1/T1-3/T1-4 update schemas no longer re-apply defaults · a9083e2 T1-2 assign_bug only on a real assignee change · 7625b1f R2-1 resubmit/module submit close the old open review · daf74d7 R2-2 assign on create needs assign_bug · 5aacd84 R2-4 in_review/approved not submittable (400) · 61fe171 R2-5 flagged fields on the test-case page · 650da35 R2-6 one notification per person · 398f960 T1-5 toggle reply source 'default' · 4ad0998 DOC-T1-6 docs/03 tables.
+- 6f7535e test fixes: verify-permissions reassign check asked for a no-op (now a real change, + no-op case); toggle e2e /tasks probe read the loading skeleton (now waits for the loaded form).
+- Test data: 3 old notif-verify users deleted (+12 activity_logs, 6 refresh_tokens, 3 login_attempts, 3 notifications), residue 0.
+
+Verification (2026-10-16, npm run dev on :3000):
+- tsc 0 errors · eslint 0 errors, 1 old warning · audit-standards 0 violations
+- verify-permissions 37/0 · verify-review-matrix 36/0 · verify-ui-gates 159/0 · verify-concurrency 34/0
+- verify-role-flows-e2e 556/0 · verify-permission-toggle-e2e 1495/0
+- matrix 126 default (0 overrides) · R9 dry run 0 rows
+
+Stage Summary:
+- All 10 deep-test bugs fixed; both e2e green.
+- NOT VERIFIED: npm run build (dev server only); a manual UI pass by a person.

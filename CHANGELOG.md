@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-16 — FIX deep-test bugs (docs/qa/DEEP-TEST-2026-10-16.md)
+
+- **Roles (R2-3):** only a VP can set or change a role, and never their own; other user managers can create viewer accounts only. Role pickers are disabled for non-VPs.
+- **Bugs (T1-1, T1-2, R2-2):** editing a bug, test case or work log no longer resets fields you did not send; saving a bug with an unchanged assignee no longer needs assign rights; assigning on create needs assign rights.
+- **Reviews (R2-1, R2-4, R2-5, R2-6):** a resubmit or module submit closes the old open review; cases in review or approved cannot be submitted again (400); authors see the flagged fields on the test-case page; a bulk module verdict sends one notification per person.
+- **Permissions (T1-5, DOC-T1-6):** turning a permission back to its default reports `source: 'default'`; docs/03 tables match the code (21 permissions, 126 cells).
+
 ## 2026-10-16 — MAINT production run
 
 - **Safety:** new `GET /api/ready` (database check); `TCMS_READ_ONLY=true` pauses every change with a clear 503 while sign-in and reading keep working; CSV exports of bugs and work logs are now quoted and protected against spreadsheet formula injection like test cases; too many failed sign-ins from one network now get 429.
