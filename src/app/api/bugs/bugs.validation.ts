@@ -6,6 +6,11 @@ import { z } from 'zod'
 import { ApiError, flattenZodError } from '@/lib/api'
 import { expectedUpdatedAtField } from '@/lib/server/optimistic-lock'
 
+// Fields with a CREATE default. Under zod 4, `.partial()` keeps `.default()`, so the
+// update schema re-declares them as plain optionals — an omitted field must never be
+// overwritten by its create default (deep-test T1-1: a Kanban drag reset severity).
+const bugSeverityField = z.enum(['critical', 'high', 'medium', 'low'])
+
 export const createBugSchema = z.object({
   // CAPS (audit 2026-10-09): mirror the test-case limits so no stored field
   // can be used as a multi-megabyte dump target.
@@ -13,7 +18,7 @@ export const createBugSchema = z.object({
   // Creation requires the essentials: a bug without a description or a
   // module is not actionable. Updates remain partial (see below).
   description: z.string().min(1).max(4_000),
-  severity: z.enum(['critical', 'high', 'medium', 'low']).default('medium'),
+  severity: bugSeverityField.default('medium'),
   environment: z.string().max(200).optional(),
   stepsToReproduce: z.string().max(4_000).optional(),
   expectedBehaviour: z.string().max(4_000).optional(),
@@ -24,6 +29,7 @@ export const createBugSchema = z.object({
 })
 
 export const updateBugSchema = createBugSchema.partial().extend({
+  severity: bugSeverityField.optional(),
   status: z.enum(['open', 'in_progress', 'resolved', 'closed', 'wont_fix']).optional(),
   resolvedAt: z.string().nullable().optional(),
   expectedUpdatedAt: expectedUpdatedAtField,

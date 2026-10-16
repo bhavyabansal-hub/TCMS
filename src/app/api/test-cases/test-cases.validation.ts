@@ -6,6 +6,12 @@ import { z } from 'zod'
 import { ApiError, flattenZodError } from '@/lib/api'
 import { expectedUpdatedAtField } from '@/lib/server/optimistic-lock'
 
+// Fields with a CREATE default. Under zod 4, `.partial()` keeps `.default()`, so the
+// update schema re-declares them as plain optionals (deep-test T1-3: a partial PUT
+// reset priority to P2 and tags to []).
+const priorityField = z.enum(['P0', 'P1', 'P2', 'P3'])
+const tagsField = z.array(z.string().max(40)).max(10)
+
 const createTestCaseSchema = z.object({
   // title + module + description are the required core of every test case;
   // everything else is optional so creation stays fast. NOTE: the update
@@ -19,12 +25,16 @@ const createTestCaseSchema = z.object({
   description: z.string().min(1, 'Description is required').max(2_000),
   preconditions: z.string().max(2_000).optional(),
   expectedResult: z.string().max(2_000).optional(),
-  priority: z.enum(['P0', 'P1', 'P2', 'P3']).default('P2'),
-  tags: z.array(z.string().max(40)).max(10).default([]),
+  priority: priorityField.default('P2'),
+  tags: tagsField.default([]),
   assigneeId: z.string().max(64).optional().nullable(),
 })
 
-const updateTestCaseSchema = createTestCaseSchema.partial().extend({ expectedUpdatedAt: expectedUpdatedAtField })
+const updateTestCaseSchema = createTestCaseSchema.partial().extend({
+  priority: priorityField.optional(),
+  tags: tagsField.optional(),
+  expectedUpdatedAt: expectedUpdatedAtField,
+})
 
 const submitReviewSchema = z.object({
   reviewerId: z.string().optional().nullable(),

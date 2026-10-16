@@ -31,15 +31,19 @@ export const taskItemSchema = z.object({
 
 // Legacy upsert body. `reportDate` now additionally must be date-parseable
 // (legacy crashed with a 500 on garbage dates — task-prescribed validation).
+// `tasks` has a CREATE default. Under zod 4, `.partial()` keeps `.default()`, so the
+// update schema re-declares it as optional (deep-test T1-4: PUT {notes} wiped tasks).
+const tasksField = z.array(taskItemSchema).max(100, 'a report holds at most 100 tasks')
+
 export const upsertTaskReportSchema = z.object({
   reportDate: z
     .string()
     .refine((v) => !Number.isNaN(Date.parse(v)), 'reportDate must be a valid date'),
-  tasks: z.array(taskItemSchema).max(100, 'a report holds at most 100 tasks').default([]),
+  tasks: tasksField.default([]),
   notes: z.string().max(4000).optional(),
 })
 
-export const updateTaskReportSchema = upsertTaskReportSchema.partial()
+export const updateTaskReportSchema = upsertTaskReportSchema.partial().extend({ tasks: tasksField.optional() })
 
 export type UpsertTaskReportInput = z.infer<typeof upsertTaskReportSchema>
 export type UpdateTaskReportInput = z.infer<typeof updateTaskReportSchema>
