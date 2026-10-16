@@ -100,6 +100,8 @@ export async function createBug(
     if (!mod) throw ApiError.notFound('Module not found')
   }
   if (input.assignedToId) {
+    // Choosing an assignee is an assignment: same right as a reassign (deep-test R2-2).
+    ensurePermission(me, 'assign_bug', 'Only roles with assign-bug rights (VP / Manager) can assign bugs')
     const assignee = await findUserById(input.assignedToId)
     if (!assignee) throw ApiError.notFound('Assignee not found')
   }

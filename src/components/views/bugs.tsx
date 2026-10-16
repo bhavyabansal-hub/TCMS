@@ -385,6 +385,8 @@ function statusDotColor(status: BugStatus): string {
 
 function CreateBugDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const qc = useQueryClient()
+  // Picking an assignee needs assign_bug (server rule, R2-2).
+  const canAssign = useAuthStore((s) => s.can('assign_bug'))
   const [title, setTitle] = useState('')
   const [severity, setSeverity] = useState<Severity>('medium')
   const [environment, setEnvironment] = useState('staging')
@@ -428,7 +430,7 @@ function CreateBugDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
         severity,
         environment: environment.trim() || undefined,
         moduleId,
-        assignedToId: assignedToId || null,
+        assignedToId: canAssign ? assignedToId || null : null,
         description: description.trim(),
         stepsToReproduce: stepsToReproduce.trim() || undefined,
         expectedBehaviour: expectedBehaviour.trim() || undefined,
@@ -517,7 +519,7 @@ function CreateBugDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
 
           <div className="space-y-1.5 min-w-0">
             <Label htmlFor="b-assigned">Assign To</Label>
-            <Select value={assignedToId} onValueChange={setAssignedToId}>
+            <Select value={canAssign ? assignedToId : ''} onValueChange={setAssignedToId} disabled={!canAssign}>
               <SelectTrigger id="b-assigned" className="w-full min-w-0 [&>span]:truncate">
                 <SelectValue placeholder="Unassigned" />
               </SelectTrigger>
