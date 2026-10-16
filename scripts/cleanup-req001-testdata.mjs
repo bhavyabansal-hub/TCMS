@@ -18,6 +18,9 @@
  *   Group B rows without QACHECK text in tasks/notes are flagged B-NO-QACHECK and left out
  *   of the candidate list and template unless --include-b-no-qacheck is given.
  *   node scripts/cleanup-req001-testdata.mjs --delete --approved=<file>     (owner go only)
+ *   The approved file may add `extraModuleReviews: { module_review_requests, notifications }`:
+ *   owner-approved D-EMPTY module reviews, deleted only if no case review is left after the
+ *   main delete, together with exactly their module_review notifications.
  * Exit: 0 ok, 1 FAIL/rollback, 2 NOT RUN (guard, lock, bad arguments).
  * Forbidden as tools or evidence: cleanup-import-demo.mjs, check-overrides.mjs (R9.AC12).
  */
@@ -134,7 +137,42 @@ function readApproved(file) {
   for (const t of ROOT_TABLES) if (!Array.isArray(approved.tables?.[t])) throw new Error(`approved file: tables.${t} missing`)
   for (const t of CHILD_TABLES) if (!Array.isArray(approved.children?.[t])) throw new Error(`approved file: children.${t} missing`)
   if (approved.orphanRisk?.length) throw new Error('approved file still lists orphanRisk rows')
+  // Optional: owner-approved D-EMPTY module reviews and their module_review notifications.
+  approved.extra = approved.extraModuleReviews ?? { module_review_requests: [], notifications: [] }
+  for (const t of ['module_review_requests', 'notifications']) {
+    const ids = approved.extra[t]
+    if (!Array.isArray(ids)) throw new Error(`approved file: extraModuleReviews.${t} missing`)
+    if (ids.some((id) => !UUID_RE.test(id))) throw new Error(`approved file: extraModuleReviews.${t} has a non-UUID id`)
+  }
   return approved
+}
+
+/** Locks the extra module reviews and re-derives their notifications; both must equal the approved sets. */
+async function recheckExtra(tx, extra, report) {
+  const mrs = extra.module_review_requests
+  const found = mrs.length
+    ? await tx.$queryRaw`SELECT module_review_request_id AS pk FROM module_review_requests WHERE ${sqlIn('module_review_request_id', mrs)} FOR UPDATE`
+    : []
+  report('re-check extra module_review_requests', sameSet(pkList(found), mrs), `found=${found.length} approved=${mrs.length}`)
+  const notes = mrs.length
+    ? await tx.$queryRaw`SELECT notification_id AS pk FROM notifications WHERE entity_type = 'module_review' AND ${sqlIn('entity_id', mrs)} FOR UPDATE`
+    : []
+  report('re-check extra notifications', sameSet(pkList(notes), extra.notifications), `found=${notes.length} approved=${extra.notifications.length}`)
+}
+
+/** Runs after deleteApproved: each extra module review must have no case reviews left (D-EMPTY). */
+async function deleteExtra(tx, extra, report) {
+  const mrs = extra.module_review_requests
+  if (mrs.length === 0) return {}
+  const left = Number((await tx.$queryRaw`SELECT COUNT(*) AS n FROM review_requests WHERE ${sqlIn('module_review_id', mrs)}`)[0].n)
+  report('extra module reviews empty after the main delete', left === 0, `case reviews left=${left}`)
+  if (left !== 0) throw new Rollback('an extra module review still has case reviews')
+  const removed = {}
+  removed['extra notifications'] = await tx.$executeRaw`DELETE FROM notifications WHERE ${sqlIn('notification_id', extra.notifications)}`
+  if (removed['extra notifications'] !== extra.notifications.length) throw new Rollback(`extra notifications: deleted ${removed['extra notifications']}, approved ${extra.notifications.length}`)
+  removed['extra module_review_requests'] = await tx.$executeRaw`DELETE FROM module_review_requests WHERE ${sqlIn('module_review_request_id', mrs)}`
+  if (removed['extra module_review_requests'] !== mrs.length) throw new Rollback(`extra module_review_requests: deleted ${removed['extra module_review_requests']}, approved ${mrs.length}`)
+  return removed
 }
 
 // SQL review finding 3: both lists must be duplicate-free, same size, same members.
@@ -197,6 +235,8 @@ async function residueInTx(tx, approved) {
     bug_test_case_links: await count(Prisma.sql`SELECT COUNT(*) AS n FROM bug_test_case_links WHERE ${sqlIn("CONCAT(bug_id, '/', test_case_id)", c.bug_test_case_links)}`),
     crew_desk_links: await count(Prisma.sql`SELECT COUNT(*) AS n FROM crew_desk_links WHERE ${sqlIn('link_id', c.crew_desk_links)}`),
     notifications: await count(Prisma.sql`SELECT COUNT(*) AS n FROM notifications WHERE ${sqlIn('notification_id', c.notifications)}`),
+    'extra module_review_requests': await count(Prisma.sql`SELECT COUNT(*) AS n FROM module_review_requests WHERE ${sqlIn('module_review_request_id', approved.extra.module_review_requests)}`),
+    'extra notifications': await count(Prisma.sql`SELECT COUNT(*) AS n FROM notifications WHERE ${sqlIn('notification_id', approved.extra.notifications)}`),
   }
   return left
 }
@@ -237,10 +277,11 @@ async function runDelete(guard, approvedFile) {
           report(`re-check ${t}`, ok, `found=${children[t].length} approved=${approved.children[t].length}`)
         }
         report('re-check orphan guard', children.orphanRisk.length === 0, `orphans=${children.orphanRisk.length}`)
+        await recheckExtra(tx, approved.extra, report)
         if (fail > 0) throw new Rollback('approved list differs from the database')
 
-        // 3. deletes in FK order (cases before modules, R9.AC2c)
-        const removed = await deleteApproved(tx, approved)
+        // 3. deletes in FK order (cases before modules, R9.AC2c), then the emptied extra module reviews
+        const removed = { ...(await deleteApproved(tx, approved)), ...(await deleteExtra(tx, approved.extra, report)) }
         for (const [t, n] of Object.entries(removed)) report(`delete ${t}`, true, `${n} removed`)
 
         // 4. in-transaction residue = 0 for every approved PK (parents and children)
