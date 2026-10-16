@@ -34,7 +34,8 @@ archive/            moved-out files (see archive/README.md): postgres/ = PG-era 
                     schemas + old deploy guide (rollback plan until 2 weeks after go-live); scripts/ =
                     one-off probes/repros; src/ = classic dashboard + /dashboard-preview
 README.md DEPLOYMENT.md CHANGELOG.md   root docs (deploy guide = MySQL 8.4)
-.zscripts/ (git-ignored) start-dev.sh Caddyfile bun.lock vercel.json   LOAD-BEARING pipeline files — never delete
+archive/platform/   old cloud-sandbox files (start-dev.sh, Caddyfile, root bun.lock, vercel.json) — moved
+                    2026-10-16, unused by Windows dev and the Linux+nginx plan; .zscripts/ git-ignored
 (no download/ folder: the IT request is `docs/deploy/it-request-mysql.md`; the canonical zip is not recreated)
 ```
 

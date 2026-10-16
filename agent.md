@@ -246,10 +246,13 @@ Also run and paste `node scripts/audit-standards.mjs` (report only, not blocking
 - Pages live under `src/app/(app)/` with real routes (`/dashboard`, `/reviews`,
   `/test-cases`, …); the root `/` redirects into the shell. Deep-link filters are
   part of the URL contract (`docs/07`) — never break them silently.
-- Platform files that look foreign are load-bearing: `start-dev.sh` + `.zscripts/*` +
-  `Caddyfile` + `bun.lock` (bun runtime) + `vercel.json` (crons now empty; keep the
-  file for the pipeline) belong to the deployment pipeline — do not delete or rename
-  them. (`.zscripts/` is git-ignored and exists only on the pipeline host.)
+- The old cloud-sandbox platform files (`start-dev.sh`, `Caddyfile`, root `bun.lock`,
+  `vercel.json`) were moved to `archive/platform/` on 2026-10-16 (owner): neither the
+  Windows setup (npm + `package-lock.json`, `npm run dev`) nor the Linux + nginx
+  production plan (`docs/deploy/PRODUCTION-CHECKLIST.md`) uses them. The WS service keeps
+  its own `mini-services/notifications/bun.lock`. `.zscripts/` is git-ignored and exists
+  only on the old pipeline host. `output: "standalone"` in `next.config.ts` stays (the
+  production plan runs `.next/standalone/server.js`).
 
 ## 6. Environment rules (every session)
 

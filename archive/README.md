@@ -28,3 +28,14 @@ Definition of Done.
 Deleted in the same pass (still in git history): the 17 screenshot PNGs that were
 here, the stray `POST` curl output, `mini-services/.gitkeep`, and the root copies of
 `CODE-QUALITY-ROADMAP.md` / `REFACTOR-CHARTER.md` (identical to the `docs/` copies).
+
+## Platform files, 2026-10-16 (owner MAINT run, item 9)
+
+| Item | Original location | Why |
+|---|---|---|
+| `platform/start-dev.sh` | repo root | Old cloud-sandbox launcher (`cd /home/z/my-project; bun run dev`). Windows uses `npm run dev` (`scripts/dev-tcms.mjs`); production uses systemd (`docs/deploy/PRODUCTION-CHECKLIST.md`). |
+| `platform/Caddyfile` | repo root | Sandbox gateway (`XTransformPort` routing on :81). Production uses nginx (`docs/deploy/it-request-mysql.md` §6). |
+| `platform/bun.lock` | repo root | Root bun lockfile; installs use npm + `package-lock.json`. The WS service keeps its own `mini-services/notifications/bun.lock`. |
+| `platform/vercel.json` | repo root | Vercel config with an empty `crons` list since the keep-alive route was removed (2026-10-14). |
+
+Restore with `git mv archive/platform/<file> .` if the old pipeline is ever used again.

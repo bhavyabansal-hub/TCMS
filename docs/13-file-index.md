@@ -14,7 +14,7 @@
 | `package-lock.json` | — | Reproducible install for Vercel |
 | `tsconfig.json` | — | TypeScript config (`@/*` → `src/*` path alias) |
 | `next.config.ts` | — | `output: "standalone"` (required by the deploy pipeline), `ignoreBuildErrors: false` (type errors never pass) |
-| `vercel.json` | — | Vercel Cron schedule: daily `GET /api/keep-alive` (anti-pause ping for free-tier databases). → doc 12 §3 |
+| ~~`vercel.json`~~ | — | Moved to `archive/platform/` 2026-10-16 (crons were empty since the keep-alive route was removed). |
 | `tailwind.config.ts` | — | Legacy-style theme mapping (v4 CSS-first lives in globals.css) |
 | `postcss.config.mjs` | — | Tailwind v4 postcss plugin |
 | `eslint.config.mjs` | — | Flat ESLint config (next/core-web-vitals) |
