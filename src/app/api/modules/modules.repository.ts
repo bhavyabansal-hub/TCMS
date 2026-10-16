@@ -112,12 +112,15 @@ export interface ModuleUpdateFields {
   updatedById?: string
 }
 
-/** Partial UPDATE — every write also bumps updated_at (raw SQL skips @updatedAt).
+/** Guarded partial UPDATE — applies only while updated_at still equals
+ *  `expectedUpdatedAt` (optimistic lock); returns null when another write landed
+ *  first. Every write also bumps updated_at (raw SQL skips @updatedAt).
  *  MySQL: UPDATE has no RETURNING — write, then read the row back. */
-export async function updateModule(
+export async function updateModuleIfUnchanged(
   moduleId: string,
-  fields: ModuleUpdateFields
-): Promise<ModuleSqlRow> {
+  fields: ModuleUpdateFields,
+  expectedUpdatedAt: Date
+): Promise<ModuleSqlRow | null> {
   const sets: Prisma.Sql[] = []
   if (fields.name !== undefined) sets.push(Prisma.sql`name = ${fields.name}`)
   if (fields.description !== undefined) sets.push(Prisma.sql`description = ${fields.description}`)
@@ -125,8 +128,10 @@ export async function updateModule(
   if (fields.updatedById !== undefined) sets.push(Prisma.sql`updated_by_id = ${fields.updatedById}`)
   sets.push(Prisma.sql`updated_at = UTC_TIMESTAMP(3)`)
 
-  await db.$executeRaw`
-    UPDATE modules SET ${Prisma.join(sets)} WHERE module_id = ${moduleId}`
+  const changed = await db.$executeRaw`
+    UPDATE modules SET ${Prisma.join(sets)}
+    WHERE module_id = ${moduleId} AND updated_at = ${expectedUpdatedAt}`
+  if (Number(changed) === 0) return null
   const rows = await db.$queryRaw<ModuleSqlRow[]>`
     SELECT * FROM modules WHERE module_id = ${moduleId} LIMIT 1`
   if (!rows[0]) throw new Error('Updated module could not be read back')

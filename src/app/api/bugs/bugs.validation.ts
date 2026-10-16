@@ -4,6 +4,7 @@
 
 import { z } from 'zod'
 import { ApiError, flattenZodError } from '@/lib/api'
+import { expectedUpdatedAtField } from '@/lib/server/optimistic-lock'
 
 export const createBugSchema = z.object({
   // CAPS (audit 2026-10-09): mirror the test-case limits so no stored field
@@ -25,6 +26,7 @@ export const createBugSchema = z.object({
 export const updateBugSchema = createBugSchema.partial().extend({
   status: z.enum(['open', 'in_progress', 'resolved', 'closed', 'wont_fix']).optional(),
   resolvedAt: z.string().nullable().optional(),
+  expectedUpdatedAt: expectedUpdatedAtField,
 })
 
 const linkTestCaseSchema = z.object({ testCaseId: z.string().min(1) })

@@ -261,7 +261,7 @@ export function ReviewDetailView() {
           onOpenChange={(v) => !v && setVerdictOpen(null)}
           onSubmit={async (comment, flaggedFields) => {
             try {
-              await reviewsApi.verdict(id, { verdict: verdictOpen, comment, flaggedFields })
+              await reviewsApi.verdict(id, { verdict: verdictOpen, comment, flaggedFields, expectedUpdatedAt: review.updatedAt })
               toast.success(`Verdict submitted: ${verdictOpen.replace('_', ' ')}`)
               invalidateAfterMutation(qc, 'reviews', 'testCases')
               setVerdictOpen(null)
@@ -279,7 +279,7 @@ export function ReviewDetailView() {
           onOpenChange={(v) => !v && setForwardOpen(false)}
           onSubmit={async (reviewerId) => {
             try {
-              await reviewsApi.forward(id, reviewerId)
+              await reviewsApi.forward(id, reviewerId, review.updatedAt)
               toast.success('Reviewer changed — the new reviewer has been notified')
               invalidateAfterMutation(qc, 'reviews')
               setForwardOpen(false)

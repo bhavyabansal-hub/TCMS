@@ -66,6 +66,7 @@ export function TestCaseEditor({
         expectedResult: expectedResult.trim() || undefined,
         tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
         assigneeId: assigneeId || null,
+        expectedUpdatedAt: tc.updatedAt,
       })
       toast.success('Test case updated')
       onSaved()

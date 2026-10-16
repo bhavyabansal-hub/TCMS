@@ -4,6 +4,7 @@
 
 import { z } from 'zod'
 import { ApiError, flattenZodError } from '@/lib/api'
+import { expectedUpdatedAtField } from '@/lib/server/optimistic-lock'
 
 const createTestCaseSchema = z.object({
   // title + module + description are the required core of every test case;
@@ -23,7 +24,7 @@ const createTestCaseSchema = z.object({
   assigneeId: z.string().max(64).optional().nullable(),
 })
 
-const updateTestCaseSchema = createTestCaseSchema.partial()
+const updateTestCaseSchema = createTestCaseSchema.partial().extend({ expectedUpdatedAt: expectedUpdatedAtField })
 
 const submitReviewSchema = z.object({
   reviewerId: z.string().optional().nullable(),

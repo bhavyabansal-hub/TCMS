@@ -193,6 +193,22 @@ export async function updateModuleReviewRequestStatus(
     WHERE module_review_request_id = ${moduleReviewRequestId}`
 }
 
+/** Guarded status write for the bulk verdict (B2): applies only while the module
+ *  review is open AND still carries the loaded updated_at. Returns rows changed
+ *  (0 = another verdict or edit landed first). */
+export async function updateModuleReviewRequestStatusIfUnchanged(
+  moduleReviewRequestId: string,
+  status: string,
+  expectedUpdatedAt: Date,
+  tx: SqlExecutor = db
+): Promise<number> {
+  const affected = await tx.$executeRaw`
+    UPDATE module_review_requests SET status = ${status}, updated_at = UTC_TIMESTAMP(3)
+    WHERE module_review_request_id = ${moduleReviewRequestId} AND status <> 'completed'
+      AND updated_at = ${expectedUpdatedAt}`
+  return Number(affected)
+}
+
 /** Re-assigns the reviewer of an OPEN module review (change-reviewer flow).
  *  Guarded against completed rows for the same double-action safety as the
  *  status write. Returns rows changed (0 = completed in the meantime). */

@@ -302,13 +302,16 @@ export const usersApi = {
 }
 
 // ---------- Modules ----------
+/** Optimistic lock (B2): send the `updatedAt` you loaded; a stale save gets 409. */
+type Guarded = { expectedUpdatedAt?: string }
+
 export const modulesApi = {
   tree: () => request<{ tree: Module[]; flat: Module[] }>('/api/modules'),
   get: (id: string, caseOffset = 0) =>
     request<{ module: Module & { createdBy?: UserRef; updatedBy?: UserRef; permissions?: unknown[] }; testCases: TestCase[]; subtreeTestCases: TestCase[]; submodules: Module[]; casePage: { limit: number; offset: number; total: number; directTotal: number; hasMore: boolean } }>(`/api/modules?id=${id}&caseOffset=${caseOffset}`),
   create: (body: { name: string; description?: string; parentId?: string | null }) =>
     request<Module>('/api/modules', { method: 'POST', body: JSON.stringify(body) }),
-  update: (id: string, body: Partial<Module>) =>
+  update: (id: string, body: Partial<Module> & Guarded) =>
     request<Module>(`/api/modules?id=${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   delete: (id: string) =>
     request<{ success: boolean }>(`/api/modules?id=${id}`, { method: 'DELETE' }),
@@ -339,7 +342,7 @@ export const testCasesApi = {
   reviews: (id: string) => request<ReviewRequest[]>(`/api/test-cases?id=${id}&action=reviews`),
   create: (body: Partial<TestCase> & { title: string }) =>
     request<TestCase>('/api/test-cases', { method: 'POST', body: JSON.stringify(body) }),
-  update: (id: string, body: Partial<TestCase>) =>
+  update: (id: string, body: Partial<TestCase> & Guarded) =>
     request<TestCase>(`/api/test-cases?id=${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   submitReview: (id: string, body: { reviewerId?: string; dueDate?: string }) =>
     request<ReviewRequest>(`/api/test-cases?id=${id}&action=submit-review`, {
@@ -371,17 +374,17 @@ export const reviewsApi = {
   list: (params: Record<string, string> = {}) =>
     request<Paginated<ReviewRequest>>(`/api/reviews?${qs(params)}`),
   get: (id: string) => request<ReviewRequest & { testCase: TestCase }>(`/api/reviews?id=${id}`),
-  verdict: (id: string, body: { verdict: string; comment?: string; flaggedFields?: string[] }) =>
+  verdict: (id: string, body: { verdict: string; comment?: string; flaggedFields?: string[] } & Guarded) =>
     request<{ event: unknown; reviewStatus: string; testCaseStatus: string; moduleReviewCompleted?: boolean }>(`/api/reviews?id=${id}`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),
   /** Forward (re-assign) an OPEN review to another TCMS user — requester or
    *  assigned reviewer, perform_review required (server enforces both). */
-  forward: (id: string, reviewerId: string) =>
+  forward: (id: string, reviewerId: string, expectedUpdatedAt?: string) =>
     request<ReviewRequest>(`/api/reviews?id=${id}&action=forward`, {
       method: 'POST',
-      body: JSON.stringify({ reviewerId }),
+      body: JSON.stringify({ reviewerId, expectedUpdatedAt }),
     }),
 }
 
@@ -390,13 +393,13 @@ export const moduleReviewsApi = {
   queue: () => request<ModuleReviewRequest[]>('/api/module-reviews?action=queue'),
   all: () => request<ModuleReviewRequest[]>('/api/module-reviews?action=all'),
   get: (id: string) => request<ModuleReviewRequest>(`/api/module-reviews?id=${id}`),
-  approveAll: (id: string, body: { comment?: string }) =>
+  approveAll: (id: string, body: { comment?: string } & Guarded) =>
     request<{ approvedCount: number; moduleReviewStatus: string }>(`/api/module-reviews?id=${id}&action=approve-all`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),
   /** One verdict (approve / fail / needs-revision) for every open case review. */
-  bulkVerdict: (id: string, body: { verdict: 'approved' | 'failed' | 'needs_revision'; comment?: string }) =>
+  bulkVerdict: (id: string, body: { verdict: 'approved' | 'failed' | 'needs_revision'; comment?: string } & Guarded) =>
     request<{ verdict: string; affectedCount: number; moduleReviewStatus: string }>(`/api/module-reviews?id=${id}&action=bulk-verdict`, {
       method: 'POST',
       body: JSON.stringify(body),
@@ -416,7 +419,7 @@ export const bugsApi = {
   get: (id: string) => request<Bug>(`/api/bugs?id=${id}`),
   create: (body: Partial<Bug> & { title: string }) =>
     request<Bug>('/api/bugs', { method: 'POST', body: JSON.stringify(body) }),
-  update: (id: string, body: Partial<Bug> & { testCaseIds?: string[] }) =>
+  update: (id: string, body: Partial<Bug> & { testCaseIds?: string[] } & Guarded) =>
     request<Bug>(`/api/bugs?id=${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   delete: (id: string) => request<{ success: boolean }>(`/api/bugs?id=${id}`, { method: 'DELETE' }),
   linkTc: (id: string, testCaseId: string) =>

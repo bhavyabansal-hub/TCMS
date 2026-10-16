@@ -297,6 +297,28 @@ user list runs per-user at posting time (10-min list cache). Mock: `127.0.0.1:30
   "reviewStatus": "in_progress", "testCaseStatus": "needs_revision" }
 ```
 
+## 15b. Concurrent edits — optimistic locking (409)
+
+Two users editing the same record never silently overwrite each other
+(`src/lib/server/optimistic-lock.ts`). These writes accept an optional body field
+`expectedUpdatedAt` = the record's `updatedAt` the client loaded (ISO date-time):
+
+| Write | Guard |
+|---|---|
+| `PUT /api/test-cases?id=` | loaded `updatedAt` + server-side `version` |
+| `PUT /api/bugs?id=` (form and Kanban drag) | `WHERE updated_at = expected` |
+| `PUT /api/modules?id=` | `WHERE updated_at = expected` |
+| `POST /api/reviews?id=` (verdict), `&action=forward` | `WHERE status <> 'completed' AND updated_at = expected` |
+| `POST /api/module-reviews?id=&action=bulk-verdict` / `approve-all` | module review row, same guard, taken first |
+
+If the record changed since it was loaded the answer is **409**
+`{ "error": "This item was changed by someone else — reload" }` and nothing is written.
+Without `expectedUpdatedAt` (older clients) the server guards with the value it read
+in the same request, so two simultaneous saves still produce one 200 and one 409.
+A malformed value → 400. The guarded UPDATE runs before any child insert (history,
+review events), so parallel saves wait for each other instead of deadlocking.
+Race test: `node scripts/verify-concurrency.mjs` → `34 passed, 0 failed` (2026-10-16).
+
 ## 16. Known quirks (documented on purpose)
 
 1. `stats` unknown action → 200 with `{error}` (everywhere else 400).

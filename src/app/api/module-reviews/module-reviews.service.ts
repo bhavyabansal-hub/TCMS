@@ -9,6 +9,7 @@
 
 import type { RequestMeta } from '@/lib/activity'
 import { ApiError } from '@/lib/api'
+import { resolveExpectedUpdatedAt } from '@/lib/server/optimistic-lock'
 import { can, ensurePermission, type SessionUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activity'
 import { createNotification, type NotificationType } from '@/lib/notifications'
@@ -26,7 +27,7 @@ import {
   listModuleReviewRequests,
   listModuleReviewRequestsByReviewer,
   updateModuleReviewRequestReviewerIfOpen,
-  updateModuleReviewRequestStatus,
+  updateModuleReviewRequestStatusIfUnchanged,
   type ModuleReviewRequestWithCountSqlRow,
 } from './module-reviews.repository'
 import {
@@ -149,7 +150,7 @@ const BULK_VERDICT_OUTCOMES: Record<
 export async function bulkCaseReviewVerdict(
   me: SessionUser,
   moduleReviewId: string,
-  input: { verdict: 'approved' | 'failed' | 'needs_revision'; comment?: string | null },
+  input: { verdict: 'approved' | 'failed' | 'needs_revision'; comment?: string | null; expectedUpdatedAt?: string },
   meta: RequestMeta
 ): Promise<{ verdict: string; affectedCount: number; moduleReviewStatus: string }> {
   ensurePermission(me, 'perform_review', 'Only roles with perform-review rights can review')
@@ -184,10 +185,15 @@ export async function bulkCaseReviewVerdict(
   const newCaseStatus = outcome.closes ? 'completed' : 'in_progress'
   const newModuleStatus = outcome.closes ? 'completed' : 'in_progress'
 
-  // ATOMIC bulk verdict: every event, every case-review status, every test
-  // case flip and the module-review status commit together or not at all —
-  // a crash halfway can never leave the module half-decided.
+  // ATOMIC bulk verdict: the module-review status, every event, every case-review
+  // status and every test case flip commit together or not at all — a crash
+  // halfway can never leave the module half-decided. The guarded module-review
+  // UPDATE runs FIRST (B2): a second bulk verdict waits on its row lock, then
+  // finds the row changed and gets 409 instead of recording verdicts twice.
+  const expected = resolveExpectedUpdatedAt(input.expectedUpdatedAt, moduleReview.updated_at)
   await db.$transaction(async (tx) => {
+    const changed = await updateModuleReviewRequestStatusIfUnchanged(moduleReviewId, newModuleStatus, expected, tx)
+    if (changed === 0) throw ApiError.staleEdit()
     for (const caseReview of caseReviews) {
       await insertReviewEvent(
         {
@@ -202,7 +208,6 @@ export async function bulkCaseReviewVerdict(
       await updateReviewRequestStatus(caseReview.review_request_id, newCaseStatus, tx)
       await updateTestCaseStatus(caseReview.test_case_id, outcome.testCaseStatus, tx)
     }
-    await updateModuleReviewRequestStatus(moduleReviewId, newModuleStatus, tx)
   })
 
   await logActivity({
@@ -263,10 +268,15 @@ export async function bulkCaseReviewVerdict(
 export async function approveAllCaseReviews(
   me: SessionUser,
   moduleReviewId: string,
-  input: { comment?: string | null },
+  input: { comment?: string | null; expectedUpdatedAt?: string },
   meta: RequestMeta
 ): Promise<{ approvedCount: number; moduleReviewStatus: string }> {
-  const res = await bulkCaseReviewVerdict(me, moduleReviewId, { verdict: 'approved', comment: input.comment }, meta)
+  const res = await bulkCaseReviewVerdict(
+    me,
+    moduleReviewId,
+    { verdict: 'approved', comment: input.comment, expectedUpdatedAt: input.expectedUpdatedAt },
+    meta
+  )
   return { approvedCount: res.affectedCount, moduleReviewStatus: res.moduleReviewStatus }
 }
 

@@ -4,12 +4,14 @@
 
 import { z } from 'zod'
 import { ApiError, flattenZodError } from '@/lib/api'
+import { expectedUpdatedAtField } from '@/lib/server/optimistic-lock'
 
 // POST ?id=...&action=approve-all — body is an optional comment. Legacy used a
 // `typeof body.comment === 'string'` check with a default text; a missing or
 // null comment falls back to that default in the service.
 const approveAllSchema = z.object({
   comment: z.string().optional().nullable(),
+  expectedUpdatedAt: expectedUpdatedAtField,
 })
 
 // POST ?id=...&action=bulk-verdict — one verdict for every open case review.
@@ -18,6 +20,7 @@ const approveAllSchema = z.object({
 const bulkVerdictSchema = z.object({
   verdict: z.enum(['approved', 'failed', 'needs_revision']),
   comment: z.string().optional().nullable(),
+  expectedUpdatedAt: expectedUpdatedAtField,
 })
 
 // POST ?id=...&action=change-reviewer — the new reviewer's user id.

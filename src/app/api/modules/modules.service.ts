@@ -22,6 +22,7 @@ import {
   type SerializedTestCase,
 } from '@/lib/serializers'
 import { findFirstActiveReviewer, findUserById } from '@/lib/server/user.repository'
+import { resolveExpectedUpdatedAt } from '@/lib/server/optimistic-lock'
 import {
   deleteModule,
   findModuleById,
@@ -29,7 +30,7 @@ import {
   listDescendantModuleIds,
   listModulesWithOwnerAndCaseCount,
   listSubmodules,
-  updateModule,
+  updateModuleIfUnchanged,
   type ModuleUpdateFields,
 } from './modules.repository'
 import {
@@ -197,7 +198,7 @@ export async function createModule(
 export async function updateModuleFields(
   me: SessionUser,
   moduleId: string,
-  input: { name?: string; description?: string; ownerId?: string },
+  input: { name?: string; description?: string; ownerId?: string; expectedUpdatedAt?: string },
   meta: RequestMeta
 ): Promise<SerializedModule> {
   ensurePermission(me, 'edit_module')
@@ -218,7 +219,9 @@ export async function updateModuleFields(
     fields.ownerId = input.ownerId
   }
 
-  const updated = await updateModule(moduleId, fields)
+  const expected = resolveExpectedUpdatedAt(input.expectedUpdatedAt, before.updated_at)
+  const updated = await updateModuleIfUnchanged(moduleId, fields, expected)
+  if (!updated) throw ApiError.staleEdit()
   await logActivity({
     userId: me.userId,
     action: 'UPDATE',

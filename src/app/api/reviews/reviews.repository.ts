@@ -87,18 +87,25 @@ export async function updateReviewRequestStatus(
     WHERE review_request_id = ${reviewRequestId}`
 }
 
+/** `AND updated_at = ?` when an optimistic-lock value is given (B2), else nothing. */
+function updatedAtGuard(expectedUpdatedAt?: Date): Prisma.Sql {
+  return expectedUpdatedAt ? Prisma.sql`AND updated_at = ${expectedUpdatedAt}` : Prisma.empty
+}
+
 /** Concurrency-guarded status write: applies ONLY when the review is not
- *  already completed. Returns the number of rows changed (0 = another verdict
- *  landed first), so two simultaneous reviewers can never double-close a
- *  review or record two verdicts for one open request. */
+ *  already completed (and, with `expectedUpdatedAt`, still unchanged since it was
+ *  loaded). Returns the number of rows changed (0 = another write landed first),
+ *  so two simultaneous reviewers can never double-close a review or record two
+ *  verdicts for one open request. */
 export async function updateReviewRequestStatusIfOpen(
   reviewRequestId: string,
   status: string,
-  tx: SqlExecutor = db
+  tx: SqlExecutor = db,
+  expectedUpdatedAt?: Date
 ): Promise<number> {
   const affected = await tx.$executeRaw`
     UPDATE review_requests SET status = ${status}, updated_at = UTC_TIMESTAMP(3)
-    WHERE review_request_id = ${reviewRequestId} AND status <> 'completed'`
+    WHERE review_request_id = ${reviewRequestId} AND status <> 'completed' ${updatedAtGuard(expectedUpdatedAt)}`
   return Number(affected)
 }
 
@@ -109,11 +116,12 @@ export async function updateReviewRequestStatusIfOpen(
 export async function updateReviewRequestReviewerIfOpen(
   reviewRequestId: string,
   reviewerId: string,
-  tx: SqlExecutor = db
+  tx: SqlExecutor = db,
+  expectedUpdatedAt?: Date
 ): Promise<number> {
   const affected = await tx.$executeRaw`
     UPDATE review_requests SET reviewer_id = ${reviewerId}, status = 'pending', updated_at = UTC_TIMESTAMP(3)
-    WHERE review_request_id = ${reviewRequestId} AND status <> 'completed'`
+    WHERE review_request_id = ${reviewRequestId} AND status <> 'completed' ${updatedAtGuard(expectedUpdatedAt)}`
   return Number(affected)
 }
 

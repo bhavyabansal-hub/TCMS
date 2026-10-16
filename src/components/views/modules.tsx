@@ -474,6 +474,7 @@ function EditModuleDialog({
       await modulesApi.update(module.moduleId, {
         name: name.trim(),
         description: description.trim() || undefined,
+        expectedUpdatedAt: module.updatedAt,
       })
       toast.success('Module updated')
       invalidateAfterMutation(qc, 'modules')

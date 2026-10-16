@@ -125,7 +125,7 @@ export function BugsView() {
     const bug = bugs.find((b) => b.bugId === bugId)
     if (!bug || bug.status === newStatus) return
     try {
-      await bugsApi.update(bugId, { status: newStatus })
+      await bugsApi.update(bugId, { status: newStatus, expectedUpdatedAt: bug.updatedAt })
       toast.success(`Moved to "${STATUS_LABEL[newStatus]}"`)
       invalidateAfterMutation(qc, 'bugs')
     } catch (err) {
@@ -780,6 +780,7 @@ function BugEditForm({
         status,
         severity,
         assignedToId: assignedToId || null,
+        expectedUpdatedAt: bug.updatedAt,
       })
       toast.success('Bug updated')
       invalidateAfterMutation(qc, 'bugs')

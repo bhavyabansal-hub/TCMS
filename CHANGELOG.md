@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-16 — MAINT production run
+
+- **Concurrent edits:** saving a test case, bug, module, review verdict/forward or a module bulk verdict that someone else changed since you opened it now answers **409 "This item was changed by someone else — reload"** instead of silently overwriting (optimistic lock on the loaded updatedAt). Parallel test-case saves and parallel verdicts no longer fail with a 500 deadlock.
+
 ## 2026-10-14 — Owner 8-step plan (steps 1–3) + Phase 2 hardening (post-migration)
 
 - **Step 1:** Crew Desk testing normalized to designated ticket **1355-only** —

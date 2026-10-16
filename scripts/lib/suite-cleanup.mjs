@@ -1,5 +1,5 @@
 // B16: end-of-run cleanup for the DoD suites (verify-import, verify-permissions,
-// verify-notifications). Deletes only the rows the run itself created, by primary key,
+// verify-notifications) and verify-concurrency. Deletes only the rows the run itself created, by primary key,
 // in one transaction (FK order), then proves residue 0 for those keys.
 // Kept on purpose: activity_logs written by the demo accounts (audit trail).
 // A module review is deleted only when every case review in it belongs to the run;
@@ -32,6 +32,7 @@ async function deleteRunRows(tx, e, users) {
   removed.test_cases = await tx.$executeRaw`DELETE FROM test_cases WHERE ${sqlIn('test_case_id', e.cases)}`
   removed.module_review_requests = await tx.$executeRaw`DELETE FROM module_review_requests
     WHERE ${sqlIn('module_review_request_id', e.moduleReviews)}`
+  removed.modules = await tx.$executeRaw`DELETE FROM modules WHERE ${sqlIn('module_id', e.modules)}`
   removed.refresh_tokens = await tx.$executeRaw`DELETE FROM refresh_tokens WHERE ${sqlIn('user_id', users.ids)}`
   removed.login_attempts = await tx.$executeRaw`DELETE FROM login_attempts WHERE ${sqlIn('email', users.emails)}`
   removed.activity_logs = await tx.$executeRaw`DELETE FROM activity_logs WHERE ${sqlIn('user_id', users.ids)}`
@@ -46,17 +47,25 @@ async function countLeft(tx, e, users) {
     review_requests: await n(tx.$queryRaw`SELECT COUNT(*) AS n FROM review_requests WHERE ${sqlIn('review_request_id', e.reviews)}`),
     module_review_requests: await n(tx.$queryRaw`SELECT COUNT(*) AS n FROM module_review_requests WHERE ${sqlIn('module_review_request_id', e.moduleReviews)}`),
     bugs: await n(tx.$queryRaw`SELECT COUNT(*) AS n FROM bugs WHERE ${sqlIn('bug_id', e.bugs)}`),
+    modules: await n(tx.$queryRaw`SELECT COUNT(*) AS n FROM modules WHERE ${sqlIn('module_id', e.modules)}`),
     users: await n(tx.$queryRaw`SELECT COUNT(*) AS n FROM users WHERE ${sqlIn('user_id', users.ids)}`),
   }
 }
 
 /**
  * @param {(name: string, cond: boolean, detail?: string) => void} check  the suite's PASS/FAIL counter
- * @param {{ cases?: string[], bugs?: string[], moduleReviews?: string[] }} created  ids from API responses
+ * @param {{ cases?: string[], bugs?: string[], moduleReviews?: string[], modules?: string[] }} created  ids from API responses
+ *   (modules: leaf modules the run created; their cases and bugs must be in the lists too)
  * @param {{ userIds?: string[], emails?: string[] }} [tempUsers]  fixture users the run registered
  */
 export async function cleanupRunEntities(check, created, tempUsers = {}) {
-  const e = { cases: created.cases ?? [], bugs: created.bugs ?? [], moduleReviews: created.moduleReviews ?? [], reviews: [] }
+  const e = {
+    cases: created.cases ?? [],
+    bugs: created.bugs ?? [],
+    moduleReviews: created.moduleReviews ?? [],
+    modules: created.modules ?? [],
+    reviews: [],
+  }
   const users = { ids: tempUsers.userIds ?? [], emails: tempUsers.emails ?? [] }
   let guard
   try {

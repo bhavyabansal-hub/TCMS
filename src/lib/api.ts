@@ -47,7 +47,13 @@ export class ApiError extends Error {
   static conflict(message: string, details?: unknown) {
     return new ApiError(409, message, details)
   }
+  /** 409 for a guarded update that lost the race (src/lib/server/optimistic-lock.ts). */
+  static staleEdit() {
+    return new ApiError(409, STALE_EDIT_MESSAGE)
+  }
 }
+
+export const STALE_EDIT_MESSAGE = 'This item was changed by someone else — reload'
 
 export function errorBody(message: string, details?: unknown) {
   return details === undefined ? { error: message } : { error: message, details }

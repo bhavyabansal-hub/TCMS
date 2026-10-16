@@ -109,8 +109,14 @@ export interface BugUpdateFields {
   resolvedAt?: Date | null
 }
 
-/** Partial UPDATE — every write also bumps updated_at (raw SQL skips @updatedAt). */
-export async function updateBug(bugId: string, fields: BugUpdateFields): Promise<BugSqlRow> {
+/** Guarded partial UPDATE — applies only while updated_at still equals
+ *  `expectedUpdatedAt` (optimistic lock); returns null when another write landed
+ *  first. Every write also bumps updated_at (raw SQL skips @updatedAt). */
+export async function updateBugIfUnchanged(
+  bugId: string,
+  fields: BugUpdateFields,
+  expectedUpdatedAt: Date
+): Promise<BugSqlRow | null> {
   const sets: Prisma.Sql[] = []
   if (fields.title !== undefined) sets.push(Prisma.sql`title = ${fields.title}`)
   if (fields.description !== undefined) sets.push(Prisma.sql`description = ${fields.description}`)
@@ -125,8 +131,10 @@ export async function updateBug(bugId: string, fields: BugUpdateFields): Promise
   if (fields.resolvedAt !== undefined) sets.push(Prisma.sql`resolved_at = ${fields.resolvedAt}`)
   sets.push(Prisma.sql`updated_at = UTC_TIMESTAMP(3)`)
 
-  await db.$executeRaw`
-    UPDATE bugs SET ${Prisma.join(sets)} WHERE bug_id = ${bugId}`
+  const changed = await db.$executeRaw`
+    UPDATE bugs SET ${Prisma.join(sets)}
+    WHERE bug_id = ${bugId} AND updated_at = ${expectedUpdatedAt}`
+  if (Number(changed) === 0) return null
   const updated = await findBugById(bugId)
   if (!updated) throw new Error('Updated bug could not be read back')
   return updated

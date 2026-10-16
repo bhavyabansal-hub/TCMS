@@ -16,6 +16,7 @@ import { serializeBug, type SerializedBug } from '@/lib/serializers'
 import { listTestCasesByIds, findTestCaseById } from '../test-cases/test-cases.repository'
 import { findModuleById } from '../modules/modules.repository'
 import { findUserById } from '@/lib/server/user.repository'
+import { resolveExpectedUpdatedAt } from '@/lib/server/optimistic-lock'
 import {
   countBugs,
   deleteBugById,
@@ -25,7 +26,7 @@ import {
   insertBugTestCaseLinks,
   listBugTestCaseLinks,
   listBugs,
-  updateBug,
+  updateBugIfUnchanged,
   type BugFilters,
   type BugUpdateFields,
 } from './bugs.repository'
@@ -191,7 +192,9 @@ export async function updateBugFields(
     fields.resolvedAt = input.resolvedAt === null ? null : new Date(input.resolvedAt)
   }
 
-  const updated = await updateBug(bugId, fields)
+  const expected = resolveExpectedUpdatedAt(input.expectedUpdatedAt, before.updated_at)
+  const updated = await updateBugIfUnchanged(bugId, fields, expected)
+  if (!updated) throw ApiError.staleEdit()
 
   // testCaseIds in the body REPLACE the bug's links (delete + insert).
   if (input.testCaseIds !== undefined) {
