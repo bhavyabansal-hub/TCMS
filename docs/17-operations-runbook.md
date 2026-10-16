@@ -270,3 +270,30 @@ Interpretation: with `connection_limit=40` the database sees at most ~45 connect
 | 2 | Load test at expected + 2× users; response times, errors, slow points; fix what breaks | 25/50/100 VU runs: 0 errors, p99 ≤ 251 ms; slow points identified (login bcrypt, two JOIN lists) — nothing broke; fixes applied: reviewer self-assignment bug found & fixed during pre-launch verification |
 | 3 | Document single-instance only + Redis path | [16-single-instance-and-scaling.md](./16-single-instance-and-scaling.md) — in-process state inventory, failure modes, Redis checklist, acceptance tests |
 | 4 | Backup/rollback plan, error logging, login & core-flow tests | This document: drill-verified backup+restore (§1.2/§2.1), two-axis rollback (§2), file+console structured logging verified (§3), 65/65 + 34/34 suites (§4) |
+
+---
+
+## 6. First admin on a fresh production database (`scripts/create-first-vp.mjs`)
+
+Seed is blocked in production and self-signup only creates `viewer` accounts, so a new
+production database has no VP. Create exactly one with this script, then add every other
+user from **Settings → Users**.
+
+```bash
+# on the app server, in the app folder, with the production .env in place
+TCMS_DEPLOY_ENV=production node scripts/create-first-vp.mjs --email=it.admin@company.com --name="IT Admin"
+Password for the new VP:      # hidden, asked twice; min 12 chars, a letter and a number
+Repeat the password:
+OK: VP created user_id=<uuid> email=it.admin@company.com
+```
+
+| Rule | Behaviour |
+|---|---|
+| Password | Hidden prompt only, never an argument; never printed or logged. bcrypt cost 10 (same as the app). With piped stdin the first two lines are password + confirmation (automation only; keep it out of shell history). |
+| Already a VP | Refuses (`REFUSED: an active VP already exists`, exit 1). Two parallel runs are serialized by `GET_LOCK('tcms_first_vp')` and re-checked in one transaction. |
+| Email taken | Refuses (exit 1). Email is trimmed and lower-cased like login. |
+| Target DB | `DATABASE_URL`. With `TCMS_DEPLOY_ENV=production` it refuses the local sandbox URL; without it only `127.0.0.1:5500/tcms_test` is accepted (exit 2, no connection made). |
+| Exit codes | 0 created · 1 refused / invalid input · 2 wrong target or DB error |
+
+Verifier (sandbox only, everything rolled back): `node scripts/create-first-vp-test.mjs`
+→ `FIRST-VP RESULT: 15 passed, 0 failed` (2026-10-16).

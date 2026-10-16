@@ -7,7 +7,7 @@ current code before working on it (things may have changed).
 
 | # | Item | Why it matters | Source | Priority |
 |---|---|---|---|---|
-| B1 | One-time script to create the first VP account in production | Seed is blocked in production and signup creates only viewers, so a fresh production DB has no admin | startup-guard-1, signup-switch-1 | Must before go-live |
+| B1 | One-time script to create the first VP account in production | Seed is blocked in production and signup creates only viewers, so a fresh production DB has no admin | startup-guard-1, signup-switch-1 | **Done 2026-10-16**: `scripts/create-first-vp.mjs` (+ `create-first-vp-test.mjs`, docs/17 §6) |
 | B2 | Concurrency safety: review verdicts, module bulk-approve, task-report upsert (transactions / guarded updates / 409; decide READ-COMMITTED) | Two users acting at once was never stress-tested on MySQL | 03-verification.md "NOT tested" | Must before go-live |
 | B3 | Map MySQL/Prisma errors to clear HTTP responses (duplicate, FK, too long, deadlock retry, pool timeout, DB down) | Users otherwise see generic 500s | owner review | High |
 | B4 | Verify "Needs revision" flagged fields round-trip (old note said they may always save as empty) | Possible silent data loss in reviews | worklog 9-b | High (verify first) |
