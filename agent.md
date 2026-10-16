@@ -238,6 +238,7 @@ Also run and paste `node scripts/audit-standards.mjs` (report only, not blocking
    requirement or bug id (`REQ-<NNN>`, `BUG-<NNN>`), or `MAINT:` for maintenance work
    without one. Never rewrite history (no reset/rebase/amend/force-push; D9). Never push —
    the owner pushes.
+   Commit only code, scripts and ONE summary report per task; raw test output and evidence files stay out of git.
 
 ## 5. Known quirks (documented on purpose — do not "fix" silently)
 
