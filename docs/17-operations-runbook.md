@@ -239,7 +239,7 @@ node scripts/loadtest.mjs                         # report; compare vs §6 basel
 ### 4.5 Certifying against the company MySQL TEST schema
 The app is MySQL-only; pointing it at a different MySQL server is just a `DATABASE_URL`
 change. **Never certify against production data** — ask IT for a dedicated TEST schema
-and a limited user (IT request file: to be recreated (pending)), then:
+and a limited user (IT request: [`deploy/it-request-mysql.md`](./deploy/it-request-mysql.md)), then:
 
 ```
 # 0. IT provides: host, port, TEST schema name, limited user (SELECT/INSERT/UPDATE/

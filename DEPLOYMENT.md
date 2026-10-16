@@ -4,7 +4,7 @@ Current as of **2026-10-14**. TCMS runs on **MySQL 8.4 only** (utf8mb4, strict m
 Two deployment realities are documented:
 
 - **Sandbox / local** — a real MySQL 8.4.6 server booted by script on `127.0.0.1:5500` (this is what the live preview uses).
-- **Company IT (production)** — the real MySQL server operated by IT. The migration and cutover plan is fully specified in [`docs/migration/04-cutover-rollback.md`](docs/migration/04-cutover-rollback.md); the questions for IT: IT request file: to be recreated (pending).
+- **Company IT (production)** — the real MySQL server operated by IT. The migration and cutover plan is fully specified in [`docs/migration/04-cutover-rollback.md`](docs/migration/04-cutover-rollback.md); the questions for IT: IT request: [`docs/deploy/it-request-mysql.md`](docs/deploy/it-request-mysql.md).
 
 > The former Vercel + Neon/Supabase guide is retired and kept only as history in
 > `archive/postgres/docs/DEPLOYMENT-GUIDE.md` — **do not follow it
@@ -62,7 +62,7 @@ npm run dev                               # scripts/dev-tcms.mjs — MySQL-only 
 The full, ordered plan with rollback lives in `docs/migration/04-cutover-rollback.md`.
 Summary of the sequence:
 
-1. **Send the IT request** (IT request file: to be recreated (pending)): server/port + MySQL 8.4
+1. **Send the IT request** (IT request: [`docs/deploy/it-request-mysql.md`](docs/deploy/it-request-mysql.md)): server/port + MySQL 8.4
    version, TEST schema + limited app user (exact grant list included), TLS certs,
    `sql_mode` (STRICT_ALL_TABLES or STRICT_TRANS_TABLES), `utf8mb4` + timezone,
    `max_connections`, backup ownership + one-off restore drill permission,

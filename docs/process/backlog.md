@@ -40,4 +40,4 @@ current code before working on it (things may have changed).
 ## Waiting on IT (not agent work)
 MySQL host/port, TEST schema + users, TLS certificates, sql_mode/time_zone/utf8mb4 confirmation,
 nginx WebSocket proxy + X-Forwarded-Proto, TCMS_DEPLOY_ENV=production, single app instance,
-cron jobs for backups, backup storage location. IT request file: to be recreated (pending).
+cron jobs for backups, backup storage location. IT request: [`docs/deploy/it-request-mysql.md`](../deploy/it-request-mysql.md).

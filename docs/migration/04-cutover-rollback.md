@@ -5,7 +5,7 @@ already executed a full rehearsal of every step against the TEST schema.
 
 ## Preconditions (from IT)
 
-> Ask: IT request file: to be recreated (pending). Answers also fill the
+> Ask: IT request: [`docs/deploy/it-request-mysql.md`](../deploy/it-request-mysql.md). Answers also fill the
 > "only IT can confirm" list in the phase-1 audit report.
 
 - [ ] MySQL 8.4 host:port reachable from the app server, TLS available.

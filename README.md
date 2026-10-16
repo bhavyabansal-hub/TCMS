@@ -17,7 +17,7 @@ A production-grade test case management web application for QA teams: modules, t
 | Verification suites | ✅ battery 63/63 · Crew Desk 5/5 · CSV import 33/33 · 250-row import probe PASS · 200-VU load test 0 errors · backup/restore drill PASS |
 | Crew Desk ticket rule | ✅ Normalized to designated test ticket **1355** everywhere (`rg 4190` = 0 matches); ticket 4191 used only as the guard-refusal probe (never written to) |
 | Phase 2 hardening | ✅ 5 fix groups landed (DB wiring, FK 404s, boot/backup logging, docs refresh, repository-only SQL + lint clean) — commits `a281b4e`…`a9ef188` |
-| Real-IT cutover (production MySQL) | ⏳ **PENDING IT ANSWERS** — server/port, TEST schema + limited user, TLS certs, `sql_mode`, backup ownership. IT request file: to be recreated (pending); plan: [`docs/migration/04-cutover-rollback.md`](docs/migration/04-cutover-rollback.md) |
+| Real-IT cutover (production MySQL) | ⏳ **PENDING IT ANSWERS** — server/port, TEST schema + limited user, TLS certs, `sql_mode`, backup ownership. IT request: [`docs/deploy/it-request-mysql.md`](docs/deploy/it-request-mysql.md); plan: [`docs/migration/04-cutover-rollback.md`](docs/migration/04-cutover-rollback.md) |
 | PostgreSQL fallback | 🔒 Kept READ-ONLY as rollback insurance: `PG_SOURCE_URL`, `scripts/pg-sandbox/` data, `archive/postgres/scripts/migration/schema.pg.prisma`, `scripts/pg-client/`; rollback plan in `docs/migration/04` |
 | Next up (after cutover) | AI-generated test cases feature; Crew Desk stays in guarded test mode (ticket 1355) until the company token is issued |
 

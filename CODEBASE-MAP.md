@@ -12,7 +12,7 @@ Tailwind v4 + shadcn/ui · Zustand 5 · TanStack React Query 5 · Prisma 6 (clie
 JWT in httpOnly cookies · zod 4 · socket.io mini-service for realtime.
 PostgreSQL retired 2026-10-14 (kept read-only as rollback source; PG-era scripts live in
 `archive/postgres/` until 2 weeks after go-live, decision D1). Production cutover is **pending IT answers**
-(IT request file: to be recreated (pending); plan in `docs/migration/04-cutover-rollback.md`).
+(IT request: [`docs/deploy/it-request-mysql.md`](docs/deploy/it-request-mysql.md); plan in `docs/migration/04-cutover-rollback.md`).
 
 ## 2. Top-level layout
 
@@ -35,7 +35,7 @@ archive/            moved-out files (see archive/README.md): postgres/ = PG-era 
                     one-off probes/repros; src/ = classic dashboard + /dashboard-preview
 README.md DEPLOYMENT.md CHANGELOG.md   root docs (deploy guide = MySQL 8.4)
 .zscripts/ (git-ignored) start-dev.sh Caddyfile bun.lock vercel.json   LOAD-BEARING pipeline files — never delete
-(no download/ folder: the canonical zip and IT request file are pending re-creation)
+(no download/ folder: the IT request is `docs/deploy/it-request-mysql.md`; the canonical zip is not recreated)
 ```
 
 ## 3. Request pipeline (every API call)
