@@ -75,8 +75,10 @@ export async function listUserOptions(): Promise<UserOption[]> {
 
 // ---------- Commands ----------
 
-/** POST /api/users — invite (create) a user; admins may grant any role. */
+/** POST /api/users — invite (create) a user. Only a VP may pick a role other than
+ *  DEFAULT_INVITE_ROLE (src/lib/roles.ts canAssignRoles). */
 import { clearIdentityCache } from '../integrations/crewdesk/crewdesk.identity'
+import { DEFAULT_INVITE_ROLE, canAssignRoles } from '@/lib/roles'
 
 export async function createUser(
   me: SessionUser,
@@ -84,6 +86,9 @@ export async function createUser(
   meta: RequestMeta
 ): Promise<SerializedUser> {
   ensurePermission(me, 'manage_users', 'Admin only')
+  if (input.role !== DEFAULT_INVITE_ROLE && !canAssignRoles(me.role)) {
+    throw ApiError.forbidden(`Only a VP can create accounts with a role other than ${DEFAULT_INVITE_ROLE}`)
+  }
   const existing = await findUserByEmail(input.email)
   if (existing) throw ApiError.badRequest('Email already registered')
   const user = await insertUser({
@@ -118,6 +123,11 @@ export async function updateUserFields(
   ensurePermission(me, 'manage_users', 'Admin only')
   const before = await findUserById(userId)
   if (!before) throw ApiError.notFound('User not found')
+  // Role changes (deep-test R2-3): never your own role; otherwise only a VP.
+  if (input.role !== undefined && input.role !== before.role) {
+    if (userId === me.userId) throw ApiError.forbidden('You cannot change your own role')
+    if (!canAssignRoles(me.role)) throw ApiError.forbidden('Only a VP can change roles')
+  }
 
   // All update fields are optional; skip the round-trip when nothing is set.
   const fields: UserUpdateFields = {}
