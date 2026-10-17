@@ -14,6 +14,7 @@ import {
   getTestCaseReviews,
   getTestCasesImportTemplate,
   importTestCasesFromCsv,
+  listTestCaseOptions,
   listTestCasesPaginated,
   submitTestCaseForReview,
   updateTestCaseFields,
@@ -23,11 +24,13 @@ import {
   validateCreateTestCaseBody,
   validateImportTestCasesBody,
   validateSubmitReviewBody,
+  validateTestCaseOptionsQuery,
   validateUpdateTestCaseBody,
 } from './test-cases.validation'
 
 /** GET /api/test-cases                            -> paginated list (filters + search)
  *  GET /api/test-cases?action=import-template     -> sample CSV for the Import tab
+ *  GET /api/test-cases?action=options             -> light picker list (id + title)
  *  GET /api/test-cases?id=...                     -> single test case
  *  GET /api/test-cases?id=...&action=history      -> version history
  *  GET /api/test-cases?id=...&action=reviews      -> review cycles */
@@ -36,6 +39,7 @@ export async function GET(req: NextRequest) {
     const me = await requireUser()
     const q = getQueryParams(req)
     if (q.action === 'import-template') return ok(await getTestCasesImportTemplate(me))
+    if (q.action === 'options') return ok(await listTestCaseOptions(validateTestCaseOptionsQuery(q)))
     if (q.id && q.action === 'history') return ok(await getTestCaseHistory(q.id))
     if (q.id && q.action === 'reviews') return ok(await getTestCaseReviews(q.id))
     if (q.id) return ok(await getTestCase(q.id))

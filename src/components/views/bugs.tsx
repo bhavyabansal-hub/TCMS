@@ -27,6 +27,7 @@ import { bugStatusColor, severityDot, formatDateTime, formatDate, timeAgo } from
 import { handleApiError } from '@/lib/errors'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { toCsv } from '@/lib/csv-export'
 import type { Bug, BugStatus, Severity } from '@/types'
 import { BUG_ASSIGNEE_ROLES } from '@/types'
 import { SeverityBadge, StatusBadge } from '@/components/shared/badges'
@@ -74,7 +75,8 @@ export function BugsView() {
   const activeBug = activeBugId ? bugs.find((b) => b.bugId === activeBugId) ?? null : null
 
   /** Export the currently loaded bugs to CSV — mirrors the test-cases export.
-   *  Exports what the user can see (the loaded page), quoted + escaped. */
+   *  Exports what the user can see (the loaded page); every cell quoted and
+   *  formula-injection safe (src/lib/csv-export.ts). */
   function exportCsv() {
     if (!bugs.length) {
       toast.error('No data to export')
@@ -83,7 +85,7 @@ export function BugsView() {
     const headers = ['ID', 'Title', 'Module', 'Severity', 'Status', 'Assignee', 'Reported By', 'Created', 'Updated']
     const rows = bugs.map((b) => [
       b.bugId,
-      `"${b.title.replace(/"/g, '""')}"`,
+      b.title,
       b.module?.name ?? '',
       b.severity,
       b.status,
@@ -92,7 +94,7 @@ export function BugsView() {
       formatDateTime(b.createdAt),
       formatDateTime(b.updatedAt),
     ])
-    const csv = [headers, ...rows].map((r) => r.join(',')).join('\n')
+    const csv = toCsv([headers, ...rows])
     downloadTextFile(`bugs-${new Date().toISOString().slice(0, 10)}.csv`, csv)
     toast.success('Exported CSV')
   }
@@ -125,7 +127,7 @@ export function BugsView() {
     const bug = bugs.find((b) => b.bugId === bugId)
     if (!bug || bug.status === newStatus) return
     try {
-      await bugsApi.update(bugId, { status: newStatus })
+      await bugsApi.update(bugId, { status: newStatus, expectedUpdatedAt: bug.updatedAt })
       toast.success(`Moved to "${STATUS_LABEL[newStatus]}"`)
       invalidateAfterMutation(qc, 'bugs')
     } catch (err) {
@@ -215,7 +217,7 @@ export function BugsView() {
                 <TableBody>
                   {bugs.map((b) => (
                     <TableRow key={b.bugId} className="cursor-pointer" onClick={() => setDetailBug(b)}>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{b.bugId.slice(-6)}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{b.bugId}</TableCell>
                       <TableCell className="font-medium max-w-xs truncate">{b.title}</TableCell>
                       <TableCell>
                         <SeverityBadge severity={b.severity} />
@@ -383,6 +385,8 @@ function statusDotColor(status: BugStatus): string {
 
 function CreateBugDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const qc = useQueryClient()
+  // Picking an assignee needs assign_bug (server rule, R2-2).
+  const canAssign = useAuthStore((s) => s.can('assign_bug'))
   const [title, setTitle] = useState('')
   const [severity, setSeverity] = useState<Severity>('medium')
   const [environment, setEnvironment] = useState('staging')
@@ -426,7 +430,7 @@ function CreateBugDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
         severity,
         environment: environment.trim() || undefined,
         moduleId,
-        assignedToId: assignedToId || null,
+        assignedToId: canAssign ? assignedToId || null : null,
         description: description.trim(),
         stepsToReproduce: stepsToReproduce.trim() || undefined,
         expectedBehaviour: expectedBehaviour.trim() || undefined,
@@ -515,7 +519,7 @@ function CreateBugDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
 
           <div className="space-y-1.5 min-w-0">
             <Label htmlFor="b-assigned">Assign To</Label>
-            <Select value={assignedToId} onValueChange={setAssignedToId}>
+            <Select value={canAssign ? assignedToId : ''} onValueChange={setAssignedToId} disabled={!canAssign}>
               <SelectTrigger id="b-assigned" className="w-full min-w-0 [&>span]:truncate">
                 <SelectValue placeholder="Unassigned" />
               </SelectTrigger>
@@ -657,7 +661,7 @@ function BugDetailContent({
         <div className="flex flex-wrap items-center gap-2 pr-6">
           <SeverityBadge severity={bug.severity} />
           <StatusBadge status={bug.status} colorClass={bugStatusColor(bug.status)} />
-          <span className="font-mono text-xs text-muted-foreground">#{bug.bugId.slice(-6)}</span>
+          <span className="font-mono text-xs text-muted-foreground">#{bug.bugId}</span>
         </div>
         <DialogTitle className="leading-snug">{bug.title}</DialogTitle>
         <DialogDescription>
@@ -771,6 +775,7 @@ function BugEditForm({
   const { data: options } = useQuery({
     queryKey: ['users', 'options'],
     queryFn: usersApi.options,
+    staleTime: REFERENCE_STALE_TIME_MS,
   })
 
   async function handleSave() {
@@ -779,7 +784,9 @@ function BugEditForm({
       const updated = await bugsApi.update(bug.bugId, {
         status,
         severity,
-        assignedToId: assignedToId || null,
+        // Only a real reassignment is sent (assign_bug is required for it; T1-2).
+        ...((assignedToId || null) !== (bug.assignedToId ?? null) ? { assignedToId: assignedToId || null } : {}),
+        expectedUpdatedAt: bug.updatedAt,
       })
       toast.success('Bug updated')
       invalidateAfterMutation(qc, 'bugs')

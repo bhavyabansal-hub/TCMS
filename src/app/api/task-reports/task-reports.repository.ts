@@ -3,7 +3,7 @@
 
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
-import { newId } from '@/lib/server/id'
+import { insertReturningId } from '@/lib/server/insert'
 import type { TaskReportSqlRow } from '@/types/sql-rows'
 
 /** Standard JOIN select — task report plus its reportedBy user ref. */
@@ -25,9 +25,10 @@ function buildWhere(filters: TaskReportFilters): Prisma.Sql {
   if (filters.reportedById) parts.push(Prisma.sql`tr.reported_by_id = ${filters.reportedById}`)
   if (filters.dateFrom) parts.push(Prisma.sql`tr.report_date >= ${filters.dateFrom}`)
   if (filters.dateTo) parts.push(Prisma.sql`tr.report_date <= ${filters.dateTo}`)
-  // JSON containment — the raw-SQL translation of the legacy Prisma
-  // `where.tasks = { contains: q.moduleId }` filter.
-  if (filters.moduleId) parts.push(Prisma.sql`JSON_CONTAINS(tr.tasks, CAST(${JSON.stringify(filters.moduleId)} AS JSON))`)
+  // Reports with at least one task line linked to this module: exact object match on
+  // the line's moduleId (ids are digit strings, so "5" never matches "15"). The old
+  // scalar JSON_CONTAINS never matched the task objects at all (Phase 5 fix).
+  if (filters.moduleId) parts.push(Prisma.sql`JSON_CONTAINS(tr.tasks, JSON_OBJECT('moduleId', ${String(filters.moduleId)}))`)
   return parts.length ? Prisma.sql`WHERE ${Prisma.join(parts, ' AND ')}` : Prisma.empty
 }
 
@@ -83,14 +84,13 @@ export interface TaskReportInsert {
 }
 
 export async function insertTaskReport(input: TaskReportInsert): Promise<TaskReportSqlRow> {
-  // MySQL has no RETURNING: generate the PK app-side, insert, then read back.
-  const taskReportId = newId()
-  await db.$executeRaw`
+  // MySQL has no RETURNING: insert, take the new key from LAST_INSERT_ID(), then read back.
+  const taskReportId = await insertReturningId(Prisma.sql`
     INSERT INTO task_reports
-      (task_report_id, reported_by_id, report_date, tasks, notes, total_minutes, created_at, updated_at)
+      (reported_by_id, report_date, tasks, notes, total_minutes, created_at, updated_at)
     VALUES
-      (${taskReportId}, ${input.reportedById}, ${input.reportDate}, CAST(${JSON.stringify(input.tasks)} AS JSON),
-       ${input.notes}, ${input.totalMinutes}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+      (${input.reportedById}, ${input.reportDate}, CAST(${JSON.stringify(input.tasks)} AS JSON),
+       ${input.notes}, ${input.totalMinutes}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
   const created = await findTaskReportById(taskReportId)
   if (!created) throw new Error('Inserted task report could not be read back')
   return created

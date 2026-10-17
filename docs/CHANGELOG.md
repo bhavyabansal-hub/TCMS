@@ -1,36 +1,120 @@
-# CHANGELOG
+# Changelog
 
-Reverse-chronological list of user-visible and architectural changes.
-Human/agent task-level detail lives in `worklog.md` (repo root).
+Reverse-chronological list of user-visible and architectural changes. Task-level
+detail lives in [`worklog.md`](./worklog.md).
+
+## 2026-10-17 — REQ readable numeric ids
+
+- **Every id is a readable number:** test cases, bugs, modules, users, reviews, wiki pages … are `1, 2, 3 …` instead of UUIDs (URLs like `/test-cases/42`; the bug and test-case lists show the full id). Keys are `INT UNSIGNED AUTO_INCREMENT`; the API and the UI keep ids as digit strings (`"42"`).
+- **One clean baseline migration** `20261017120000_baseline_numeric_ids` replaces the three old migrations (production never ran one). Dev database reset and reseeded; existing sessions sign in again.
+- **Safe insert ids:** `insertReturningId()` reads `LAST_INSERT_ID()` on the insert's own connection; proven by 75 parallel inserts in the new `scripts/verify-numeric-ids.mjs`, which also checks that every id in every list/detail response is a positive integer.
+- **Fixes found on the way:** the work-log module filter now matches (it compared a JSON array with a scalar); the seed adds one wiki document; the UI suites retry a locked Chrome port file on Windows instead of aborting.
+
+## 2026-10-17 — FIX modules page crash + console-error checks on every page
+
+- **/modules crashed** ("Cannot read properties of undefined (reading 'length')") in browser tabs still running the previous client: the PERF change had removed `tree` from `GET /api/modules`. The field is back (deprecated, backlog B30; `flat` still carries no children), the page reads it defensively, and API changes must now be additive (CODING-STANDARDS §2 rule 15).
+- **No calls that are certain to fail:** review and module-review detail pages call the detail API only with `perform_review` (no 403 + retry for developer / qa_engineer / viewer); Integrations skips the Crew Desk email check when Crew Desk is not configured (no 502); detail pages no longer retry a 403/404.
+- **Permission toggles show at once again:** the session check reads the permission table fresh (the PERF cache read showed the old matrix for up to 3 s).
+- **Stricter page checker:** `scripts/verify-page-apis.mjs` now fails on any browser console error, uncaught exception, Next.js error overlay, error boundary or empty page, for every page and role.
+
+## 2026-10-17 — PERF pages and APIs for 1000+ users
+
+- **Every page loads only what it shows:** no duplicate API calls any more (the boot cache clear wiped the prefetch), the boot prefetch only on the dashboard, no Crew Desk/module call for users who see "permission denied". Checked per page × role by the new `scripts/verify-page-apis.mjs`.
+- **Smaller, cheaper responses:** `/api/modules` sends each module once (14 KB → 5 KB on demo data; the client builds the tree); new light pickers `GET /api/test-cases?action=options` and `/api/bugs?action=options`; the dashboard activity feed no longer carries snapshots.
+- **Server:** cache-aside for the module tree and user picker (cleared by every write, no stale result after an invalidation), module review writes batched (3 statements per module instead of 3 per case), bulk delete is one statement, list-sort indexes (new migration), pool default 40 (`TCMS_DB_CONNECTION_LIMIT`), buffered async log writes, fast reads logged at debug.
+- **Measured (production build, laptop):** API calls p95 < 60 ms; 1000 realistic users (350 req/s) served with 0 errors, p95 764 ms (`scripts/loadtest-1000.mjs`, `docs/architecture/HLD.md` §7).
+
+## 2026-10-16 — MAINT faster agents
+
+- Default for every job = the fast lane: one developer does the work, sdet runs the Definition of Done. The full 6-agent process only when the owner types `/new-requirement`.
+- Every agent and command: the WORKING METHOD, read-first list (CLAUDE.md + CODING-STANDARDS + last 10 worklog entries + the task files only), reports max 15 lines, no re-review rounds unless a gate fails, waits only for data deletes, schema changes or a push.
+
+## 2026-10-16 — MAINT docs: one docs folder, one standards file
+
+- Root keeps only README.md, CLAUDE.md, package files and configs. agent.md, CODEBASE-MAP.md, DEPLOYMENT.md, CHANGELOG.md and worklog.md moved into docs/.
+- docs/ = README index + architecture/ (new HLD and LLD; database, API, auth, frontend, realtime, Crew Desk) + guides/ + deploy/ + process/ + qa/. Overlapping docs merged (overview + scaling → HLD, standards & LLD → LLD, file index → CODEBASE-MAP); the finished REQ-001 record removed.
+- docs/CODING-STANDARDS.md is the one rules file (owner standards word for word + TCMS rules); CLAUDE.md carries the WORKING METHOD.
+
+## 2026-10-16 — MAINT logs
+
+- **Clean dev log:** the 8 "Node.js API in Edge Runtime" warnings are gone — `src/instrumentation.ts` only loads `src/instrumentation-node.ts` in the Node runtime.
+- **SQL logging:** `prisma:query` lines only with `TCMS_LOG_SQL=true` (off by default, any environment).
+- **Fallbacks:** the WebSocket broadcast no longer delays a request when the WS service is slow or down; SMTP sends have a full timeout. DB down → `/api/ready` and data requests answer 503 with a clear message.
+
+## 2026-10-16 — Cleanup: PostgreSQL removed, docs describe today's app
+
+- **Removed:** the whole `archive/` folder, the PostgreSQL scripts (schema converter, 250-row probe, rollback drill), the migration dossier `docs/migration/`, old one-time reports (REFACTOR-*, CODE-QUALITY-*, older QA prompts/reports), the stale PDF guide and its build script, and raw test evidence files.
+- **PostgreSQL:** fully removed — no rollback source (D1) and no data copy (D2: production starts empty with `scripts/create-first-vp.mjs`). The data-copy script, `PG_SOURCE_URL` and the `scripts/pg-client/` ignores are gone.
+- **Docs:** README, DEPLOYMENT, CODEBASE-MAP and guides 01–17 now describe MySQL 8.4, the six roles and the permission matrix, the Windows setup, the nginx production topology, the safety features (409 on concurrent edits, read-only mode, `/api/ready`, sign-in limit) and the deep-test fixes.
+
+## 2026-10-16 — FIX deep-test bugs (docs/qa/DEEP-TEST-2026-10-16.md)
+
+- **Roles (R2-3):** only a VP can set or change a role, and never their own; other user managers can create viewer accounts only. Role pickers are disabled for non-VPs.
+- **Bugs (T1-1, T1-2, R2-2):** editing a bug, test case or work log no longer resets fields you did not send; saving a bug with an unchanged assignee no longer needs assign rights; assigning on create needs assign rights.
+- **Reviews (R2-1, R2-4, R2-5, R2-6):** a resubmit or module submit closes the old open review; cases in review or approved cannot be submitted again (400); authors see the flagged fields on the test-case page; a bulk module verdict sends one notification per person.
+- **Permissions (T1-5, DOC-T1-6):** turning a permission back to its default reports `source: 'default'`; `docs/architecture/auth-and-permissions.md` tables match the code (21 permissions, 126 cells).
+
+## 2026-10-16 — MAINT production run
+
+- **Safety:** new `GET /api/ready` (database check); `TCMS_READ_ONLY=true` pauses every change with a clear 503 while sign-in and reading keep working; CSV exports of bugs and work logs are now quoted and protected against spreadsheet formula injection like test cases; too many failed sign-ins from one network now get 429.
+- **Database errors:** duplicate, foreign-key, too-long and similar MySQL errors now answer a clear 400/409 (DB down or busy: 503) instead of a generic 500; SQL text never reaches the client. Two saves of the same day's work log at once no longer fail.
+- **Concurrent edits:** saving a test case, bug, module, review verdict/forward or a module bulk verdict that someone else changed since you opened it now answers **409 "This item was changed by someone else — reload"** instead of silently overwriting (optimistic lock on the loaded updatedAt). Parallel test-case saves and parallel verdicts no longer fail with a 500 deadlock.
+
+## 2026-10-14 — Owner 8-step plan (steps 1–3) + Phase 2 hardening (post-migration)
+
+- **Step 1:** Crew Desk testing normalized to designated ticket **1355-only** —
+  fixed 6 stale `4190` remnants including the functional default in
+  `src/lib/server/config.ts`; `rg 4190` over the repo = 0. Ticket 4191 survives
+  only as the guard-refusal probe (asserted refused, never written to).
+- **Step 2:** The two battery checks rewritten during the migration were
+  independently audited with evidence (`git show` archaeology + live MySQL
+  probes) — both old versions were stale on ANY database (CSRF
+  marker-allows-Origin is the guard's documented design; the bare `steps` field
+  no longer exists in the product). Battery 63/63 is honest.
+- **Step 3:** IT request for the real production MySQL server drafted →
+  `download/it-request-mysql.md` (server/port, TEST schema + limited user with
+  grant list, TLS/sql_mode/charset/timezone, backup ownership, Workbench access,
+  where real data lives).
+- **Phase 2 hardening (5 groups, suites green after each):**
+  1. `scripts/mysql-env.sh` = single source of DB wiring (safe env parser immune
+     to the `source .env` `&`-truncation bug); repair-only `.env` self-heal;
+     unquoted-`.env` standard; battery self-boots.
+  2. Unknown `moduleId`/`assignee` on test-case/bug create/update → proper
+     404s (was raw FK 500). 22-probe sweep: zero 500s.
+  3. Backup scheduler wired into autostart (pgrep-guarded, idempotent);
+     backup log lines; CSV import completion log line.
+  4. Twelve stale docs updated for MySQL 8.4 (schema, API reference + new
+     endpoint sections, runbook rewritten to mysqldump drills, file index,
+     deployment/scaling/realtime banners; Vercel-era guides marked HISTORICAL).
+  5. `src/lib/auth.ts` SQL moved to the user repository (no import cycle);
+     SMTP lazy singleton; eslint ignores vendored code (490 errors → 0);
+     stale `scripts/tcms-package/` removed (zip 759 → 443 files);
+     Crew Desk identity cache invalidation on user changes.
 
 ## 2026-10-14 — PostgreSQL → MySQL 8.4 migration (MySQL-only)
 
-The database engine changed. Full narrative in `../CHANGELOG.md` and
-[`migration/`](./migration/) (01 audit → 02 schema conversion → 03 verification →
-04 cutover/rollback). Facts users and contributors must know:
-
-- **MySQL 8.4 only.** utf8mb4 / utf8mb4_unicode_ci (case-insensitive `LIKE`),
-  strict mode (over-length or invalid values are REJECTED, not truncated),
-  DATETIME(3), native JSON columns, CHAR(36) uuid PKs generated app-side
-  (`newId()`), case-sensitive collations only for `password_hash` + refresh
-  tokens.
-- **All raw SQL rewritten across 20 repositories** — `RETURNING` →
-  insert-then-read-back, `ILIKE` → `LIKE`, `ON CONFLICT` → `ON DUPLICATE KEY`,
-  `::int` casts → `Number()` coercion, JSONB operators → `JSON_CONTAINS` /
-  `CAST(? AS JSON)`, `FILTER (WHERE …)` → `COUNT(CASE WHEN …)`.
-- **Data migrated with zero differences** (17 tables / 450 rows verified row by
-  row; emoji + Hindi roundtrip OK; FK-orphan audit clean). PG stays READ-ONLY
-  as the rollback source (`PG_SOURCE_URL`, `schema.pg.prisma`,
-  `scripts/pg-client/`, `scripts/pg-sandbox/` data).
-- **keep-alive route removed** (it existed to stop free-tier Postgres from
-  sleeping). `GET /api` is the health endpoint now; the vercel.json cron is gone.
-- **Verification:** battery 63/63 · Crew Desk mock 5/5 · import 33/33 · 250-row
-  import probe PASS · 200-VU load test 0 errors · mysqldump backup + scratch-
-  schema restore drill PASS. Numbers: [`migration/03-verification.md`](./migration/03-verification.md).
-- **Ops changes:** backups are `mysqldump`-based (`scripts/backup-db-mysql.sh`,
-  14-day retention) with a restore drill (`scripts/restore-mysql.sh`);
-  `scripts/mysql-env.sh` is the single source of DB wiring; production cutover
-  awaits IT answers ([`migration/04-cutover-rollback.md`](./migration/04-cutover-rollback.md)).
+- Adopted TCMS-complete-2026-10-14.zip as the baseline (settings reorg, cookie
+  auth, wiki, search, backup scheduler, Crew Desk v2, Register kept).
+- Prisma schema converted to MySQL 8.4 (provider swap; explicit native types
+  on every String — CHAR(36) uuids, VARCHAR sized per validation caps,
+  TEXT/MEDIUMTEXT long text; DATETIME(3) everywhere; JSON expression defaults;
+  case-sensitive collations for password_hash + refresh token).
+- All raw SQL rewritten for MySQL across 20 repositories (RETURNING →
+  insert+read-back with app-side uuids, ILIKE → LIKE, ON CONFLICT →
+  ON DUPLICATE KEY, interval/cast/JSONB fixes, Number() coercions, boolean
+  normalization). No raw SQL outside repositories (unchanged rule).
+- keep-alive route removed (Supabase/PG pool leftover); its cron removed;
+  scripts updated to use /api health.
+- Backup scheduler: mysqldump-based (scripts/backup-db-mysql.sh, same
+  14-retention policy) + restore drill (scripts/restore-mysql.sh, scratch
+  schema, verified 17 tables).
+- One-time data migration script (scripts/migration/migrate-pg-to-mysql.mjs):
+  batched, dependency-ordered, idempotent, dry-run mode, FK-orphan audit,
+  utf8mb4 + strict-mode probes. PG source stays READ-ONLY.
+- Verification: battery 63/63, Crew Desk mock suite 5/5, import suite 33/33,
+  250-row import probe PASS (cap enforced), 200-VU load test 0 errors.
+  (The migration dossier docs/migration/ was removed 2026-10-16; the PostgreSQL
+  rollback window was dropped, decision D1.)
 
 ## 2026-10-14 — Phase 2 hardening (post-audit fixes)
 
@@ -177,7 +261,6 @@ The database engine changed. Full narrative in `../CHANGELOG.md` and
   stays as the second layer. No-CORS-marker attacks are still 403 (suite
   asserts it).
 
-
 ## 2026-10-09 — Integrations redesign (3rd round): horizontal, no explainer
 
 ### Changed
@@ -235,6 +318,12 @@ The database engine changed. Full narrative in `../CHANGELOG.md` and
   the 3-step link form beside a plain-English "How it works" card, and the
   full-width link history table. Same behavior, far less jargon, no inner
   width limits (nothing "shrunken").
+
+## 2026-10-08 — Adopted baseline (zip lineage)
+
+- Crew Desk integration (shared account, mock-only in sandbox, email check,
+  1355-designated-ticket rule), settings reorg, cookie sessions, wiki, search,
+  backup scheduler, self-signup Register tab.
 
 ## 2026-10-08 — UI/UX fix round (owner feedback)
 
@@ -346,7 +435,7 @@ The database engine changed. Full narrative in `../CHANGELOG.md` and
   invalidate the owning keys.
 - **`qs()` query-string builder + `writeAccessCookie()`** in `lib/client/api.ts` —
   replaced 8 inline `new URLSearchParams(...)` copies and 2 duplicated cookie writes.
-- **docs/15-standards-and-lld.md** — the standards/LLD contract (layering rules, raw
+- **docs/architecture/LLD.md** — the standards/LLD contract (layering rules, raw
   SQL rules, LLD principle map, caching/load-management, logging, route-permission map).
 
 ### Changed (load management)
@@ -362,40 +451,13 @@ The database engine changed. Full narrative in `../CHANGELOG.md` and
   `@radix-ui/react-tooltip` (lockfile synced).
 - Root-level doc duplicates (`CODE-QUALITY-ROADMAP.md`, `DEPLOYMENT-GUIDE.md`,
   `REFACTORING-REPORT.md`, `REFACTOR-CHARTER.md` — byte-identical copies of docs/),
-  superseded root `DEPLOYMENT.md` (docs/DEPLOYMENT-GUIDE.md is canonical), and the
+  superseded root `docs/deploy/DEPLOYMENT.md` (docs/DEPLOYMENT-GUIDE.md is canonical), and the
   stale `scripts/tcms-package/` project snapshot.
 - Stale QA screenshots from `download/` (current-verification set kept).
 
 ### Verified
 - `tsc --noEmit` clean; `eslint` clean; production build OK; 31/31 e2e checks pass;
   dark/light smoke screenshots; zero browser console errors.
-
-## 2026-09-30 — Tasks page, error boundaries, preview crash fix
-
-- Fixed the app-wide "client-side exception" crash (bare `<SelectTrigger>` outside
-  `<Select>` context) and added root + segment error boundaries
-  (`global-error.tsx`, `(app)/error.tsx`) with reset/reload/digest.
-- Tasks (Daily Work Log) page rebuilt: add tasks with minutes/status, optional
-  entity links (module / test case / bug) with explicit link-type state, sticky
-  save bar that never overlaps row controls, validation before save, report
-  upsert by date (API `task-reports`), CSV export.
-
-## 2026-09-29 — Reviews ownership & permanent deletion
-
-- Review/module-review listing and detail are participant-scoped server-side
-  (reviewer or requester only; 403 otherwise).
-- Test-case deletion is now PERMANENT (hard DELETE with cascades) instead of a
-  soft "deprecated" status; permission rule unchanged (author or delete right),
-  confirm dialog updated.
-- Route-wide hardening pass on dialogs (max-width utilities), sticky bars, dnd
-  kanban and CSV import verified end-to-end (31-check e2e suite introduced here).
-
-## 2026-09-28 — First production hardening
-
-- Production start script (`scripts/start-tcms.sh`): embedded PostgreSQL + WS
-  mini-service + Next.js production build with health gate.
-- Preview deployment fixed (port/host wiring), login/token flow verified against
-  the production build.
 
 ## 2026-10-01 — Pre-launch hardening (cookie sessions, CSRF, load test, runbook)
 
@@ -423,7 +485,7 @@ The database engine changed. Full narrative in `../CHANGELOG.md` and
   p99 441→304 ms; throughput 265→339 rps (+28%); server-side p99 193 ms at 50 VUs.
 - New tooling: `scripts/loadtest.mjs`, `scripts/seed-load-volume.mjs`.
 
-**Single-instance constraint documented** (`docs/12-realtime-and-deployment.md §3`):
+**Single-instance constraint documented** (`docs/architecture/realtime-and-notifications.md §3`):
 in-process TTL cache + WebSocket hub mean horizontal scaling requires Redis
 (cache + notification fan-out) first.
 
@@ -435,5 +497,32 @@ row-count verification; restore drill executed and verified (15/15 tables).
 uncaughtException into the structured `[tcms]` logger; `withApi()` continues to
 log every request (method, path, status, latency) and every error with stack.
 
-**Docs**: `docs/03` rewritten for the cookie session model; auth API contract in
-`docs/04` unchanged in shape but token-free bodies noted.
+**Docs**: ``docs/architecture/auth-and-permissions.md`` rewritten for the cookie session model; auth API contract in
+``docs/architecture/api-reference.md`` unchanged in shape but token-free bodies noted.
+
+## 2026-09-30 — Tasks page, error boundaries, preview crash fix
+
+- Fixed the app-wide "client-side exception" crash (bare `<SelectTrigger>` outside
+  `<Select>` context) and added root + segment error boundaries
+  (`global-error.tsx`, `(app)/error.tsx`) with reset/reload/digest.
+- Tasks (Daily Work Log) page rebuilt: add tasks with minutes/status, optional
+  entity links (module / test case / bug) with explicit link-type state, sticky
+  save bar that never overlaps row controls, validation before save, report
+  upsert by date (API `task-reports`), CSV export.
+
+## 2026-09-29 — Reviews ownership & permanent deletion
+
+- Review/module-review listing and detail are participant-scoped server-side
+  (reviewer or requester only; 403 otherwise).
+- Test-case deletion is now PERMANENT (hard DELETE with cascades) instead of a
+  soft "deprecated" status; permission rule unchanged (author or delete right),
+  confirm dialog updated.
+- Route-wide hardening pass on dialogs (max-width utilities), sticky bars, dnd
+  kanban and CSV import verified end-to-end (31-check e2e suite introduced here).
+
+## 2026-09-28 — First production hardening
+
+- Production start script (`scripts/start-tcms.sh`): embedded PostgreSQL + WS
+  mini-service + Next.js production build with health gate.
+- Preview deployment fixed (port/host wiring), login/token flow verified against
+  the production build.

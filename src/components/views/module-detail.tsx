@@ -40,7 +40,7 @@ export function ModuleDetailView() {
       last.casePage.hasMore ? last.casePage.offset + last.subtreeTestCases.length : undefined,
     enabled: !!id,
     staleTime: REFERENCE_STALE_TIME_MS,
-    retry: 1,
+    // retries: global policy (a 403/404 is never retried — no duplicate call)
   })
 
   if (!id) {

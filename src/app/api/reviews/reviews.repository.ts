@@ -7,7 +7,7 @@
 
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
-import { newId } from '@/lib/server/id'
+import { insertReturningId } from '@/lib/server/insert'
 import type { ReviewRequestSqlRow, ReviewEventSqlRow } from '@/types/sql-rows'
 import type { SqlExecutor } from '../test-cases/test-cases.repository'
 
@@ -43,11 +43,10 @@ export async function insertReviewRequest(
   },
   tx: SqlExecutor = db
 ): Promise<ReviewRequestSqlRow> {
-  // MySQL has no RETURNING: generate the PK app-side, insert, then read back.
-  const reviewRequestId = newId()
-  await tx.$executeRaw`
-    INSERT INTO review_requests (review_request_id, test_case_id, reviewer_id, requester_id, status, due_date, cycle, created_at, updated_at)
-    VALUES (${reviewRequestId}, ${input.testCaseId}, ${input.reviewerId}, ${input.requesterId}, 'pending', ${input.dueDate}, ${input.cycle}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+  // MySQL has no RETURNING: insert, take the new key from LAST_INSERT_ID(), then read back.
+  const reviewRequestId = await insertReturningId(Prisma.sql`
+    INSERT INTO review_requests (test_case_id, reviewer_id, requester_id, status, due_date, cycle, created_at, updated_at)
+    VALUES (${input.testCaseId}, ${input.reviewerId}, ${input.requesterId}, 'pending', ${input.dueDate}, ${input.cycle}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`, tx)
   const rows = await tx.$queryRaw<ReviewRequestSqlRow[]>`
     ${REVIEW_SELECT} WHERE r.review_request_id = ${reviewRequestId} LIMIT 1`
   if (!rows[0]) throw new Error('Inserted review request could not be read back')
@@ -87,18 +86,61 @@ export async function updateReviewRequestStatus(
     WHERE review_request_id = ${reviewRequestId}`
 }
 
+/** Batch form of updateReviewRequestStatus — ONE statement (module bulk verdict). */
+export async function updateReviewRequestStatusMany(
+  reviewRequestIds: string[],
+  status: string,
+  tx: SqlExecutor = db
+): Promise<void> {
+  if (reviewRequestIds.length === 0) return
+  await tx.$executeRaw`
+    UPDATE review_requests SET status = ${status}, updated_at = UTC_TIMESTAMP(3)
+    WHERE review_request_id IN (${Prisma.join(reviewRequestIds)})`
+}
+
+/** Batch form of updateReviewRequestReviewerIfOpen (module change-reviewer): ONE
+ *  guarded statement; completed reviews are left alone. Returns rows changed. */
+export async function updateReviewRequestsReviewerIfOpen(
+  reviewRequestIds: string[],
+  reviewerId: string,
+  tx: SqlExecutor = db
+): Promise<number> {
+  if (reviewRequestIds.length === 0) return 0
+  const affected = await tx.$executeRaw`
+    UPDATE review_requests SET reviewer_id = ${reviewerId}, status = 'pending', updated_at = UTC_TIMESTAMP(3)
+    WHERE review_request_id IN (${Prisma.join(reviewRequestIds)}) AND status <> 'completed'`
+  return Number(affected)
+}
+
+/** Closes every still-open review of these test cases (a resubmit supersedes the old
+ *  cycle, deep-test R2-1). Returns the number of reviews closed. */
+export async function closeOpenReviewsForTestCases(testCaseIds: string[], tx: SqlExecutor = db): Promise<number> {
+  if (testCaseIds.length === 0) return 0
+  const closed = await tx.$executeRaw`
+    UPDATE review_requests SET status = 'completed', updated_at = UTC_TIMESTAMP(3)
+    WHERE test_case_id IN (${Prisma.join(testCaseIds)}) AND status <> 'completed'`
+  return Number(closed)
+}
+
+/** `AND updated_at = ?` when an optimistic-lock value is given (B2), else nothing. */
+function updatedAtGuard(expectedUpdatedAt?: Date): Prisma.Sql {
+  return expectedUpdatedAt ? Prisma.sql`AND updated_at = ${expectedUpdatedAt}` : Prisma.empty
+}
+
 /** Concurrency-guarded status write: applies ONLY when the review is not
- *  already completed. Returns the number of rows changed (0 = another verdict
- *  landed first), so two simultaneous reviewers can never double-close a
- *  review or record two verdicts for one open request. */
+ *  already completed (and, with `expectedUpdatedAt`, still unchanged since it was
+ *  loaded). Returns the number of rows changed (0 = another write landed first),
+ *  so two simultaneous reviewers can never double-close a review or record two
+ *  verdicts for one open request. */
 export async function updateReviewRequestStatusIfOpen(
   reviewRequestId: string,
   status: string,
-  tx: SqlExecutor = db
+  tx: SqlExecutor = db,
+  expectedUpdatedAt?: Date
 ): Promise<number> {
   const affected = await tx.$executeRaw`
     UPDATE review_requests SET status = ${status}, updated_at = UTC_TIMESTAMP(3)
-    WHERE review_request_id = ${reviewRequestId} AND status <> 'completed'`
+    WHERE review_request_id = ${reviewRequestId} AND status <> 'completed' ${updatedAtGuard(expectedUpdatedAt)}`
   return Number(affected)
 }
 
@@ -109,11 +151,12 @@ export async function updateReviewRequestStatusIfOpen(
 export async function updateReviewRequestReviewerIfOpen(
   reviewRequestId: string,
   reviewerId: string,
-  tx: SqlExecutor = db
+  tx: SqlExecutor = db,
+  expectedUpdatedAt?: Date
 ): Promise<number> {
   const affected = await tx.$executeRaw`
     UPDATE review_requests SET reviewer_id = ${reviewerId}, status = 'pending', updated_at = UTC_TIMESTAMP(3)
-    WHERE review_request_id = ${reviewRequestId} AND status <> 'completed'`
+    WHERE review_request_id = ${reviewRequestId} AND status <> 'completed' ${updatedAtGuard(expectedUpdatedAt)}`
   return Number(affected)
 }
 
@@ -130,8 +173,8 @@ export interface ModuleCaseReviewInsert {
 }
 
 /** Batch-inserts the case reviews linked to a module-level review (single
- *  INSERT, the raw-SQL equivalent of the legacy createMany). PKs are generated
- *  app-side (MySQL raw INSERT supplies no RETURNING). Timestamps are
+ *  INSERT, the raw-SQL equivalent of the legacy createMany). Keys are AUTO_INCREMENT
+ *  (no ids are needed back). Timestamps are
  *  set explicitly: updated_at has no DB default and raw SQL bypasses
  *  Prisma's @updatedAt. */
 export async function insertReviewRequestsForModuleReview(
@@ -139,12 +182,12 @@ export async function insertReviewRequestsForModuleReview(
 ): Promise<void> {
   if (inputs.length === 0) return
   const values = inputs.map(
-    (input) => Prisma.sql`(${newId()}, ${input.testCaseId}, ${input.reviewerId}, ${input.requesterId},
+    (input) => Prisma.sql`(${input.testCaseId}, ${input.reviewerId}, ${input.requesterId},
       'pending', ${input.dueDate}, ${input.cycle}, ${input.moduleReviewId}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
   )
   await db.$executeRaw`
     INSERT INTO review_requests
-      (review_request_id, test_case_id, reviewer_id, requester_id, status, due_date, cycle, module_review_id,
+      (test_case_id, reviewer_id, requester_id, status, due_date, cycle, module_review_id,
        created_at, updated_at)
     VALUES ${Prisma.join(values, ', ')}`
 }
@@ -213,15 +256,27 @@ export interface ReviewEventInsert {
   flaggedFields: string[]
 }
 
+/** Batch insert of verdict events — ONE multi-row INSERT, no read-back (module
+ *  bulk verdict needs no rows back). */
+export async function insertReviewEventsMany(inputs: ReviewEventInsert[], tx: SqlExecutor = db): Promise<void> {
+  if (inputs.length === 0) return
+  const values = inputs.map(
+    (input) => Prisma.sql`(${input.reviewRequestId}, ${input.reviewerId}, ${input.verdict}, ${input.comment},
+      CAST(${JSON.stringify(input.flaggedFields)} AS JSON), UTC_TIMESTAMP(3))`
+  )
+  await tx.$executeRaw`
+    INSERT INTO review_events (review_request_id, reviewer_id, verdict, comment, flagged_fields, created_at)
+    VALUES ${Prisma.join(values)}`
+}
+
 /** Creates a verdict event; the JSON column is the camelCase
  *  flagged_fields (the schema @maps flaggedFields -> flagged_fields).
- *  MySQL: no RETURNING — generate the PK app-side, insert, then read back. */
+ *  MySQL: no RETURNING — insert, take the new key from LAST_INSERT_ID(), then read back. */
 export async function insertReviewEvent(input: ReviewEventInsert, tx: SqlExecutor = db): Promise<ReviewEventSqlRow> {
-  const reviewEventId = newId()
-  await tx.$executeRaw`
-    INSERT INTO review_events (review_event_id, review_request_id, reviewer_id, verdict, comment, flagged_fields, created_at)
-    VALUES (${reviewEventId}, ${input.reviewRequestId}, ${input.reviewerId}, ${input.verdict}, ${input.comment},
-            CAST(${JSON.stringify(input.flaggedFields)} AS JSON), UTC_TIMESTAMP(3))`
+  const reviewEventId = await insertReturningId(Prisma.sql`
+    INSERT INTO review_events (review_request_id, reviewer_id, verdict, comment, flagged_fields, created_at)
+    VALUES (${input.reviewRequestId}, ${input.reviewerId}, ${input.verdict}, ${input.comment},
+            CAST(${JSON.stringify(input.flaggedFields)} AS JSON), UTC_TIMESTAMP(3))`, tx)
   const rows = await tx.$queryRaw<ReviewEventSqlRow[]>`
     SELECT * FROM review_events WHERE review_event_id = ${reviewEventId} LIMIT 1`
   if (!rows[0]) throw new Error('Inserted review event could not be read back')

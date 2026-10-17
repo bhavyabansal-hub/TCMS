@@ -33,7 +33,7 @@ const DB = 'tcms_test'
 const MYSQL_ENV = { ...process.env, LD_LIBRARY_PATH: '/tmp/mysql84/extra-lib' }
 const APP_PORT = 3996
 const APP_URL = `http://localhost:${APP_PORT}`
-const BAD_TC_ID = '00000000-0000-0000-0000-0000000000tc' // 36 chars, no such test case
+const BAD_TC_ID = '999999999' // well-formed INT UNSIGNED id, no such test case
 
 let PASS = 0, FAIL = 0
 const ok = (m) => { PASS++; console.log(`PASS: ${m}`) }
@@ -87,7 +87,8 @@ let appChild = null
 // when main() throws before/while creating them.
 const probeEmail = `tz-probe-${randomUUID().slice(0, 8)}@correctness.test`
 const probePassword = `Pb-${randomUUID()}${randomUUID()}` // random per run, never printed
-const scratchBugId = randomUUID()
+// Explicit key far above the AUTO_INCREMENT range used by the dev data (INT UNSIGNED max 4294967295).
+const scratchBugId = String(4_000_000_000 + Math.floor(Math.random() * 100_000_000))
 const cookieJar = resolve('/tmp', `tcms-correctness-jar-${process.pid}.txt`) // removed in cleanup (holds session cookies)
 
 async function killApp() {
@@ -119,7 +120,7 @@ async function main() {
   section('1. bug_test_case_links: FK failure surfaces, duplicate stays a no-op')
   const realTcId = mysqlRoot(`SELECT test_case_id FROM ${DB}.test_cases ORDER BY created_at DESC LIMIT 1;`).out
   const realUserId = mysqlRoot(`SELECT user_id FROM ${DB}.users WHERE is_active = 1 ORDER BY created_at LIMIT 1;`).out
-  if (!/^[0-9a-f-]{36}$/.test(realTcId) || !/^[0-9a-f-]{36}$/.test(realUserId)) throw new Error('could not resolve a real test_case_id/user_id for the probe')
+  if (!/^[1-9][0-9]*$/.test(realTcId) || !/^[1-9][0-9]*$/.test(realUserId)) throw new Error('could not resolve a real test_case_id/user_id for the probe')
   const ins = mysqlApp(`INSERT INTO ${DB}.bugs (bug_id, title, description, severity, status, reported_by_id, attachments, created_at, updated_at) VALUES ('${scratchBugId}', 'correctness-test scratch bug', 'created by mysql-correctness-test.mjs', 'P3', 'open', '${realUserId}', CAST('[]' AS JSON), UTC_TIMESTAMP(3), UTC_TIMESTAMP(3));`)
   if (ins.status === 0) ok('scratch bug created (deleted again in cleanup)')
   else throw new Error(`could not create scratch bug: ${ins.err}`)

@@ -4,17 +4,20 @@
 
 import { z } from 'zod'
 import { ApiError, flattenZodError } from '@/lib/api'
+import { expectedUpdatedAtField } from '@/lib/server/optimistic-lock'
 
 const verdictSchema = z.object({
   verdict: z.enum(['approved', 'failed', 'needs_revision']),
   comment: z.string().optional(),
   flaggedFields: z.array(z.string()).default([]),
+  expectedUpdatedAt: expectedUpdatedAtField,
 })
 
 export type VerdictInput = z.infer<typeof verdictSchema>
 
 const forwardSchema = z.object({
   reviewerId: z.string().min(1, 'Choose the user to forward this review to'),
+  expectedUpdatedAt: expectedUpdatedAtField,
 })
 
 export type ForwardInput = z.infer<typeof forwardSchema>

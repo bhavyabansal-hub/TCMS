@@ -20,6 +20,7 @@
 
 import { hashPassword } from '@/lib/auth'
 import { logger } from '@/lib/logger'
+import { REFERENCE_CACHE_PREFIX, invalidateCache } from '@/lib/server/cache'
 import {
   countUsers,
   insertSeedBug,
@@ -27,6 +28,7 @@ import {
   insertSeedTaskReport,
   insertSeedTestCase,
   insertSeedUser,
+  insertSeedWikiDocument,
   runSeedInTransaction,
   type SeedTaskItem,
 } from './seed.repository'
@@ -40,6 +42,7 @@ export type SeedResult =
       testCases: number
       bugs: number
       taskReports: number
+      wikiDocuments: number
     }
 
 /** Seeds demo data. Safe to call repeatedly: no-ops when users exist. */
@@ -50,7 +53,7 @@ export async function seedDemoData(): Promise<SeedResult> {
     return { seeded: false, message: 'Database already has users; skipping seed.' }
   }
 
-  return runSeedInTransaction(async (tx) => {
+  const result: SeedResult = await runSeedInTransaction(async (tx): Promise<SeedResult> => {
     // 7 demo accounts covering the full 6-role hierarchy (VP -> Viewer);
     // admin@tcms.com remains the top admin (now the VP role).
     const admin = await insertSeedUser(
@@ -314,12 +317,25 @@ export async function seedDemoData(): Promise<SeedResult> {
       await insertSeedTaskReport(r, tx)
     }
 
+    // One written wiki document, so the wiki list and /wiki/[id] have demo content.
+    await insertSeedWikiDocument(
+      {
+        title: 'How we write test cases',
+        content:
+          '<h2>How we write test cases</h2><p>One behaviour per case. Steps are short and numbered; every step has an expected result.</p><ul><li>Title: what is checked, not how.</li><li>Preconditions: the state before step 1.</li><li>Priority: P0 blocks a release, P3 is cosmetic.</li></ul>',
+        tags: ['guide', 'test-cases'],
+        authorId: admin.userId,
+      },
+      tx
+    )
+
     logger.info('Demo data seeded', {
       users: 4,
       modules: moduleIds.length,
       testCases: tcData.length,
       bugs: bugData.length,
       taskReports: taskReports.length,
+      wikiDocuments: 1,
     })
 
     // Success payload: every seeded account email.
@@ -330,6 +346,12 @@ export async function seedDemoData(): Promise<SeedResult> {
       testCases: tcData.length,
       bugs: bugData.length,
       taskReports: 2,
+      wikiDocuments: 1,
     }
   })
+  // Seed writes bypass logActivity: drop the cached reference data and stats
+  // after the commit so the new rows show at once.
+  invalidateCache(REFERENCE_CACHE_PREFIX)
+  invalidateCache('stats:')
+  return result
 }

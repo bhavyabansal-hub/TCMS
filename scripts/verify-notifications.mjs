@@ -1,7 +1,10 @@
 // Notification & auth-security verifier — exercises the flows the delivery
 // feature touches. Creates a dedicated temp user so demo accounts stay
-// pristine; soft-deletes it at the end. Run with the server up:
+// pristine; soft-deletes it at the end (domain check), then removes the temp
+// user, its bug and their notifications by id (B16). Run with the server up:
 //   TCMS_BASE_URL=http://localhost:3000 node scripts/verify-notifications.mjs
+import { cleanupRunEntities } from './lib/suite-cleanup.mjs'
+
 const BASE = process.env.TCMS_BASE_URL || 'http://localhost:3000'
 
 let passed = 0
@@ -195,6 +198,13 @@ const deactivatedLogin = await req('POST', '/api/auth?path=login', {
   body: { email: TEMP.email, password: 'NewPass@1234' },
 })
 check('deactivated user cannot log in -> 401', deactivatedLogin.status === 401, `got ${deactivatedLogin.status}`)
+
+// ---------- 8. B16 cleanup — the temp user, its bug and their notifications ----------
+await cleanupRunEntities(
+  check,
+  { bugs: bugCreate.json?.bugId ? [bugCreate.json.bugId] : [] },
+  { userIds: tempId ? [tempId] : [], emails: [TEMP.email] }
+)
 
 console.log('======================================')
 console.log(`NOTIF-AUTH RESULT: ${passed} passed, ${failed} failed`)

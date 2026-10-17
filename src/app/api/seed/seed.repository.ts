@@ -1,11 +1,9 @@
 // Seed repository — raw SQL data access for demo-data creation.
 // Contains ONLY data access: no orchestration, no logging, no HTTP.
 //
-// Every INSERT supplies the primary key app-side via newId() (MySQL has no
-// gen_random_uuid()/RETURNING; see src/lib/server/id.ts — the column's
-// DEFAULT (uuid()) remains only as a safety net). Where the seed needs the id
-// for relations (module tree paths, FK references) it is generated BEFORE the
-// insert and used directly — no read-back is needed.
+// Keys are AUTO_INCREMENT numbers. Where the seed needs a new id for relations
+// (module tree paths, FK references) the insert returns it through
+// insertReturningId (INSERT + LAST_INSERT_ID() on the seed transaction).
 //
 // Tables the legacy seed fills: users, modules, test_cases, bugs,
 // task_reports. It writes NO review requests/events, notifications or
@@ -18,7 +16,7 @@
 
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
-import { newId } from '@/lib/server/id'
+import { insertReturningId } from '@/lib/server/insert'
 
 /** Number of existing users — backs the seed's idempotency check. */
 export async function countUsers(client: Prisma.TransactionClient = db): Promise<number> {
@@ -52,10 +50,9 @@ export async function insertSeedUser(
   input: SeedUserInsert,
   client: Prisma.TransactionClient = db
 ): Promise<{ userId: string; email: string }> {
-  const userId = newId()
-  await client.$executeRaw`
-    INSERT INTO users (user_id, email, full_name, password_hash, role, created_at, updated_at)
-    VALUES (${userId}, ${input.email}, ${input.fullName}, ${input.passwordHash}, ${input.role}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+  const userId = await insertReturningId(Prisma.sql`
+    INSERT INTO users (email, full_name, password_hash, role, created_at, updated_at)
+    VALUES (${input.email}, ${input.fullName}, ${input.passwordHash}, ${input.role}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`, client)
   return { userId, email: input.email }
 }
 
@@ -77,14 +74,13 @@ export async function insertSeedModule(
   input: SeedModuleInsert,
   client: Prisma.TransactionClient = db
 ): Promise<string> {
-  const moduleId = newId()
-  await client.$executeRaw`
+  const moduleId = await insertReturningId(Prisma.sql`
     INSERT INTO modules
-      (module_id, name, description, parent_id, path, depth, owner_id, created_by_id, updated_by_id,
+      (name, description, parent_id, path, depth, owner_id, created_by_id, updated_by_id,
        created_at, updated_at)
     VALUES
-      (${moduleId}, ${input.name}, ${input.description}, ${input.parentId}, ${input.path}, ${input.depth},
-       ${input.ownerId}, ${input.createdById}, ${input.updatedById}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+      (${input.name}, ${input.description}, ${input.parentId}, ${input.path}, ${input.depth},
+       ${input.ownerId}, ${input.createdById}, ${input.updatedById}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`, client)
   return moduleId
 }
 
@@ -111,11 +107,11 @@ export async function insertSeedTestCase(
 ): Promise<void> {
   await client.$executeRaw`
     INSERT INTO test_cases
-      (test_case_id, module_id, title, description, preconditions, expected_result, priority,
+      (module_id, title, description, preconditions, expected_result, priority,
        status, tags, version, author_id, last_edited_by_id, assignee_id, attachments,
        created_at, updated_at)
     VALUES
-      (${newId()}, ${input.moduleId}, ${input.title}, ${input.description}, ${input.preconditions},
+      (${input.moduleId}, ${input.title}, ${input.description}, ${input.preconditions},
        ${input.expectedResult}, ${input.priority},
        ${input.status}, CAST(${JSON.stringify(input.tags)} AS JSON), ${input.version},
        ${input.authorId}, ${input.lastEditedById}, ${input.assigneeId},
@@ -144,11 +140,11 @@ export async function insertSeedBug(
 ): Promise<void> {
   await client.$executeRaw`
     INSERT INTO bugs
-      (bug_id, title, description, severity, status, environment, steps_to_reproduce,
+      (title, description, severity, status, environment, steps_to_reproduce,
        expected_behaviour, actual_behaviour, reported_by_id, assigned_to_id, module_id,
        attachments, resolved_at, created_at, updated_at)
     VALUES
-      (${newId()}, ${input.title}, ${input.description}, ${input.severity}, ${input.status},
+      (${input.title}, ${input.description}, ${input.severity}, ${input.status},
        ${input.environment}, ${input.stepsToReproduce}, ${input.expectedBehaviour},
        ${input.actualBehaviour}, ${input.reportedById}, ${input.assignedToId},
        ${input.moduleId}, CAST(${JSON.stringify([])} AS JSON), ${input.resolvedAt}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
@@ -178,8 +174,28 @@ export async function insertSeedTaskReport(
 ): Promise<void> {
   await client.$executeRaw`
     INSERT INTO task_reports
-      (task_report_id, reported_by_id, report_date, tasks, notes, total_minutes, created_at, updated_at)
+      (reported_by_id, report_date, tasks, notes, total_minutes, created_at, updated_at)
     VALUES
-      (${newId()}, ${input.reportedById}, ${input.reportDate}, CAST(${JSON.stringify(input.tasks)} AS JSON),
+      (${input.reportedById}, ${input.reportDate}, CAST(${JSON.stringify(input.tasks)} AS JSON),
        ${input.notes}, ${input.totalMinutes}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+}
+
+export interface SeedWikiDocumentInsert {
+  title: string
+  content: string
+  tags: string[]
+  authorId: string
+}
+
+/** Creates a demo written wiki document (rich-text HTML, already safe). Returns its id. */
+export async function insertSeedWikiDocument(
+  input: SeedWikiDocumentInsert,
+  client: Prisma.TransactionClient = db
+): Promise<string> {
+  return insertReturningId(Prisma.sql`
+    INSERT INTO wiki_documents
+      (title, kind, content, tags, author_id, created_at, updated_at)
+    VALUES
+      (${input.title}, 'written', ${input.content}, CAST(${JSON.stringify(input.tags)} AS JSON),
+       ${input.authorId}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`, client)
 }

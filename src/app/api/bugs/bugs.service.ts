@@ -16,6 +16,7 @@ import { serializeBug, type SerializedBug } from '@/lib/serializers'
 import { listTestCasesByIds, findTestCaseById } from '../test-cases/test-cases.repository'
 import { findModuleById } from '../modules/modules.repository'
 import { findUserById } from '@/lib/server/user.repository'
+import { resolveExpectedUpdatedAt } from '@/lib/server/optimistic-lock'
 import {
   countBugs,
   deleteBugById,
@@ -24,8 +25,9 @@ import {
   insertBug,
   insertBugTestCaseLinks,
   listBugTestCaseLinks,
+  listBugOptionRows,
   listBugs,
-  updateBug,
+  updateBugIfUnchanged,
   type BugFilters,
   type BugUpdateFields,
 } from './bugs.repository'
@@ -54,6 +56,12 @@ export interface BugTestCaseLinkView {
 export type BugWithLinks = SerializedBug & { testCaseLinks: BugTestCaseLinkView[] }
 
 // ---------- Queries ----------
+
+/** Light picker list (id + title) — e.g. linking a work-log line to a bug. */
+export async function listBugOptions(input: { limit: number }): Promise<{ bugId: string; title: string }[]> {
+  const rows = await listBugOptionRows(input.limit)
+  return rows.map((r) => ({ bugId: r.bug_id, title: r.title }))
+}
 
 export async function listBugsPaginated(
   q: Record<string, string>
@@ -99,6 +107,8 @@ export async function createBug(
     if (!mod) throw ApiError.notFound('Module not found')
   }
   if (input.assignedToId) {
+    // Choosing an assignee is an assignment: same right as a reassign (deep-test R2-2).
+    ensurePermission(me, 'assign_bug', 'Only roles with assign-bug rights (VP / Manager) can assign bugs')
     const assignee = await findUserById(input.assignedToId)
     if (!assignee) throw ApiError.notFound('Assignee not found')
   }
@@ -159,7 +169,10 @@ export async function updateBugFields(
   if (!canAny(me.role, ['create_bug', 'assign_bug'])) {
     throw ApiError.forbidden('Only roles with bug rights (create / assign) can edit bugs')
   }
-  if (input.assignedToId !== undefined) {
+  // assign_bug is needed only when the assignee really changes (deep-test T1-2):
+  // resending the current assignee (or null for an unassigned bug) is a no-op.
+  const isReassign = input.assignedToId !== undefined && (input.assignedToId ?? null) !== before.assigned_to_id
+  if (isReassign) {
     ensurePermission(me, 'assign_bug', 'Only roles with assign-bug rights (VP / Manager) can reassign bugs')
     // Fail fast: unknown assignee 404s instead of a raw FK 500 mid-update.
     if (input.assignedToId) {
@@ -182,7 +195,7 @@ export async function updateBugFields(
   if (input.expectedBehaviour !== undefined) fields.expectedBehaviour = input.expectedBehaviour
   if (input.actualBehaviour !== undefined) fields.actualBehaviour = input.actualBehaviour
   if (input.moduleId !== undefined) fields.moduleId = input.moduleId ?? null
-  if (input.assignedToId !== undefined) fields.assignedToId = input.assignedToId ?? null
+  if (isReassign) fields.assignedToId = input.assignedToId ?? null
   // Legacy rule, preserved exactly: whenever the update sets the status to
   // resolved/closed, resolved_at is stamped with now (any body value loses).
   if (input.status === 'resolved' || input.status === 'closed') {
@@ -191,7 +204,9 @@ export async function updateBugFields(
     fields.resolvedAt = input.resolvedAt === null ? null : new Date(input.resolvedAt)
   }
 
-  const updated = await updateBug(bugId, fields)
+  const expected = resolveExpectedUpdatedAt(input.expectedUpdatedAt, before.updated_at)
+  const updated = await updateBugIfUnchanged(bugId, fields, expected)
+  if (!updated) throw ApiError.staleEdit()
 
   // testCaseIds in the body REPLACE the bug's links (delete + insert).
   if (input.testCaseIds !== undefined) {

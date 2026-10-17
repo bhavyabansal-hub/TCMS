@@ -4,6 +4,7 @@
 
 import { z } from 'zod'
 import { ApiError, flattenZodError } from '@/lib/api'
+import { expectedUpdatedAtField } from '@/lib/server/optimistic-lock'
 
 const createModuleSchema = z.object({
   // CAPS (audit 2026-10-09): consistent with test-cases/bugs.
@@ -20,6 +21,7 @@ const updateModuleSchema = z.object({
   name: z.string().max(120).optional(),
   description: z.string().max(2_000).optional(),
   ownerId: z.string().max(64).optional(),
+  expectedUpdatedAt: expectedUpdatedAtField,
 })
 
 const submitModuleReviewSchema = z.object({

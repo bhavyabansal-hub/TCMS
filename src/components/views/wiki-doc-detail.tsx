@@ -64,7 +64,7 @@ export function WikiDocDetailView() {
     queryKey: ['wiki', 'detail', id],
     queryFn: () => wikiApi.get(id!),
     enabled: !!id,
-    retry: 1,
+    // retries: global policy (a 403/404 is never retried — no duplicate call)
   })
 
   // Keep the editor buffer in sync with the loaded doc (initial load, refetch).

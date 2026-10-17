@@ -38,5 +38,3 @@ case "${DATABASE_URL:-}" in
   *) export DATABASE_URL="mysql://tcms_app:ChangeMe_local_only@127.0.0.1:5500/tcms_test?connection_limit=40&pool_timeout=10" ;;
 esac
 export DIRECT_URL="${DIRECT_URL:-$DATABASE_URL}"
-# PostgreSQL stays ONLY the read-only drill/migration source — never the app DB.
-export PG_SOURCE_URL="${PG_SOURCE_URL:-postgresql://tcms:tcms@localhost:5499/tcms?sslmode=disable}"

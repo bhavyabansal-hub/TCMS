@@ -4,7 +4,7 @@
 
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
-import { newId } from '@/lib/server/id'
+import { insertReturningId } from '@/lib/server/insert'
 import type { ModuleSqlRow } from '@/types/sql-rows'
 
 /** All modules ordered by name, each with its owner reference
@@ -88,18 +88,17 @@ export interface ModuleInsert {
   updatedById: string
 }
 
-/** Creates a module. The PK is generated app-side (MySQL: no RETURNING).
+/** Creates a module. The key comes from LAST_INSERT_ID() (MySQL: no RETURNING).
  *  created_at/updated_at are set explicitly: updated_at has no DB default
  *  and raw SQL bypasses @updatedAt. */
 export async function insertModule(input: ModuleInsert): Promise<string> {
-  const moduleId = newId()
-  await db.$executeRaw`
+  const moduleId = await insertReturningId(Prisma.sql`
     INSERT INTO modules
-      (module_id, name, description, parent_id, path, depth, owner_id, created_by_id, updated_by_id,
+      (name, description, parent_id, path, depth, owner_id, created_by_id, updated_by_id,
        created_at, updated_at)
     VALUES
-      (${moduleId}, ${input.name}, ${input.description}, ${input.parentId}, ${input.path}, ${input.depth},
-       ${input.ownerId}, ${input.createdById}, ${input.updatedById}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+      (${input.name}, ${input.description}, ${input.parentId}, ${input.path}, ${input.depth},
+       ${input.ownerId}, ${input.createdById}, ${input.updatedById}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
   return moduleId
 }
 
@@ -112,12 +111,15 @@ export interface ModuleUpdateFields {
   updatedById?: string
 }
 
-/** Partial UPDATE — every write also bumps updated_at (raw SQL skips @updatedAt).
+/** Guarded partial UPDATE — applies only while updated_at still equals
+ *  `expectedUpdatedAt` (optimistic lock); returns null when another write landed
+ *  first. Every write also bumps updated_at (raw SQL skips @updatedAt).
  *  MySQL: UPDATE has no RETURNING — write, then read the row back. */
-export async function updateModule(
+export async function updateModuleIfUnchanged(
   moduleId: string,
-  fields: ModuleUpdateFields
-): Promise<ModuleSqlRow> {
+  fields: ModuleUpdateFields,
+  expectedUpdatedAt: Date
+): Promise<ModuleSqlRow | null> {
   const sets: Prisma.Sql[] = []
   if (fields.name !== undefined) sets.push(Prisma.sql`name = ${fields.name}`)
   if (fields.description !== undefined) sets.push(Prisma.sql`description = ${fields.description}`)
@@ -125,8 +127,10 @@ export async function updateModule(
   if (fields.updatedById !== undefined) sets.push(Prisma.sql`updated_by_id = ${fields.updatedById}`)
   sets.push(Prisma.sql`updated_at = UTC_TIMESTAMP(3)`)
 
-  await db.$executeRaw`
-    UPDATE modules SET ${Prisma.join(sets)} WHERE module_id = ${moduleId}`
+  const changed = await db.$executeRaw`
+    UPDATE modules SET ${Prisma.join(sets)}
+    WHERE module_id = ${moduleId} AND updated_at = ${expectedUpdatedAt}`
+  if (Number(changed) === 0) return null
   const rows = await db.$queryRaw<ModuleSqlRow[]>`
     SELECT * FROM modules WHERE module_id = ${moduleId} LIMIT 1`
   if (!rows[0]) throw new Error('Updated module could not be read back')

@@ -19,7 +19,7 @@ import {
   type StatusCountSqlRow,
   type PriorityCountSqlRow,
 } from './stats.repository'
-import { listRecentActivityLogs } from '../activity-logs/activity-logs.repository'
+import { listRecentActivitySummaries } from '../activity-logs/activity-logs.repository'
 import { listTaskReportsSince } from '../task-reports/task-reports.repository'
 
 /** Legacy dashboard recent-activity take. */
@@ -79,7 +79,7 @@ export async function getDashboardStats(me: SessionUser): Promise<DashboardStats
   const [aggregates, myPendingReviews, recentActivity] = await Promise.all([
     getGlobalAggregates(),
     countPendingReviewsForReviewer(me.userId),
-    listRecentActivityLogs(RECENT_ACTIVITY_LIMIT, activityFilters),
+    listRecentActivitySummaries(RECENT_ACTIVITY_LIMIT, activityFilters),
   ])
   return {
     totalTestCases: aggregates.totalTestCases,

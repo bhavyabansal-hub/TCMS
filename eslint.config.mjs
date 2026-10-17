@@ -44,10 +44,8 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "off",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "archive/**", "skills",
-    // Vendored read-only Prisma PostgreSQL driver (one-time data-copy tooling)
-    // and migration helpers: generated/historical code, not app source.
-    "scripts/pg-client/**", "scripts/migration/*.cjs", "scripts/tcms-package/**"]
+  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills",
+    "scripts/tcms-package/**"]
 }];
 
 export default eslintConfig;

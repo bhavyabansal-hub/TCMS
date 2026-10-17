@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 import { ZodError } from 'zod'
 import { logger } from './logger'
-import { EXTRA_ALLOWED_HOSTS } from '@/lib/server/config'
+import { EXTRA_ALLOWED_HOSTS, READ_ONLY, SLOW_REQUEST_MS } from '@/lib/server/config'
+import { READ_ONLY_MESSAGE, isBlockedInReadOnly } from '@/lib/server/read-only'
 import type { RequestMeta } from './activity'
+import { mapDatabaseError, mysqlErrno } from '@/lib/server/db-errors'
 
 // Standard API response helpers — the ONLY way routes produce responses.
 //
@@ -47,7 +49,13 @@ export class ApiError extends Error {
   static conflict(message: string, details?: unknown) {
     return new ApiError(409, message, details)
   }
+  /** 409 for a guarded update that lost the race (src/lib/server/optimistic-lock.ts). */
+  static staleEdit() {
+    return new ApiError(409, STALE_EDIT_MESSAGE)
+  }
 }
+
+export const STALE_EDIT_MESSAGE = 'This item was changed by someone else — reload'
 
 export function errorBody(message: string, details?: unknown) {
   return details === undefined ? { error: message } : { error: message, details }
@@ -228,10 +236,18 @@ export async function withApi(
   const url = new URL(req.url)
   try {
     assertSameOrigin(req)
+    // Maintenance mode (TCMS_READ_ONLY=true): writes answer 503 before any work.
+    if (READ_ONLY && isBlockedInReadOnly(req.method, url.pathname, url.searchParams)) {
+      throw new ApiError(503, READ_ONLY_MESSAGE)
+    }
     const res = await handler()
-    logger.info(`${req.method} ${url.pathname}${url.search} -> ${res.status}`, {
-      durationMs: Date.now() - startedAt,
-    })
+    // LOAD: a fast successful read is a debug line (shown in dev, not in production);
+    // writes stay info, slow requests warn, errors are logged below.
+    const durationMs = Date.now() - startedAt
+    const line = `${req.method} ${url.pathname}${url.search} -> ${res.status}`
+    if (durationMs >= SLOW_REQUEST_MS) logger.warn(`${line} (slow)`, { durationMs })
+    else if (req.method === 'GET') logger.debug(line, { durationMs })
+    else logger.info(line, { durationMs })
     // Belt-and-braces: even a handler that forgot the header can never
     // produce a cacheable API response (see NO_STORE_HEADERS / ok()).
     res.headers.set('Cache-Control', 'no-store, must-revalidate')
@@ -244,6 +260,15 @@ export async function withApi(
     if (err instanceof ZodError) {
       logger.warn(`${req.method} ${url.pathname}${url.search} -> 400: validation failed`)
       return badRequest('Invalid input', flattenZodError(err))
+    }
+    // Database failures get a clean status + fixed message (never SQL text);
+    // the original error stays in the server log only.
+    const dbError = mapDatabaseError(err)
+    if (dbError) {
+      const line = `${req.method} ${url.pathname}${url.search} -> ${dbError.status}: db ${dbError.kind}`
+      if (dbError.status === 503) logger.error(line, err)
+      else logger.warn(line, { errno: mysqlErrno(err), detail: String((err as Error).message ?? '').slice(-300) })
+      return NextResponse.json(errorBody(dbError.message), { status: dbError.status, headers: NO_STORE_HEADERS })
     }
     logger.error(`${req.method} ${url.pathname}${url.search} -> 500`, err)
     return NextResponse.json(errorBody('Internal server error'), { status: 500, headers: NO_STORE_HEADERS })

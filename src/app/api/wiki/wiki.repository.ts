@@ -8,7 +8,7 @@
 
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
-import { newId } from '@/lib/server/id'
+import { insertReturningId } from '@/lib/server/insert'
 import type { WikiDocumentSqlRow } from '@/types/sql-rows'
 
 /** Standard JOIN select — document plus author/lastEditedBy refs
@@ -77,15 +77,14 @@ export interface WikiDocumentInsert {
 }
 
 export async function insertWikiDocument(input: WikiDocumentInsert): Promise<string> {
-  // MySQL has no RETURNING: generate the PK app-side, insert, return it.
-  const id = newId()
-  await db.$executeRaw`
+  // MySQL has no RETURNING: insert, take the new key from LAST_INSERT_ID(), return it.
+  const id = await insertReturningId(Prisma.sql`
     INSERT INTO wiki_documents
-      (wiki_document_id, title, kind, content, file_name, file_type, file_size, file_data, tags, author_id, created_at, updated_at)
+      (title, kind, content, file_name, file_type, file_size, file_data, tags, author_id, created_at, updated_at)
     VALUES
-      (${id}, ${input.title}, ${input.kind}, ${input.content}, ${input.fileName},
+      (${input.title}, ${input.kind}, ${input.content}, ${input.fileName},
        ${input.fileType}, ${input.fileSize}, ${input.fileData},
-       CAST(${JSON.stringify(input.tags)} AS JSON), ${input.authorId}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+       CAST(${JSON.stringify(input.tags)} AS JSON), ${input.authorId}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
   return id
 }
 

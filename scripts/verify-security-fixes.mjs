@@ -36,7 +36,7 @@ const flatModule = tree.json?.flat?.[0]?.moduleId
 
 // ---------- 1. JWT_SECRET fail-fast + forged token rejection ----------
 const forged = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')
-  + '.' + Buffer.from(JSON.stringify({ sub: '00000000-0000-0000-0000-000000000000', email: 'evil@evil.com', role: 'vp', fullName: 'Evil', exp: Math.floor(Date.now()/1000) + 900 })).toString('base64url')
+  + '.' + Buffer.from(JSON.stringify({ sub: '999999999', email: 'evil@evil.com', role: 'vp', fullName: 'Evil', exp: Math.floor(Date.now()/1000) + 900 })).toString('base64url')
   + '.Zm9vZ2Vkc2lnbmF0dXJl' // signed with the OLD public fallback secret -> must now fail
 const forgedProbe = await req('GET', '/api/users', { headers: { Authorization: `Bearer ${forged}` } })
 check('FIX 1a: forged JWT with old public secret -> 401', forgedProbe.status === 401, String(forgedProbe.status))

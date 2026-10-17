@@ -13,7 +13,7 @@ import { usersApi } from '@/lib/client/api'
 import { invalidateAfterMutation } from '@/lib/client/invalidate'
 import { useAuthStore } from '@/store'
 import type { Role, User } from '@/types'
-import { ROLE_OPTIONS } from '@/lib/roles'
+import { DEFAULT_INVITE_ROLE, ROLE_OPTIONS, canAssignRoles } from '@/lib/roles'
 import { formatDate, roleColor } from '@/lib/format'
 import { handleApiError } from '@/lib/errors'
 
@@ -66,6 +66,8 @@ import { initials } from '@/lib/format'
 
 export function SettingsUsersView() {
   const { user, can } = useAuthStore()
+  // Only a VP may set or change roles (server rule in users.service; R2-3).
+  const mayAssignRoles = !!user && canAssignRoles(user.role)
   const qc = useQueryClient()
 
   const [page, setPage] = useState(1)
@@ -78,7 +80,7 @@ export function SettingsUsersView() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteName, setInviteName] = useState('')
   const [invitePassword, setInvitePassword] = useState('')
-  const [inviteRole, setInviteRole] = useState<Role>('qa_engineer')
+  const [inviteRole, setInviteRole] = useState<Role>(DEFAULT_INVITE_ROLE)
 
   // Delete dialog state
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -166,7 +168,7 @@ export function SettingsUsersView() {
       email: inviteEmail,
       fullName: inviteName,
       password: invitePassword,
-      role: inviteRole,
+      role: mayAssignRoles ? inviteRole : DEFAULT_INVITE_ROLE,
     })
   }
 
@@ -286,7 +288,7 @@ export function SettingsUsersView() {
                       <TableCell>
                         <Select
                           value={u.role}
-                          disabled={isSelf || updateMutation.isPending}
+                          disabled={isSelf || !mayAssignRoles || updateMutation.isPending}
                           onValueChange={(v) =>
                             updateMutation.mutate({ id: u.userId, patch: { role: v as Role } })
                           }
@@ -449,8 +451,9 @@ export function SettingsUsersView() {
             <div className="space-y-2">
               <Label htmlFor="invite-role">Role</Label>
               <Select
-                value={inviteRole}
+                value={mayAssignRoles ? inviteRole : DEFAULT_INVITE_ROLE}
                 onValueChange={(v) => setInviteRole(v as Role)}
+                disabled={!mayAssignRoles}
               >
                 <SelectTrigger id="invite-role">
                   <SelectValue />

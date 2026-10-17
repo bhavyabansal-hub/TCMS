@@ -148,7 +148,40 @@ function ensureDayFiles(day: string): void {
   }
 }
 
-function appendToFile(file: string, line: string): boolean {
+// LOAD: info/debug lines are buffered and written asynchronously (one
+// appendFile per file every FLUSH_MS), so a request never blocks the event loop
+// on disk I/O. Error lines are written synchronously — a crash right after an
+// error must never lose it. Pending lines are flushed on process exit.
+const FLUSH_MS = 100
+const pendingLines = new Map<string, string[]>()
+let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+function flushPendingLines(): void {
+  flushTimer = null
+  for (const [file, lines] of pendingLines) {
+    pendingLines.delete(file)
+    fs.appendFile(file, lines.join('\n') + '\n', (err) => {
+      if (err) fileState.disabledUntilDay = isoDay()
+    })
+  }
+}
+
+function flushPendingLinesSync(): void {
+  for (const [file, lines] of pendingLines) {
+    try {
+      fs.appendFileSync(file, lines.join('\n') + '\n')
+    } catch {
+      /* the console already has these lines */
+    }
+  }
+  pendingLines.clear()
+}
+
+if (typeof process !== 'undefined' && typeof process.on === 'function') {
+  process.on('exit', flushPendingLinesSync)
+}
+
+function appendToFile(file: string, line: string, sync = false): boolean {
   try {
     const day = isoDay()
     if (day !== fileState.day) {
@@ -158,7 +191,18 @@ function appendToFile(file: string, line: string): boolean {
       ensureDayFiles(day)
     }
     if (fileState.disabledUntilDay === day) return false
-    fs.appendFileSync(file, line + '\n')
+    if (sync) {
+      flushPendingLinesSync() // keep the file in order
+      fs.appendFileSync(file, line + '\n')
+      return true
+    }
+    const lines = pendingLines.get(file)
+    if (lines) lines.push(line)
+    else pendingLines.set(file, [line])
+    if (!flushTimer) {
+      flushTimer = setTimeout(flushPendingLines, FLUSH_MS)
+      flushTimer.unref?.()
+    }
     return true
   } catch {
     // Disk problem (permissions, full volume...) — console still has the line.
@@ -192,8 +236,9 @@ function write(level: LogLevel, message: string, meta?: Record<string, unknown>)
   else if (level === 'warn') console.warn(line)
   else console.log(line)
 
-  appendToFile(fileState.appFile || path.join(LOG_DIR, `app-${isoDay()}.log`), line)
-  if (level === 'error') appendToFile(path.join(LOG_DIR, `error-${isoDay()}.log`), line)
+  const sync = level === 'error'
+  appendToFile(fileState.appFile || path.join(LOG_DIR, `app-${isoDay()}.log`), line, sync)
+  if (sync) appendToFile(path.join(LOG_DIR, `error-${isoDay()}.log`), line, true)
 
   queueForTelegram(level, line)
 }

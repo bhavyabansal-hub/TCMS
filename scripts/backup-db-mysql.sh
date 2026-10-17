@@ -1,7 +1,6 @@
 #!/bin/bash
 # Nightly logical backup of the TCMS MySQL database via mysqldump
-# (task mysql-backup-1: the ONLY backup path the scheduler runs — the
-# PostgreSQL-era backup-db.mjs is retired and must never be invoked again).
+# (task mysql-backup-1: the ONLY backup path the scheduler runs).
 #
 # Output:  backups/tcms-backup-<UTC-timestamp>.sql.gz   (gzip, ~350 KB)
 # Restore: bash scripts/restore-mysql.sh --file <backup.sql.gz> [--database scratch]
