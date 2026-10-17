@@ -1638,3 +1638,28 @@ Stage Summary:
 - Open question: decision D2 ("fresh start, no data copy") conflicts with the go-live copy; owner to confirm.
 - NOT VERIFIED: the go-live copy steps (pg-client generation, run against a real PostgreSQL); the 3 edited Linux shell scripts (not run on Windows).
 - Follow-up (owner, same day): D2 confirmed — fresh start, no data copy. Deleted scripts/migration/migrate-pg-to-mysql.mjs and the go-live copy doc + every link, pg-client ignores (no npm package was used only by them: none in package.json/lock). src/ comment/message text only (instrumentation.ts, activity.ts, db.ts, db-settings-guard.ts, + serializers.ts, server/id.ts): old-database wording and docs/migration pointers replaced; no logic change. tsc 0, eslint 0 errors, verify-permissions 37/0, links 0 broken. Remaining "postgres" hits: prisma/migrations, CHANGELOGs, worklog history, 2 lines in the approved REQ-001 records.
+
+---
+Task ID: owner-job-logs-docs-agents-perf-2026-10-17
+Agent: Main (Claude Code, Opus 5.5) — fast mode, no subagents
+Task: Phase 1 logs, Phase 2 one docs folder + one standards file, Phase 3 fast agents, Phase 4 performance for 1000+ users, owner bug (/modules crash), Phase 5 numeric-ID plan (plan only).
+
+Work Log:
+- 86e9502 MAINT logs: instrumentation.ts -> instrumentation-node.ts (Node runtime only), 0 Edge warnings on a fresh dev server; TCMS_LOG_SQL; WS broadcast fire-and-forget; SMTP timeouts; DB down -> 503 proven on a copy with an unused port.
+- f27d840 MAINT docs: root = README + CLAUDE.md + configs; docs/ = README, CODING-STANDARDS (owner text word for word + rules), CODEBASE-MAP, CHANGELOG (merged), worklog, architecture/ (new HLD + LLD), guides/, deploy/, process/, qa/; REQ-001 record removed; link check 0 broken.
+- 7dd82b2 MAINT faster agents: fast lane default, full process only on /new-requirement; WORKING METHOD + 15-line reports in every agent/command.
+- e8aa1a2 PERF: boot cache clear wiped the prefetch (every page fetched twice) -> fixed; route-aware prefetch; light pickers ?action=options; cache-aside module tree + user picker with generation-safe invalidation; batched module-review writes; list-sort indexes migration; pool defaults 40; async log writes; new verify-page-apis.mjs + loadtest-1000.mjs.
+- 4f27bc3 MAINT: removed check-db-state / check-overrides / verify-review-ux-round (PostgreSQL SQL, broken).
+- c76afc9 FIX: /modules crash = breaking API change (tree removed) seen by tabs on the previous client -> tree restored (deprecated, B30), defensive read, additive-API rule; review detail no certain-403 calls; Crew Desk email-check only when configured; no 403/404 retries; GET /api/auth permission read fresh again (cached read showed old matrix up to 3 s, caught by toggle e2e); page checker fails on console errors / exceptions / overlay / boundary / empty page.
+- Phase 5: docs/process/plan-numeric-ids.md (plan only, waiting for owner OK).
+
+Verification (2026-10-17):
+- tsc 0 · eslint 0 errors (1 old warning) · audit 0 violations · npm run build OK (separate copy, deleted)
+- Production (:3999, build of c76afc9 code): verify-permissions 37/0 · verify-ui-gates 159/0 · verify-concurrency 34/0 · verify-page-apis 791/0 · verify-role-flows-e2e 556/0 · verify-permission-toggle-e2e 1488/0
+- Dev (:3000): verify-permissions 37/0 · verify-ui-gates 159/0 · verify-concurrency 34/0 · verify-page-apis 791/0 (p95 limit 5 s in dev) · verify-role-flows-e2e 556/0 · verify-permission-toggle-e2e 1493/0
+- Page errors (console / exception / overlay / boundary / empty), 18 pages x 6 roles: 0 in dev, 0 in production
+- Load: 1000 realistic users (350 req/s) 0 errors p95 764 ms; R9 dry run 0 rows; matrix 126 default
+
+Stage Summary:
+- Clean logs, one docs tree, fast agents, faster pages and APIs, no page errors in either mode.
+- NOT VERIFIED: /wiki/[id] page (no wiki documents in the dev DB); load figures are from the owner's laptop (shared CPU), not a server; the version-skew crash itself was not reproduced automatically (needs a tab on the old client).
