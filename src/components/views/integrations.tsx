@@ -85,11 +85,14 @@ export function IntegrationsView() {
     queryFn: () => crewdeskApi.list({ pageSize: '50' }),
     enabled: canManageIntegrations,
   })
+  // Only when Crew Desk credentials are set: without them the check is certain to
+  // answer 502 (page-API audit 2026-10-17) — the status strip says "not configured".
+  const crewdeskConfigured = configQuery.data?.authConfigured === true
   const emailCheckQuery = useQuery({
     queryKey: ['crewdesk', 'email-check'],
     queryFn: crewdeskApi.emailCheck,
     retry: 0,
-    enabled: canManageIntegrations,
+    enabled: canManageIntegrations && crewdeskConfigured,
   })
 
   const invalidate = () => {
@@ -223,7 +226,7 @@ export function IntegrationsView() {
   const refreshAll = () => {
     void configQuery.refetch()
     void linksQuery.refetch()
-    if (!manual) void emailCheckQuery.refetch()
+    if (!manual && crewdeskConfigured) void emailCheckQuery.refetch()
   }
 
   // STRICT in-view guard (second layer; the sidebar already hides the tab):
@@ -324,7 +327,9 @@ export function IntegrationsView() {
           label={
             manual
               ? 'Verification not required'
-              : emailCheckQuery.isLoading
+              : !crewdeskConfigured
+                ? 'Crew Desk not configured'
+                : emailCheckQuery.isLoading
                 ? 'Checking your email…'
                 : emailStatus === 'verified'
                   ? 'Email verified'

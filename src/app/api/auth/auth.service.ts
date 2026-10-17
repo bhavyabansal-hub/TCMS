@@ -13,9 +13,7 @@ import {
   signRefreshToken,
   verifyToken,
   refreshTtlDays,
-  effectivePermissionsFor,
   effectivePermissionsFresh,
-  ensurePermissionsLoaded,
   type JwtPayload,
   type SessionUser,
 } from '@/lib/auth'
@@ -245,14 +243,14 @@ export async function logoutSession(refreshToken?: string): Promise<{ success: t
   return { success: true }
 }
 
-/** GET /api/auth (me) runs on every page load, so it reads the permission matrix from
- *  the 3 s instance cache (a VP toggle invalidates it at once) instead of re-reading
- *  the table each time; login/register keep the fresh read (perf audit 2026-10-17). */
+/** GET /api/auth (me): the session's permission list must reflect a VP toggle at once,
+ *  so it re-reads the (small) override table. The 3 s cache is per route module copy, so
+ *  a cached read here served the old matrix for up to 3 s after a toggle (caught by
+ *  verify-permission-toggle-e2e, 2026-10-17). */
 export async function getProfile(userId: string): Promise<{ user: SerializedUser; permissions: string[] }> {
   const user = await findUserById(userId)
   if (!user) throw ApiError.unauthorized()
-  await ensurePermissionsLoaded()
-  return { user: serializeUser(user), permissions: effectivePermissionsFor(user.role) }
+  return { user: serializeUser(user), permissions: await effectivePermissionsFresh(user.role) }
 }
 
 export async function changePassword(

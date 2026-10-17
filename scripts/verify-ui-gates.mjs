@@ -452,11 +452,17 @@ async function checkVpPositive(page, tc) {
   check('R3.AC2 vp: Crew Desk config -> 200', cfg?.status === 200, cfg ? `${cfg.status}` : 'not sent')
   const links = await waitForRequest(page, mark, (r) => crewdesk(r) && r.url.includes('pageSize=50'))
   check('R3.AC2 vp: Crew Desk links -> 200', links?.status === 200, links ? `${links.status}` : 'not sent')
-  const email = await waitForRequest(page, mark, (r) => crewdesk(r) && r.url.includes('path=email-check'))
+  // email-check runs only when Crew Desk credentials are set (page-API audit 2026-10-17:
+  // without them it is certain to fail with 502 "not configured").
+  const cfgBody = cfg?.status === 200 ? await page.responseBody(cfg.id) : ''
+  const configured = /"authConfigured"\s*:\s*true/.test(cfgBody)
+  const email = await waitForRequest(page, mark, (r) => crewdesk(r) && r.url.includes('path=email-check'), configured ? 20_000 : 4_000)
   const emailBody = email?.status === 502 ? await page.responseBody(email.id) : ''
   check(
-    'R3.AC2 vp: Crew Desk email-check -> 200 or 502 not configured',
-    email?.status === 200 || (email?.status === 502 && emailBody.includes(CREWDESK_NOT_CONFIGURED)),
+    configured
+      ? 'R3.AC2 vp: Crew Desk configured -> email-check 200'
+      : `R3.AC2 vp: Crew Desk not configured -> email-check not sent (no certain 502 "${CREWDESK_NOT_CONFIGURED}")`,
+    configured ? email?.status === 200 : !email,
     email ? `${email.status} ${emailBody.slice(0, 100)}` : 'not sent'
   )
 

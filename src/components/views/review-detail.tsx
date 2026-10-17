@@ -49,8 +49,10 @@ export function ReviewDetailView() {
   } = useQuery({
     queryKey: ['reviews', 'detail', id],
     queryFn: () => reviewsApi.get(id),
-    enabled: !!id,
-    retry: 1,
+    // The detail API needs perform_review — without it the page shows PermissionDenied
+    // and must not call an API that is certain to answer 403 (page-API audit 2026-10-17).
+    // Retries follow the global policy (4xx are never retried).
+    enabled: !!id && !!user && can('perform_review'),
   })
 
   const [verdictOpen, setVerdictOpen] = useState<Verdict | null>(null)

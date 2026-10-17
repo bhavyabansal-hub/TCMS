@@ -3,11 +3,18 @@
 Reverse-chronological list of user-visible and architectural changes. Task-level
 detail lives in [`worklog.md`](./worklog.md).
 
+## 2026-10-17 — FIX modules page crash + console-error checks on every page
+
+- **/modules crashed** ("Cannot read properties of undefined (reading 'length')") in browser tabs still running the previous client: the PERF change had removed `tree` from `GET /api/modules`. The field is back (deprecated, backlog B30; `flat` still carries no children), the page reads it defensively, and API changes must now be additive (CODING-STANDARDS §2 rule 15).
+- **No calls that are certain to fail:** review and module-review detail pages call the detail API only with `perform_review` (no 403 + retry for developer / qa_engineer / viewer); Integrations skips the Crew Desk email check when Crew Desk is not configured (no 502); detail pages no longer retry a 403/404.
+- **Permission toggles show at once again:** the session check reads the permission table fresh (the PERF cache read showed the old matrix for up to 3 s).
+- **Stricter page checker:** `scripts/verify-page-apis.mjs` now fails on any browser console error, uncaught exception, Next.js error overlay, error boundary or empty page, for every page and role.
+
 ## 2026-10-17 — PERF pages and APIs for 1000+ users
 
 - **Every page loads only what it shows:** no duplicate API calls any more (the boot cache clear wiped the prefetch), the boot prefetch only on the dashboard, no Crew Desk/module call for users who see "permission denied". Checked per page × role by the new `scripts/verify-page-apis.mjs`.
 - **Smaller, cheaper responses:** `/api/modules` sends each module once (14 KB → 5 KB on demo data; the client builds the tree); new light pickers `GET /api/test-cases?action=options` and `/api/bugs?action=options`; the dashboard activity feed no longer carries snapshots.
-- **Server:** cache-aside for the module tree and user picker (cleared by every write, no stale result after an invalidation), session check uses the permission cache, module review writes batched (3 statements per module instead of 3 per case), bulk delete is one statement, list-sort indexes (new migration), pool default 40 (`TCMS_DB_CONNECTION_LIMIT`), buffered async log writes, fast reads logged at debug.
+- **Server:** cache-aside for the module tree and user picker (cleared by every write, no stale result after an invalidation), module review writes batched (3 statements per module instead of 3 per case), bulk delete is one statement, list-sort indexes (new migration), pool default 40 (`TCMS_DB_CONNECTION_LIMIT`), buffered async log writes, fast reads logged at debug.
 - **Measured (production build, laptop):** API calls p95 < 60 ms; 1000 realistic users (350 req/s) served with 0 errors, p95 764 ms (`scripts/loadtest-1000.mjs`, `docs/architecture/HLD.md` §7).
 
 ## 2026-10-16 — MAINT faster agents

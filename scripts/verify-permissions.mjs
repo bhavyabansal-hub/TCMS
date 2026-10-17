@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto'
 import { cleanupRunEntities } from './lib/suite-cleanup.mjs'
 
-const BASE = 'http://localhost:3000'
+const BASE = process.env.TCMS_BASE_URL || 'http://localhost:3000'
 let pass = 0
 let fail = 0
 

@@ -101,7 +101,7 @@ returns **200** `{ error: 'Unknown action' }` (elsewhere it's 400).
 
 | Endpoint | Auth rules | Behaviour |
 |---|---|---|
-| `GET` | any role | `{ flat }` — every module once, with `owner` and `testCaseCount` (whole subtree); cached server-side (cleared by every write). The client builds the nested tree (`modulesApi.tree()` → `{ tree, flat }`) |
+| `GET` | any role | `{ tree, flat }` — `flat`: every module once (no `children`), with `owner` and `testCaseCount` (whole subtree); cached server-side (cleared by every write). The client builds the nested tree from `flat` (`modulesApi.tree()`); `tree` is deprecated, kept for open tabs on the previous client (backlog B30) |
 | `GET ?id=` | any role | `{ module (incl. owner/createdBy/updatedBy/permissions), testCases (desc by updated), submodules }`; 404 `Module not found` |
 | `POST` 🛡 `create_module` | body `{ name(min 1), description?, parentId? }` | Root: `path=''`, depth 0. Child: parent 404-checked; `path=parent.path + '.' + parentId`, `depth+1`. **`ownerId` is never taken from the client — owner = creator.** Logs `CREATE/module` |
 | `PUT ?id=` 🛡 `edit_module` | body `{ name?, description?, ownerId? }` | Ownership transfer allowed; `createdById` immutable (governs delete rights). Sets `updatedById`. Logs `UPDATE/module` with before/after |

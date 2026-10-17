@@ -319,7 +319,7 @@ function buildModuleTree(flat: Module[]): { tree: Module[]; flat: Module[] } {
 }
 
 export const modulesApi = {
-  tree: async () => buildModuleTree((await request<{ flat: Module[] }>('/api/modules')).flat),
+  tree: async () => buildModuleTree((await request<{ flat?: Module[] }>('/api/modules')).flat ?? []),
   get: (id: string, caseOffset = 0) =>
     request<{ module: Module & { createdBy?: UserRef; updatedBy?: UserRef; permissions?: unknown[] }; testCases: TestCase[]; subtreeTestCases: TestCase[]; submodules: Module[]; casePage: { limit: number; offset: number; total: number; directTotal: number; hasMore: boolean } }>(`/api/modules?id=${id}&caseOffset=${caseOffset}`),
   create: (body: { name: string; description?: string; parentId?: string | null }) =>

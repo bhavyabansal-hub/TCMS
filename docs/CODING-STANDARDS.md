@@ -98,6 +98,11 @@ starts empty + `scripts/create-first-vp.mjs` (D2).
     errors through `src/lib/server/db-errors.ts` (duplicate → 409, FK → 400, DB down →
     503, …) and anything unexpected → 500 without internals. Client: `handleApiError(err, fallback)` → toast.
 14. **One validator + one service function per controller action** — no mega-functions.
+15. **API changes are additive** — never remove or rename a response field in the same release
+    that stops using it: browser tabs still run the previous client (owner bug 2026-10-17,
+    `/modules` crashed when `tree` left `GET /api/modules`). Add the new field, switch the
+    client, mark the old one `@deprecated`, remove it in a later release (backlog). Client code
+    reads optional API data defensively (`data?.list?.length`).
 
 ---
 

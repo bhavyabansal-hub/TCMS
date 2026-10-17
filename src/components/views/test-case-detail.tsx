@@ -51,7 +51,7 @@ export function TestCaseDetailView() {
     queryKey: ['test-cases', 'detail', id],
     queryFn: () => testCasesApi.get(id),
     enabled: !!id,
-    retry: 1,
+    // retries: global policy (a 403/404 is never retried — no duplicate call)
   })
 
   const { data: history } = useQuery({

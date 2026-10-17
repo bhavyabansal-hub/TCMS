@@ -75,8 +75,8 @@ permission).
   (`ref:user-options`), `REFERENCE_CACHE_TTL_MS` (30 s); `logActivity` clears the whole `ref:`
   prefix after every write (seed clears it too). A load that overlapped an invalidation is
   returned but not stored (generation counter in `cache.ts`).
-- The session check (`GET /api/auth`) reads permissions from the 3 s matrix cache; login and
-  register re-read the table.
+- The session check (`GET /api/auth`), login and register re-read the permission table (it is
+  small): the 3 s cache is per route module copy, so only a fresh read shows a VP toggle at once.
 - Permission matrix: in-memory, 3 s TTL, reloaded after a toggle on this instance.
 - Crew Desk user list: ~10 min TTL + refresh once on miss.
 - Pool bounded by `DATABASE_URL` (`connection_limit`, `pool_timeout`): a busy instance
@@ -87,7 +87,7 @@ permission).
 - Defaults: `staleTime 30 s`, `retry 1`, `refetchOnWindowFocus false`.
 - Reference data (`['modules','tree']`, `['users','options']`): `REFERENCE_STALE_TIME_MS`
   (5 min); mutations invalidate the owning keys.
-- Boot prefetch: `['stats','dashboard']` + `['modules','tree']` in parallel with the session check.
+- Boot prefetch: `['stats','dashboard']` in parallel with the session check, only when `/dashboard` is opened.
 - Paged lists use `placeholderData: keepPreviousData`.
 - Pickers use light endpoints (`GET /api/test-cases?action=options`, `/api/bugs?action=options`:
   id + title only); `/api/modules` sends each module once (the client builds the tree).

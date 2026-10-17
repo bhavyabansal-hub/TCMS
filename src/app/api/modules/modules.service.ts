@@ -57,9 +57,16 @@ const ELIGIBLE_REVIEW_STATUSES = ['draft', 'needs_revision']
 export const MODULE_DETAIL_PAGE_SIZE = 100
 
 
-/** Flat list only: the client builds the tree (src/lib/client/api.ts modulesApi.tree),
- *  so every module is sent once instead of twice (perf audit 2026-10-17). */
+/** `flat` = every module once, WITHOUT children (the client builds the tree from it,
+ *  src/lib/client/api.ts modulesApi.tree). `tree` stays in the response for backward
+ *  compatibility: browser tabs still running the previous client read `tree` directly
+ *  (owner bug 2026-10-17: removing it crashed /modules). Remove it only after a release
+ *  in which no client reads it (backlog B30). */
+export type ModuleTreeNode = SerializedModule & { children: ModuleTreeNode[] }
+
 export interface ModuleTreeResponse {
+  /** @deprecated read `flat`; kept so open tabs on the previous client keep working. */
+  tree: ModuleTreeNode[]
   flat: SerializedModule[]
 }
 
@@ -99,7 +106,17 @@ export interface SubmitModuleReviewResult {
 export async function listModuleTree(): Promise<ModuleTreeResponse> {
   // Cache-aside: every page with a module picker reads this; logActivity clears it.
   const rows = await withCache(`${REFERENCE_CACHE_PREFIX}module-tree`, REFERENCE_CACHE_TTL_MS, listModulesWithOwnerAndCaseCount)
-  return { flat: rows.map((row) => serializeModuleWithJoins(row)) }
+  const flat = rows.map((row) => serializeModuleWithJoins(row))
+  // Compatibility tree: separate node objects, so `flat` never repeats the children.
+  const nodes: ModuleTreeNode[] = flat.map((module) => ({ ...module, children: [] }))
+  const byId = new Map(nodes.map((node) => [node.moduleId, node]))
+  const tree: ModuleTreeNode[] = []
+  for (const node of nodes) {
+    const parent = node.parentId ? byId.get(node.parentId) : undefined
+    if (parent) parent.children.push(node)
+    else tree.push(node)
+  }
+  return { tree, flat }
 }
 
 /** Module detail: module with user refs, its test cases, its direct

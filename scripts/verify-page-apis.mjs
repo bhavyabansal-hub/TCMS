@@ -7,6 +7,8 @@
 //   2. no call that answers 401/403 (the page must check the permission first),
 //   3. parallel loading: the "waterfall depth" (calls that could only start after an
 //      earlier call finished) stays <= MAX_DEPTH,
+//   0. the page is healthy: no browser console error, no uncaught exception, no Next.js
+//      error overlay, no "Something went wrong" boundary, and <main> shows content,
 //   4. speed: every distinct GET the pages call is re-run SAMPLES times with the role's
 //      session; its p95 must stay under P95_LIMIT_MS (local, demo data).
 // Writes nothing except the normal login rows (refresh token + LOGIN activity).
@@ -31,6 +33,8 @@ const IDLE_MS = 1_500
 // really wait for another response stay sequential and independent ones overlap — with
 // 5 ms responses a later component mount would otherwise look like a waterfall.
 const API_DELAY_MS = Number(process.env.PAGE_APIS_API_DELAY_MS ?? 300)
+// A loaded page shows at least this much text in <main> (skeletons only = empty page).
+const MIN_MAIN_CHARS = 20
 const LOAD_TIMEOUT_MS = 60_000
 const ALL_ROLES = ['vp', 'manager', 'product', 'developer', 'qa_engineer', 'viewer']
 const ROLES = (process.env.PAGE_APIS_ROLES || ALL_ROLES.join(',')).split(',')
@@ -132,6 +136,36 @@ function waterfallDepth(reqs) {
 }
 
 /** Delays every /api request of this page by API_DELAY_MS (CDP Fetch interception). */
+/** Collects uncaught exceptions, console.error calls and browser log errors of this page. */
+async function watchPageErrors(cdp, page) {
+  page.errors = []
+  cdp.on((msg) => {
+    if (msg.sessionId !== page.sessionId) return
+    if (msg.method === 'Runtime.exceptionThrown') {
+      const d = msg.params.exceptionDetails
+      page.errors.push(`exception: ${(d.exception?.description ?? d.text ?? '').split('\n')[0]}`)
+    } else if (msg.method === 'Runtime.consoleAPICalled' && msg.params.type === 'error') {
+      page.errors.push(`console.error: ${msg.params.args.map((a) => a.value ?? a.description ?? '').join(' ').split('\n')[0]}`)
+    } else if (msg.method === 'Log.entryAdded' && msg.params.entry.level === 'error') {
+      page.errors.push(`log: ${msg.params.entry.text} ${msg.params.entry.url ?? ''}`.trim())
+    }
+  })
+  await page.send('Log.enable')
+}
+
+/** Page-side health probe: Next.js error overlay, app error boundary, empty main area. */
+function probePageHealth() {
+  const portal = document.querySelector('nextjs-portal')
+  const overlayRoot = portal?.shadowRoot
+  const overlay = !!overlayRoot?.querySelector('[data-nextjs-dialog], [data-nextjs-dialog-overlay], [data-nextjs-toast-errors], [data-issues]')
+  const overlayText = (overlayRoot?.textContent || '').replace(/\s+/g, ' ').slice(0, 160)
+  const bodyText = document.body?.innerText || ''
+  const boundary = /Something went wrong/.test(bodyText)
+  const main = document.querySelector('main')
+  const mainChars = (main?.innerText || '').replace(/\s+/g, ' ').trim().length
+  return { overlay, overlayText, boundary, mainChars }
+}
+
 async function holdApiRequests(cdp, page) {
   if (API_DELAY_MS <= 0) return
   cdp.on((msg) => {
@@ -165,21 +199,31 @@ async function main() {
   if (!launched.wsUrl) throw new Error('Chrome did not start')
   const cdp = await Cdp.connect(launched.wsUrl)
   const rows = [] // { page, role, calls, dupes, denied, depth, endpoints }
+  const errorRows = [] // { page, role, errors }
   const endpoints = new Map() // url -> { role, pages:Set }
   try {
     for (const role of ROLES) {
       const page = await RolePage.open(cdp, sessions[role], BASE)
       await holdApiRequests(cdp, page)
+      await watchPageErrors(cdp, page)
       try {
         await loadPage(page, '/settings/profile') // warm the shell once per role (not a measured URL twice in a row)
         for (const pg of pages) {
+          const errMark = page.errors.length
           const reqs = await loadPage(page, pg.url)
+          const health = await page.evaluate(probePageHealth).catch((e) => ({ overlay: false, boundary: false, mainChars: 0, overlayText: `probe failed: ${e.message}` }))
+          const errs = page.errors.slice(errMark)
+          errorRows.push({ page: pg.label, role, errors: errs.length + (health.overlay ? 1 : 0) + (health.boundary ? 1 : 0) + (health.mainChars < MIN_MAIN_CHARS ? 1 : 0) })
           const counts = new Map()
           for (const r of reqs) counts.set(keyOf(r), (counts.get(keyOf(r)) ?? 0) + 1)
           const dupes = [...counts].filter(([, n]) => n > 1).map(([k, n]) => `${k} x${n}`)
           const denied = reqs.filter((r) => r.status === 401 || r.status === 403).map((r) => `${keyOf(r)} -> ${r.status}`)
           const depth = waterfallDepth(reqs)
           const where = `[${role}] ${pg.label}`
+          check(`${where}: no console error / uncaught exception`, errs.length === 0, errs.slice(0, 3).join(' || '))
+          check(`${where}: no Next.js error overlay`, !health.overlay, health.overlayText)
+          check(`${where}: no error boundary ("Something went wrong")`, !health.boundary)
+          check(`${where}: page shows content (not empty)`, health.mainChars >= MIN_MAIN_CHARS, `main=${health.mainChars} chars`)
           check(`${where}: no duplicate API call`, dupes.length === 0, dupes.join(', '))
           check(`${where}: no 401/403 call`, denied.length === 0, denied.join(', '))
           check(`${where}: waterfall depth <= ${MAX_DEPTH}`, depth <= MAX_DEPTH, `depth=${depth} calls=${[...counts.keys()].join(' | ')}`)
@@ -218,6 +262,8 @@ async function main() {
     const slowest = Math.max(0, ...r.urls.filter((k) => k.startsWith('GET ')).map((k) => timing.get(k.slice(4)) ?? 0))
     console.log(`ROW | ${r.page} | ${r.role} | ${r.calls} | ${r.dupes} | ${r.denied} | ${r.depth} | ${slowest}`)
   }
+  console.log('\n=== PAGE ERRORS (page | role | errors = console + exception + overlay + boundary + empty) ===')
+  for (const r of errorRows) console.log(`ERR | ${r.page} | ${r.role} | ${r.errors}`)
   console.log('\n=== CALLS PER PAGE (vp, or first role) ===')
   const seenPage = new Set()
   for (const r of rows) {

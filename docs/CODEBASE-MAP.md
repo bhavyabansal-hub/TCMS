@@ -73,7 +73,7 @@ MySQL errors → clean 400/409/503 in `withApi` via `src/lib/server/db-errors.ts
 | auth | POST `?path=login\|register\|refresh\|logout`; GET me, `?path=ws-ticket`; PUT profile, `?path=password` | public login/refresh/logout; register only if `TCMS_ALLOW_SIGNUP=true` (creates `viewer`); lockout 5 fails→60 s 429; refresh rotation + 120 s grace; password change revokes all refresh tokens |
 | users | GET list, `?action=options`; POST; PUT `?id`; DELETE `?id` (soft `is_active=false`) | `manage_users` (options = any user) |
 | permissions | GET matrix; PUT toggle `{role,action,enabled}` | `manage_permissions` |
-| modules | GET `{flat}` (client builds the tree), `?id[&caseOffset]`; POST; PUT `?id`, `&action=submit-review`; DELETE `?id` (hard, cascades) | `create_module`, `edit_module`, `submit_review`; delete = creator or `edit_module` |
+| modules | GET `{tree (deprecated), flat}` (client builds the tree from flat), `?id[&caseOffset]`; POST; PUT `?id`, `&action=submit-review`; DELETE `?id` (hard, cascades) | `create_module`, `edit_module`, `submit_review`; delete = creator or `edit_module` |
 | test-cases | GET list/`?id`/`&action=history\|reviews`/`?action=import-template`; POST, `?action=import` (CSV ≤200 rows); PUT `?id` (versioned + history snapshot), `&action=submit-review`; DELETE `?id`, `?action=bulk-delete` (hard, ≤200) | `create_test_case`; edit = `edit_any_test_case` or author+`edit_own_test_case`; `submit_review`; delete = author or `delete_test_case` |
 | reviews | GET `?action=queue`, `?id`, list; POST `?id` verdict, `&action=forward` | `perform_review` (+ assigned reviewer) |
 | module-reviews | GET `?action=queue\|all`, `?id`; POST `?id&action=approve-all\|bulk-verdict\|change-reviewer` | `perform_review` |
