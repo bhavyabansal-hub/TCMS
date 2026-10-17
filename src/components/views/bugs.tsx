@@ -217,7 +217,7 @@ export function BugsView() {
                 <TableBody>
                   {bugs.map((b) => (
                     <TableRow key={b.bugId} className="cursor-pointer" onClick={() => setDetailBug(b)}>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{b.bugId.slice(-6)}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{b.bugId}</TableCell>
                       <TableCell className="font-medium max-w-xs truncate">{b.title}</TableCell>
                       <TableCell>
                         <SeverityBadge severity={b.severity} />
@@ -661,7 +661,7 @@ function BugDetailContent({
         <div className="flex flex-wrap items-center gap-2 pr-6">
           <SeverityBadge severity={bug.severity} />
           <StatusBadge status={bug.status} colorClass={bugStatusColor(bug.status)} />
-          <span className="font-mono text-xs text-muted-foreground">#{bug.bugId.slice(-6)}</span>
+          <span className="font-mono text-xs text-muted-foreground">#{bug.bugId}</span>
         </div>
         <DialogTitle className="leading-snug">{bug.title}</DialogTitle>
         <DialogDescription>

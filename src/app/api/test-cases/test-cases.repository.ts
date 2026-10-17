@@ -4,7 +4,7 @@
 
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
-import { newId } from '@/lib/server/id'
+import { insertReturningId } from '@/lib/server/insert'
 import type { TestCaseSqlRow, TestCaseHistorySqlRow } from '@/types/sql-rows'
 
 /** Anything that can run raw SQL: the singleton client OR one interactive
@@ -89,17 +89,16 @@ export interface TestCaseInsert {
 }
 
 export async function insertTestCase(input: TestCaseInsert): Promise<TestCaseSqlRow> {
-  // MySQL has no RETURNING: generate the PK app-side, insert, then read back.
-  const testCaseId = newId()
-  await db.$executeRaw`
+  // MySQL has no RETURNING: insert, take the new key from LAST_INSERT_ID(), then read back.
+  const testCaseId = await insertReturningId(Prisma.sql`
     INSERT INTO test_cases
-      (test_case_id, module_id, title, description, preconditions, expected_result,
+      (module_id, title, description, preconditions, expected_result,
        priority, status, tags, author_id, last_edited_by_id, assignee_id, created_at, updated_at)
     VALUES
-      (${testCaseId}, ${input.moduleId}, ${input.title}, ${input.description}, ${input.preconditions},
+      (${input.moduleId}, ${input.title}, ${input.description}, ${input.preconditions},
        ${input.expectedResult},
        ${input.priority}, 'draft', CAST(${JSON.stringify(input.tags)} AS JSON),
-       ${input.authorId}, ${input.lastEditedById}, ${input.assigneeId}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+       ${input.authorId}, ${input.lastEditedById}, ${input.assigneeId}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
   const created = await findTestCaseById(testCaseId)
   if (!created) throw new Error('Inserted test case could not be read back')
   return created
@@ -231,8 +230,8 @@ export interface TestCaseHistoryInsert {
 
 export async function insertTestCaseHistory(input: TestCaseHistoryInsert, tx: SqlExecutor = db): Promise<void> {
   await tx.$executeRaw`
-    INSERT INTO test_case_history (history_id, test_case_id, version, snapshot, changed_by_id, change_summary, created_at)
-    VALUES (${newId()}, ${input.testCaseId}, ${input.version}, CAST(${JSON.stringify(input.snapshot)} AS JSON),
+    INSERT INTO test_case_history (test_case_id, version, snapshot, changed_by_id, change_summary, created_at)
+    VALUES (${input.testCaseId}, ${input.version}, CAST(${JSON.stringify(input.snapshot)} AS JSON),
             ${input.changedById}, ${input.changeSummary}, UTC_TIMESTAMP(3))`
 }
 

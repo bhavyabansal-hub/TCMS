@@ -390,7 +390,7 @@ export function TestCasesView() {
                       </TableCell>
                     )}
                     <TableCell className="font-mono text-xs text-muted-foreground">
-                      {tc.testCaseId.slice(-6)}
+                      {tc.testCaseId}
                     </TableCell>
                     <TableCell className="font-medium max-w-xs">
                       <TestCaseTitleHover tc={tc} />

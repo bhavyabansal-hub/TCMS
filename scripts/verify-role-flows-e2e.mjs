@@ -29,7 +29,7 @@
  *        node scripts/verify-role-flows-e2e.mjs --cleanup-stamp=<STAMP>   (recovery: cleanup only, for a killed run)
  * Exit: 0 all pass, 1 any FAIL, 2 NOT RUN, 130 Ctrl+C.
  */
-import { randomBytes, randomUUID } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -43,6 +43,9 @@ import {
   deleteReviewsByParticipants, deleteTestCaseById, deleteUsersByIds, deleteWikiDocById, emptyEntities,
 } from './lib/suite-data.mjs'
 import { DEFAULT_CHROME, Cdp, RolePage, launchChrome, parseSetCookie, shutdownChrome } from './lib/cdp-browser.mjs'
+
+// A well-formed id that no row has (keys are INT UNSIGNED AUTO_INCREMENT, max 4294967295).
+const MISSING_ID = '999999999'
 
 const PREFIX = 'roleflow'
 const CLEANUP_STAMP = (process.argv.find((a) => a.startsWith('--cleanup-stamp=')) || '').split('=')[1] || null
@@ -315,7 +318,7 @@ async function settle(role, spec, timeout = 20_000) {
   return { ...fin, ready: st.ready && fin.ready }
 }
 const hasButton = (st, label, prefix = false) => st.buttons.some((b) => (prefix ? b.startsWith(label) : b === label))
-const where = (role, p) => `UI ${role} ${p.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, '<id>')}`
+const where = (role, p) => `UI ${role} ${p.replace(/\/\d+(?=\/|\?|$)/g, '/<id>')}`
 
 /** Standard UI expectation block. */
 function uiExpect(role, p, st, { link, linkShown, deniedShown, buttons = {}, texts = {}, selectors = {} } = {}) {
@@ -590,7 +593,7 @@ async function flowModuleReview() {
   await denied('1.10 developer PUT /api/modules submit-review (no submit_review)', 'developer', () => api('developer', 'PUT', `/api/modules?id=${F.m2}&action=submit-review`, { reviewerId: uid('manager') }),
     sigOf(() => q`SELECT COUNT(*) AS n FROM module_review_requests WHERE module_id = ${F.m2}`))
   await denied('1.10 qa module submit with an unknown reviewerId -> 400/404 (same contract as case submit, test-cases.service.ts:255-257)', 'qa_engineer',
-    () => api('qa_engineer', 'PUT', `/api/modules?id=${F.m2}&action=submit-review`, { reviewerId: randomUUID() }),
+    () => api('qa_engineer', 'PUT', `/api/modules?id=${F.m2}&action=submit-review`, { reviewerId: MISSING_ID }),
     sigOf(() => q`SELECT (SELECT COUNT(*) FROM module_review_requests WHERE module_id = ${F.m2}) AS mr, (SELECT COUNT(*) FROM review_requests WHERE ${sqlIn('test_case_id', F.mc)}) AS rr`), [400, 404])
   beginStep('1 review', '1.10 module submit for review', 'qa_engineer')
   let t0, t1
@@ -1043,7 +1046,7 @@ async function flowIsolation() {
   await denied('6.1 qa PATCH /api/notifications?id=<manager notification>', 'qa_engineer', () => api('qa_engineer', 'PATCH', `/api/notifications?id=${nid}`), sigN)
   await denied('6.1 qa DELETE /api/notifications?id=<manager notification>', 'qa_engineer', () => api('qa_engineer', 'DELETE', `/api/notifications?id=${nid}`), sigN)
   await denied('6.1 developer PATCH /api/notifications?id=<manager notification>', 'developer', () => api('developer', 'PATCH', `/api/notifications?id=${nid}`), sigN)
-  const nf = await api('qa_engineer', 'PATCH', `/api/notifications?id=${randomUUID()}`)
+  const nf = await api('qa_engineer', 'PATCH', `/api/notifications?id=${MISSING_ID}`)
   check('API', '6.1 qa PATCH unknown notification id -> 404', nf.status === 404, short(nf))
   for (const role of ['viewer', 'qa_engineer', 'developer']) {
     const l = await api(role, 'GET', '/api/notifications?pageSize=100')
@@ -1102,8 +1105,8 @@ async function auditNotifications(entities) {
 
 async function warmUp() {
   const page = await pageFor('vp')
-  for (const p of ['/dashboard', '/modules', '/test-cases', `/test-cases/${randomUUID()}`, `/reviews/${randomUUID()}`, `/module-reviews/${randomUUID()}`, '/reviews', '/bugs', '/tasks', '/reports',
-    '/wiki', `/wiki/${randomUUID()}`, '/notifications', '/settings/users']) {
+  for (const p of ['/dashboard', '/modules', '/test-cases', `/test-cases/${MISSING_ID}`, `/reviews/${MISSING_ID}`, `/module-reviews/${MISSING_ID}`, '/reviews', '/bugs', '/tasks', '/reports',
+    '/wiki', `/wiki/${MISSING_ID}`, '/notifications', '/settings/users']) {
     await page.goto(p)
     await page.waitFor(probe, [{ markerSelector: 'h1, [data-slot=card]' }], 90_000)
     await sleep(400)

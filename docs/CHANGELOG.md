@@ -3,6 +3,13 @@
 Reverse-chronological list of user-visible and architectural changes. Task-level
 detail lives in [`worklog.md`](./worklog.md).
 
+## 2026-10-17 — REQ readable numeric ids
+
+- **Every id is a readable number:** test cases, bugs, modules, users, reviews, wiki pages … are `1, 2, 3 …` instead of UUIDs (URLs like `/test-cases/42`; the bug and test-case lists show the full id). Keys are `INT UNSIGNED AUTO_INCREMENT`; the API and the UI keep ids as digit strings (`"42"`).
+- **One clean baseline migration** `20261017120000_baseline_numeric_ids` replaces the three old migrations (production never ran one). Dev database reset and reseeded; existing sessions sign in again.
+- **Safe insert ids:** `insertReturningId()` reads `LAST_INSERT_ID()` on the insert's own connection; proven by 75 parallel inserts in the new `scripts/verify-numeric-ids.mjs`, which also checks that every id in every list/detail response is a positive integer.
+- **Fixes found on the way:** the work-log module filter now matches (it compared a JSON array with a scalar); the seed adds one wiki document; the UI suites retry a locked Chrome port file on Windows instead of aborting.
+
 ## 2026-10-17 — FIX modules page crash + console-error checks on every page
 
 - **/modules crashed** ("Cannot read properties of undefined (reading 'length')") in browser tabs still running the previous client: the PERF change had removed `tree` from `GET /api/modules`. The field is back (deprecated, backlog B30; `flat` still carries no children), the page reads it defensively, and API changes must now be additive (CODING-STANDARDS §2 rule 15).

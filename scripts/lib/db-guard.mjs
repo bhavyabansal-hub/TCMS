@@ -55,6 +55,32 @@ function resolveGuardedUrl(rawUrl) {
  * @returns {Promise<{ db: PrismaClient, port: number, database: string,
  *   assertLockOwned: () => Promise<boolean>, setBusy: (busy: boolean) => void, release: () => Promise<void> }>}
  */
+/** Numbers in `id` / `*_id` columns -> digit strings (mirrors src/lib/db.ts). */
+export function idsAsStrings(row) {
+  if (!row || typeof row !== 'object') return row
+  for (const key of Object.keys(row)) {
+    const value = row[key]
+    if ((key === 'id' || key.endsWith('_id')) && (typeof value === 'number' || typeof value === 'bigint')) row[key] = String(value)
+  }
+  return row
+}
+
+/**
+ * Runs one INSERT (a Prisma.sql fragment) and returns the new AUTO_INCREMENT key as a
+ * digit string. INSERT + LAST_INSERT_ID() always share ONE connection: the given
+ * transaction client, or a transaction opened here on the root client.
+ */
+export async function insertReturningId(client, statement) {
+  const run = async (tx) => {
+    await tx.$executeRaw(statement)
+    const rows = await tx.$queryRaw`SELECT LAST_INSERT_ID() AS id`
+    const id = String(rows[0]?.id ?? '0')
+    if (id === '0') throw new Error('INSERT returned no AUTO_INCREMENT id')
+    return id
+  }
+  return typeof client.$transaction === 'function' ? client.$transaction(run) : run(client)
+}
+
 export async function openGuardedDb({ lock = true, log = console.log } = {}) {
   // Importing @prisma/client loads .env into process.env (Prisma's own loader);
   // the value is only parsed here, never printed.
@@ -65,7 +91,16 @@ export async function openGuardedDb({ lock = true, log = console.log } = {}) {
     throw new GuardAbort('DB guard: DATABASE_URL does not point at 127.0.0.1:5500/tcms_test')
   }
 
-  const db = new PrismaClient({ datasources: { db: { url: guardedUrl } } })
+  // Same id rule as the app (src/lib/db.ts): numeric *_id / id columns come back as
+  // digit strings, so script comparisons with API ids ("42") just work.
+  const db = new PrismaClient({ datasources: { db: { url: guardedUrl } } }).$extends({
+    query: {
+      async $queryRaw({ args, query }) {
+        const rows = await query(args)
+        return Array.isArray(rows) ? rows.map(idsAsStrings) : rows
+      },
+    },
+  })
   let keepalive = null
   let isBusy = false
   const release = async () => {

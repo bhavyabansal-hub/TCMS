@@ -4,7 +4,7 @@
 
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
-import { newId } from '@/lib/server/id'
+import { insertReturningId } from '@/lib/server/insert'
 import type { ModuleSqlRow } from '@/types/sql-rows'
 
 /** All modules ordered by name, each with its owner reference
@@ -88,18 +88,17 @@ export interface ModuleInsert {
   updatedById: string
 }
 
-/** Creates a module. The PK is generated app-side (MySQL: no RETURNING).
+/** Creates a module. The key comes from LAST_INSERT_ID() (MySQL: no RETURNING).
  *  created_at/updated_at are set explicitly: updated_at has no DB default
  *  and raw SQL bypasses @updatedAt. */
 export async function insertModule(input: ModuleInsert): Promise<string> {
-  const moduleId = newId()
-  await db.$executeRaw`
+  const moduleId = await insertReturningId(Prisma.sql`
     INSERT INTO modules
-      (module_id, name, description, parent_id, path, depth, owner_id, created_by_id, updated_by_id,
+      (name, description, parent_id, path, depth, owner_id, created_by_id, updated_by_id,
        created_at, updated_at)
     VALUES
-      (${moduleId}, ${input.name}, ${input.description}, ${input.parentId}, ${input.path}, ${input.depth},
-       ${input.ownerId}, ${input.createdById}, ${input.updatedById}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+      (${input.name}, ${input.description}, ${input.parentId}, ${input.path}, ${input.depth},
+       ${input.ownerId}, ${input.createdById}, ${input.updatedById}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
   return moduleId
 }
 

@@ -73,7 +73,7 @@ Toolbar (search + 3 filter selects + Export CSV + New Test Case) → table → s
 | **New Test Case** | **hidden for viewers**; opens the create dialog |
 
 ### Table columns
-ID (last 6 chars), Title (truncated 60), Module, Priority badge, Status badge, Tags
+ID (the readable number, e.g. 42), Title (truncated 60), Module, Priority badge, Status badge, Tags
 (first 2 + `+N`), Author, Updated. Row click *and* eye icon →
 `navigate('test-case-detail', { id })`. Empty state: *"No test cases match your filters"*.
 

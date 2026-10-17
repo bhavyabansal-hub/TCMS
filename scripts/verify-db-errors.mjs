@@ -10,7 +10,7 @@
  *      any body, exactly one row (the duplicate-key race used to answer 500).
  * Usage: node scripts/verify-db-errors.mjs   (app on :3000; DB guard + lock)
  */
-import { randomUUID } from 'node:crypto'
+
 import { openGuardedDb } from './lib/db-guard.mjs'
 import { cleanupRunEntities } from './lib/suite-cleanup.mjs'
 import { mapDatabaseError } from '../src/lib/server/db-errors.ts'
@@ -53,12 +53,12 @@ function expectMapped(label, err, status, kind) {
 async function checkRealErrors(db) {
   const [anyUser] = await db.$queryRaw`SELECT user_id FROM users WHERE is_active = 1 LIMIT 1`
   const [anyModule] = await db.$queryRaw`SELECT module_id FROM modules LIMIT 1`
-  const insertModule = (tx, { id = randomUUID(), name = 'db-errors probe', parentId = null, ownerId = anyUser.user_id }) =>
+  const insertModule = (tx, { id = null, name = 'db-errors probe', parentId = null, ownerId = anyUser.user_id }) =>
     tx.$executeRaw`INSERT INTO modules (module_id, name, description, parent_id, path, depth, owner_id, created_by_id, updated_by_id, created_at, updated_at)
       VALUES (${id}, ${name}, '', ${parentId}, '/', 0, ${ownerId}, ${anyUser.user_id}, ${anyUser.user_id}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
 
   expectMapped('duplicate primary key (1062)', await captureError(db, (tx) => insertModule(tx, { id: anyModule.module_id })), 409, 'duplicate_key')
-  expectMapped('FK target missing (1452)', await captureError(db, (tx) => insertModule(tx, { parentId: randomUUID() })), 400, 'fk_missing')
+  expectMapped('FK target missing (1452)', await captureError(db, (tx) => insertModule(tx, { parentId: '999999999' })), 400, 'fk_missing')
   expectMapped('value too long (1406)', await captureError(db, (tx) => insertModule(tx, { name: 'x'.repeat(5000) })), 400, 'too_long')
   expectMapped('NOT NULL (1048)', await captureError(db, (tx) => insertModule(tx, { name: null })), 400, 'not_null')
   expectMapped('FK still in use (1451)', await captureError(db, (tx) => tx.$executeRaw`DELETE FROM users WHERE user_id = ${anyUser.user_id}`), 409, 'fk_in_use')

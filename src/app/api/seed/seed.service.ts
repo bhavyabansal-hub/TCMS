@@ -28,6 +28,7 @@ import {
   insertSeedTaskReport,
   insertSeedTestCase,
   insertSeedUser,
+  insertSeedWikiDocument,
   runSeedInTransaction,
   type SeedTaskItem,
 } from './seed.repository'
@@ -41,6 +42,7 @@ export type SeedResult =
       testCases: number
       bugs: number
       taskReports: number
+      wikiDocuments: number
     }
 
 /** Seeds demo data. Safe to call repeatedly: no-ops when users exist. */
@@ -315,12 +317,25 @@ export async function seedDemoData(): Promise<SeedResult> {
       await insertSeedTaskReport(r, tx)
     }
 
+    // One written wiki document, so the wiki list and /wiki/[id] have demo content.
+    await insertSeedWikiDocument(
+      {
+        title: 'How we write test cases',
+        content:
+          '<h2>How we write test cases</h2><p>One behaviour per case. Steps are short and numbered; every step has an expected result.</p><ul><li>Title: what is checked, not how.</li><li>Preconditions: the state before step 1.</li><li>Priority: P0 blocks a release, P3 is cosmetic.</li></ul>',
+        tags: ['guide', 'test-cases'],
+        authorId: admin.userId,
+      },
+      tx
+    )
+
     logger.info('Demo data seeded', {
       users: 4,
       modules: moduleIds.length,
       testCases: tcData.length,
       bugs: bugData.length,
       taskReports: taskReports.length,
+      wikiDocuments: 1,
     })
 
     // Success payload: every seeded account email.
@@ -331,6 +346,7 @@ export async function seedDemoData(): Promise<SeedResult> {
       testCases: tcData.length,
       bugs: bugData.length,
       taskReports: 2,
+      wikiDocuments: 1,
     }
   })
   // Seed writes bypass logActivity: drop the cached reference data and stats

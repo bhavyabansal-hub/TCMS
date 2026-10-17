@@ -25,7 +25,7 @@ Bug"** (hidden for viewers). Data: `['bugs','list']` → `GET /api/bugs?pageSize
   the assignee needs `assign_bug` and deleting needs `delete_bug`.
 
 ### Table view
-Columns: ID (last 6), Title, Severity badge, Status badge, Assigned, Module, Reported
+Columns: ID (the readable number, e.g. 42), Title, Severity badge, Status badge, Assigned, Module, Reported
 (`timeAgo`). Row click opens the detail sheet.
 
 ### CreateBugDialog ("Report a Bug")
@@ -36,7 +36,7 @@ vp, manager, product, qa_engineer; the picker is disabled without `assign_bug`),
 chosen the server notifies them (`bug_assigned`).
 
 ### BugDetailDialog (detail dialog)
-Shows everything: badges, `#{id6}`, reporter + timestamp, Description, Environment,
+Shows everything: badges, `#{id}` (the readable number), reporter + timestamp, Description, Environment,
 Steps, Expected / Actual, module + assignee grid.
 - **Edit** (`create_bug` or `assign_bug`) opens the edit form (Status / Severity / fields;
   Assignee only with `assign_bug`) + Save (`bugsApi.update` → `Bug updated`). Only changed

@@ -51,7 +51,7 @@ export const lookupSchema = z.object({
 })
 
 export const retrySchema = z.object({
-  linkId: z.string().trim().uuid('Invalid link id'),
+  linkId: z.string().trim().regex(/^[1-9][0-9]*$/, 'Invalid link id'),
 })
 
 export function parseLinkCreate(body: unknown): { moduleId: string; ticketId: string; note: string | null } {

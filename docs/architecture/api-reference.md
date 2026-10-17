@@ -15,7 +15,8 @@
 > Service (`*.service.ts`) → Repository (`*.repository.ts`, raw SQL only), with
 > responses through `src/lib/api.ts` (`ok`, `paginate`, `ApiError`, `withApi`)
 > and structured logging (`src/lib/logger.ts`). Entity keys in responses are
-> renamed end-to-end (`id` → `userId`/`moduleId`/`testCaseId`/`bugId`/...).
+> renamed end-to-end (`id` → `userId`/`moduleId`/`testCaseId`/`bugId`/...). Every id is a
+> readable number sent as a digit string (`"moduleId": "7"`, URLs `/test-cases/42`).
 > Unknown actions consistently return 400; search is case-insensitive
 > (`LIKE` on `utf8mb4_unicode_ci`).
 

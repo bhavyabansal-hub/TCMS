@@ -484,7 +484,14 @@ async function launchChrome() {
   const end = Date.now() + 20_000
   while (Date.now() < end) {
     if (existsSync(portFile)) {
-      const [port, wsPath] = readFileSync(portFile, 'utf8').split(/\r?\n/)
+      let text = ''
+      try {
+        text = readFileSync(portFile, 'utf8')
+      } catch (e) {
+        // Windows: Chrome may still hold the file open while writing it (EBUSY) — retry.
+        if (e.code !== 'EBUSY' && e.code !== 'EPERM') throw e
+      }
+      const [port, wsPath] = text.split(/\r?\n/)
       if (port && wsPath) return { child, wsUrl: `ws://127.0.0.1:${port}${wsPath}` }
     }
     await sleep(250)

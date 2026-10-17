@@ -44,7 +44,10 @@ Rules that keep the pipeline clean:
 - Tagged templates only — values are bound parameters; dynamic IN-lists use `Prisma.join`,
   optional filters compose with `Prisma.sql` / `Prisma.empty`. `*Unsafe` is forbidden.
 - Columns are `snake_case`; each query declares its row interface next to it.
-- Writes stamp `UTC_TIMESTAMP(3)`; no `RETURNING` in MySQL → INSERT with `newId()` then SELECT.
+- Writes stamp `UTC_TIMESTAMP(3)`; no `RETURNING` in MySQL → `insertReturningId()` (INSERT +
+  `LAST_INSERT_ID()` on one connection) then SELECT.
+- Ids: keys are `INT UNSIGNED AUTO_INCREMENT`; one hook in `src/lib/db.ts` turns numeric `id` /
+  `*_id` row values into digit strings, so ids compare equal across rows, URLs, sessions and bodies.
 - Schema changes only through `prisma/migrations/` (`npx prisma migrate deploy`).
 
 ## 3. Design patterns in use

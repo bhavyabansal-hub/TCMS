@@ -53,8 +53,8 @@ Errors: { error, details? }; ApiError→status, ZodError→400, anything else→
 
 Dispatch is by query params: `?id=`, `?action=`, auth/crewdesk use `?path=`.
 
-**MySQL idioms in repositories:** `newId()` (app-side uuid) + INSERT then SELECT read-back
-(no RETURNING) · `UTC_TIMESTAMP(3)` for every created_at/updated_at (never NOW()) ·
+**MySQL idioms in repositories:** `insertReturningId()` (INSERT + `LAST_INSERT_ID()` on one
+connection) then SELECT read-back (no RETURNING); ids are digit strings everywhere · `UTC_TIMESTAMP(3)` for every created_at/updated_at (never NOW()) ·
 `ON DUPLICATE KEY UPDATE` (no INSERT IGNORE) · `LIKE` (case-insensitive via collation) ·
 `CAST(? AS JSON)` writes, `JSON_CONTAINS` filters · `Number()` on aggregates ·
 TINYINT(1) → boolean normalization (user.repository) · `Prisma.join/sql/empty` for
@@ -165,7 +165,8 @@ reconnect + tab visible, no polling timers).
 | `src/lib/db.ts` | Prisma singleton |
 | `src/lib/logger.ts` | console + `logs/app|error-YYYY-MM-DD.log` + optional Telegram log bot |
 | `src/lib/server/config.ts` | central env inventory (intended sole `process.env` reader) |
-| `src/lib/server/id.ts` | `newId()` = randomUUID |
+| `src/lib/server/insert.ts` | `insertReturningId()` — INSERT + `LAST_INSERT_ID()` in one transaction, returns the key as a digit string |
+| `src/lib/db.ts` | Prisma singleton + the id hook: numeric `id` / `*_id` row values become digit strings |
 | `src/lib/server/cache.ts` | TTL cache, coalesced loaders, 500 cap, prefix invalidation |
 | `src/lib/server/auth-cookies.ts` | tcms-access / tcms-refresh httpOnly cookie helpers |
 | `src/lib/server/ws-ticket.ts` | 60 s HMAC WS tickets |
@@ -187,7 +188,8 @@ reconnect + tab visible, no polling timers).
 
 ## 8. Database (`prisma/schema.prisma`, MySQL)
 
-17 tables, CHAR(36) uuid PKs named after the entity, DATETIME(3), utf8mb4_unicode_ci
+17 tables, `INT UNSIGNED AUTO_INCREMENT` keys named after the entity (FKs `INT UNSIGNED`; ids travel
+as digit strings), DATETIME(3), utf8mb4_unicode_ci
 (utf8mb4_bin on `users.password_hash`, `refresh_tokens.token`).
 users · refresh_tokens · modules (self-tree via parent_id + materialized `path`/`depth`) ·
 role_permissions (PK role+action) · login_attempts (PK email) · test_cases (JSON tags,
@@ -201,8 +203,8 @@ review `pending→in_progress→completed`; verdict `approved|failed|needs_revis
 bug `open|in_progress|resolved|closed|wont_fix`.
 
 **Migrations** (only DDL path — `npx prisma migrate deploy` as the DDL user via DIRECT_URL;
-never `db push`): `20261015034822_init_mysql` (hand-edited collations + JSON defaults),
-`20261015034940_add_perf_indexes`. DB users: `tcms_app` (DML), `tcms_migrate` (DDL),
+never `db push`): ONE baseline `20261017120000_baseline_numeric_ids` (all 17 tables + indexes;
+hand-edited collations + JSON defaults; production never ran an earlier migration). DB users: `tcms_app` (DML), `tcms_migrate` (DDL),
 `tcms_backup` (read-only for mysqldump).
 
 ## 9. Mini-services

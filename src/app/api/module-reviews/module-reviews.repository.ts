@@ -9,7 +9,7 @@
 
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
-import { newId } from '@/lib/server/id'
+import { insertReturningId } from '@/lib/server/insert'
 import type { ModuleReviewRequestSqlRow, ReviewRequestSqlRow } from '@/types/sql-rows'
 import type { SqlExecutor } from '../test-cases/test-cases.repository'
 
@@ -77,20 +77,19 @@ export interface ModuleReviewRequestInsert {
   cycle: number
 }
 
-/** Creates a pending module review request. The PK is generated app-side
+/** Creates a pending module review request. The key comes from LAST_INSERT_ID()
  *  (MySQL: no RETURNING — insert, then read back).
  *  created_at/updated_at are set explicitly: updated_at has no DB default
  *  and raw SQL bypasses Prisma's @updatedAt. */
 export async function insertModuleReviewRequest(
   input: ModuleReviewRequestInsert
 ): Promise<ModuleReviewRequestSqlRow> {
-  const moduleReviewRequestId = newId()
-  await db.$executeRaw`
+  const moduleReviewRequestId = await insertReturningId(Prisma.sql`
     INSERT INTO module_review_requests
-      (module_review_request_id, module_id, reviewer_id, requester_id, status, due_date, cycle, created_at, updated_at)
+      (module_id, reviewer_id, requester_id, status, due_date, cycle, created_at, updated_at)
     VALUES
-      (${moduleReviewRequestId}, ${input.moduleId}, ${input.reviewerId}, ${input.requesterId}, 'pending',
-       ${input.dueDate}, ${input.cycle}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+      (${input.moduleId}, ${input.reviewerId}, ${input.requesterId}, 'pending',
+       ${input.dueDate}, ${input.cycle}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
   const rows = await db.$queryRaw<ModuleReviewRequestSqlRow[]>`
     SELECT * FROM module_review_requests WHERE module_review_request_id = ${moduleReviewRequestId} LIMIT 1`
   if (!rows[0]) throw new Error('Inserted module review request could not be read back')

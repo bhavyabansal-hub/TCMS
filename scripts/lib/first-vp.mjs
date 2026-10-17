@@ -1,6 +1,5 @@
 // Shared logic for scripts/create-first-vp.mjs and its test (backlog B1).
 // Raw SQL only; values are bind parameters. No function here logs anything.
-import { randomUUID } from 'node:crypto'
 import bcrypt from 'bcryptjs'
 
 export const BCRYPT_ROUNDS = 10 // same cost as hashPassword() in src/lib/auth.ts
@@ -34,14 +33,15 @@ export async function isEmailTaken(q, email) {
   return Number(rows[0].n) > 0
 }
 
-/** Inserts the VP (bcrypt hash computed here) and returns the new user id. */
+/** Inserts the VP (bcrypt hash computed here) and returns the new user id (digit string).
+ *  q must be a transaction client: LAST_INSERT_ID() is read on the same connection. */
 export async function insertVp(q, { email, fullName, password }) {
-  const userId = randomUUID()
   const passwordHash = bcrypt.hashSync(password, BCRYPT_ROUNDS)
   await q.$executeRaw`
-    INSERT INTO users (user_id, email, full_name, password_hash, role, is_active, created_at, updated_at)
-    VALUES (${userId}, ${email}, ${fullName}, ${passwordHash}, 'vp', 1, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
-  return userId
+    INSERT INTO users (email, full_name, password_hash, role, is_active, created_at, updated_at)
+    VALUES (${email}, ${fullName}, ${passwordHash}, 'vp', 1, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+  const rows = await q.$queryRaw`SELECT LAST_INSERT_ID() AS id`
+  return String(rows[0].id)
 }
 
 /**

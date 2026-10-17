@@ -6,7 +6,7 @@
 
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
-import { newId } from '@/lib/server/id'
+import { insertReturningId } from '@/lib/server/insert'
 import type { UserSqlRow } from '@/types/sql-rows'
 
 export interface UserFilters {
@@ -63,11 +63,10 @@ export interface UserInsert {
 }
 
 export async function insertUser(input: UserInsert): Promise<UserSqlRow> {
-  // MySQL has no RETURNING: generate the PK app-side, insert, then read back.
-  const userId = newId()
-  await db.$executeRaw`
-    INSERT INTO users (user_id, email, full_name, password_hash, role, created_at, updated_at)
-    VALUES (${userId}, ${input.email}, ${input.fullName}, ${input.passwordHash}, ${input.role}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+  // MySQL has no RETURNING: insert, take the new key from LAST_INSERT_ID(), then read back.
+  const userId = await insertReturningId(Prisma.sql`
+    INSERT INTO users (email, full_name, password_hash, role, created_at, updated_at)
+    VALUES (${input.email}, ${input.fullName}, ${input.passwordHash}, ${input.role}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
   const rows = await db.$queryRaw<UserSqlRow[]>`
     SELECT * FROM users WHERE user_id = ${userId} LIMIT 1`
   if (!rows[0]) throw new Error('Inserted user could not be read back')

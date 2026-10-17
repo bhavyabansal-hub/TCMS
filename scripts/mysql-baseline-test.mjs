@@ -107,9 +107,8 @@ async function main() {
   const portUp = sh(`ss -tln | grep -q ':${PORT} ' && echo up || echo down`).trim()
   if (portUp !== 'up') throw new Error(`MySQL :${PORT} is not running`)
   ok(`MySQL :${PORT} is up`)
-  if (!existsSync(`${ROOT}/prisma/migrations/20261015034822_init_mysql/migration.sql`)) throw new Error('baseline migration missing')
-  if (!existsSync(`${ROOT}/prisma/migrations/20261015034940_add_perf_indexes/migration.sql`)) throw new Error('add_perf_indexes migration missing')
-  ok('both migrations present in prisma/migrations')
+  if (!existsSync(`${ROOT}/prisma/migrations/20261017120000_baseline_numeric_ids/migration.sql`)) throw new Error('baseline migration missing')
+  ok('the single baseline migration is present in prisma/migrations')
 
   out('\n== 1. BRAND-NEW EMPTY SCHEMA ==')
   mysqlRoot(`DROP DATABASE IF EXISTS ${FRESH_DB}; CREATE DATABASE ${FRESH_DB} CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -129,9 +128,9 @@ async function main() {
   } catch (e) { deployOut = (e.stdout || '') + (e.stderr || '') }
   assertNoSecretLeak('deploy', deployOut)
   out(deployOut.split('\n').filter(Boolean).join('\n'))
-  if (/All migrations have been successfully applied/.test(deployOut) && /20261015034822_init_mysql/.test(deployOut) && /20261015034940_add_perf_indexes/.test(deployOut))
-    ok('deploy applied BOTH migrations on the empty schema (zero manual steps)')
-  else bad('deploy output did not confirm both migrations applied')
+  if (/All migrations have been successfully applied/.test(deployOut) && /20261017120000_baseline_numeric_ids/.test(deployOut))
+    ok('deploy applied the baseline on the empty schema (zero manual steps)')
+  else bad('deploy output did not confirm the baseline applied')
 
   out('\n== 3. SCHEMA PROOFS (fresh schema) ==')
   const secretCols = mysqlRoot(`SELECT TABLE_NAME, COLUMN_NAME, COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='${FRESH_DB}' AND ((TABLE_NAME='users' AND COLUMN_NAME='password_hash') OR (TABLE_NAME='refresh_tokens' AND COLUMN_NAME='token'));`)
@@ -238,8 +237,8 @@ async function main() {
   const hist = mysqlRoot(`SELECT migration_name FROM ${FRESH_DB}._prisma_migrations ORDER BY migration_name;`)
   out(hist)
   const histRows = hist.trim().split('\n').slice(1) // drop the header row
-  const histOk = histRows.length === 2 && histRows.some((r) => /20261015034822_init_mysql/.test(r)) && histRows.some((r) => /20261015034940_add_perf_indexes/.test(r))
-  if (histOk) ok('migration history exactly 2 rows, unchanged by the second deploy')
+  const histOk = histRows.length === 1 && histRows.some((r) => /20261017120000_baseline_numeric_ids/.test(r))
+  if (histOk) ok('migration history exactly 1 row, unchanged by the second deploy')
   else bad('migration history unexpected')
 
   await cleanup('test complete')

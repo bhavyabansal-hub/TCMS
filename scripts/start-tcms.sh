@@ -171,7 +171,7 @@ fi
 #         "No pending migrations" on every boot after the first. The old
 #         db-push + mysql-json-defaults.sh + collation-fixups dance is GONE:
 #         utf8mb4_bin and the JSON expression defaults live in the baseline
-#         migration (20261015034822_init_mysql) itself.
+#         migration (20261017120000_baseline_numeric_ids) itself.
 if port_up 5500; then
   echo "[start-tcms] applying schema (prisma migrate deploy, migrate user)..."
   npx prisma migrate deploy || { echo "[start-tcms] FATAL: migrate deploy failed"; exit 1; }

@@ -41,7 +41,8 @@ starts empty + `scripts/create-first-vp.mjs` (D2).
    (`listTestCases`, `createBug`); types/components `PascalCase`; constants
    `SCREAMING_SNAKE`; booleans read as predicates (`isX`, `hasX`, `canX`). DB tables and
    columns `snake_case`; primary keys are named after their entity (`user_id`,
-   `module_id`, `test_case_id`) — never a generic `id`.
+   `module_id`, `test_case_id`) — never a generic `id`. Keys are `INT UNSIGNED AUTO_INCREMENT`
+   numbers; in code, the API and the UI an id is always a digit string (`"42"`).
 2. **Names define purpose** — a name states the one thing a unit does. If it needs "and", split it.
 3. **Small units** — one responsibility per function/component; controllers ≈30–60 lines.
 4. **Modular features** — each API resource is one folder with its own four layers
@@ -170,7 +171,8 @@ starts empty + `scripts/create-first-vp.mjs` (D2).
   `src/instrumentation-node.ts` (loaded only in the Node runtime).
 - **Time.** Every raw-SQL write sets `created_at` / `updated_at` with `UTC_TIMESTAMP(3)` —
   never `NOW()` (decision D7). No `INSERT IGNORE`; duplicates use `ON DUPLICATE KEY UPDATE`.
-  MySQL has no `RETURNING`: INSERT with an app-side id (`newId()`), then SELECT.
+  MySQL has no `RETURNING`: INSERT through `insertReturningId()` (INSERT + `LAST_INSERT_ID()` on
+  ONE connection — never read `LAST_INSERT_ID()` on a separate pooled call), then SELECT.
   Aggregates arrive as bigints → `Number()`; TINYINT(1) → real booleans.
 - **Schema changes.** Edit `prisma/schema.prisma` **together with** a new migration in
   `prisma/migrations/`; apply with `npx prisma migrate deploy`, never `db push` (D4).

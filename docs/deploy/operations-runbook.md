@@ -278,7 +278,7 @@ user from **Settings → Users**.
 TCMS_DEPLOY_ENV=production node scripts/create-first-vp.mjs --email=it.admin@company.com --name="IT Admin"
 Password for the new VP:      # hidden, asked twice; min 12 chars, a letter and a number
 Repeat the password:
-OK: VP created user_id=<uuid> email=it.admin@company.com
+OK: VP created user_id=1 email=it.admin@company.com
 ```
 
 | Rule | Behaviour |

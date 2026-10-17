@@ -17,7 +17,7 @@
 
 | Convention | Detail |
 |---|---|
-| Primary keys | `CHAR(36)` UUIDs named after the entity (`user_id`, …); the repositories supply app-generated UUIDs (`src/lib/server/id.ts`); `BugTestCaseLink` has a composite PK. |
+| Primary keys | Readable numbers: `INT UNSIGNED AUTO_INCREMENT`, named after the entity (`user_id`, …); every foreign key is `INT UNSIGNED`. A new key is read back with `LAST_INSERT_ID()` on the insert's own connection (`src/lib/server/insert.ts`). The app, the API and the UI handle every id as a digit string (`"42"`; `src/lib/db.ts` converts rows). `BugTestCaseLink` has a composite PK; `role_permissions` (role + action) and `login_attempts` (email) keep natural keys; `activity_logs.entity_id` is `VARCHAR(64)` because permission toggles log `role:action` keys. |
 | Timestamps | `created_at` / `updated_at` `DATETIME(3)` in UTC; raw SQL writes `UTC_TIMESTAMP(3)`. Some log-like tables deliberately omit `updated_at`. `updated_at` also serves the optimistic lock (a save with a stale `expectedUpdatedAt` answers 409). |
 | Enums | Stored as plain `String` columns with documented value sets (roles, statuses, priorities). The TypeScript unions in `src/types/index.ts` mirror them. |
 | JSON columns | **10 columns are MySQL JSON** (Prisma `Json`): `TestCase.steps/tags/attachments`, `TestCaseHistory.snapshot`, `ReviewEvent.flaggedFields`, `Bug.attachments`, `TaskReport.tasks`, `ActivityLog.beforeSnapshot/afterSnapshot/diff`. Array-typed ones carry `@default("[]")`. |

@@ -1663,3 +1663,26 @@ Verification (2026-10-17):
 Stage Summary:
 - Clean logs, one docs tree, fast agents, faster pages and APIs, no page errors in either mode.
 - NOT VERIFIED: /wiki/[id] page (no wiki documents in the dev DB); load figures are from the owner's laptop (shared CPU), not a server; the version-skew crash itself was not reproduced automatically (needs a tab on the old client).
+
+---
+Task ID: numeric-ids-2026-10-17
+Agent: Main (Claude Code, Opus 5.5) — fast mode, no subagents
+Task: Phase 5 — readable numeric ids (owner OK: Q1 INT UNSIGNED, Q2 digit strings, Q3 ONE clean baseline migration replacing the old ones, Q4 reset + reseed tcms_test; + one wiki document in the seed). Commit, do not push.
+
+Work Log:
+- Why: UUID keys were unreadable in URLs, lists and support talk; production starts empty (D2), so no data is converted.
+- prisma/schema.prisma: 14 keys -> Int autoincrement UnsignedInt, 34 FK/id columns -> UnsignedInt; activity_logs.entity_id stays VARCHAR(64) (permission toggles log role:action).
+- prisma/migrations: the 3 old migrations removed; ONE baseline 20261017120000_baseline_numeric_ids (migrate diff --from-empty + hand edits: utf8mb4_bin on password_hash / token, JSON '[]' defaults). First version carried Prisma's update-notice box (stderr captured) -> owner reset failed P3018; box removed, ASCII, no BOM; owner reset OK.
+- src/lib/db.ts: query hook turns numeric id / *_id row values into digit strings (new globalThis key tcmsDb, old client disconnected). New src/lib/server/insert.ts insertReturningId() (INSERT + LAST_INSERT_ID() in one transaction, or in the caller's tx); src/lib/server/id.ts (newId) deleted; 14 repositories moved to it.
+- Seed: one wiki document. task-reports moduleId filter: JSON_CONTAINS with JSON_OBJECT (old scalar compare never matched). Crew Desk linkId validation: positive integer. bugs/test-cases views show the full id.
+- Scripts: db-guard (same hook + insertReturningId), fixtures, first-vp, fake ids (999999999), UUID regexes, mysql-baseline-test expects the single baseline; new scripts/verify-numeric-ids.mjs; cdp-browser.mjs + verify-ui-gates.mjs retry an EBUSY DevToolsActivePort read (first production role-flows run aborted at Chrome start and hung).
+- Docs: database.md, CODEBASE-MAP, CODING-STANDARDS, LLD, api-reference, operations-runbook, guides (bugs, test cases), plan-numeric-ids (BUILT), .env.example, CHANGELOG.
+
+Verification (2026-10-17):
+- tsc 0 · eslint 0 errors · audit 0 violations · migrate status up to date · drift check = empty migration · npm run build OK (separate copy, deleted)
+- Dev (:3000) / Production (:3999): verify-numeric-ids 40/0 / 40/0 · verify-import 35/0 / 35/0 · verify-permissions 37/0 / 37/0 · verify-notifications 31/0 / 31/0 · verify-review-matrix 36/0 / 36/0 · verify-concurrency 34/0 / 34/0 · verify-db-errors 21/0 / 21/0 · verify-flagged-fields 10/0 / 10/0 · verify-safety 27/0 / 27/0 · create-first-vp-test 15/0 / 15/0 · verify-ui-gates 159/0 / 159/0 · verify-page-apis 748/0 / 748/0 · verify-role-flows-e2e 556/0 / 556/0 (re-run after the Chrome-start fix) · verify-permission-toggle-e2e 1493/0 / 1489/0 (difference = 4 harness lock re-checks, same app checks)
+- R9 dry run 0 rows; role_permissions rows=0 (126 cells default); no leftover Chrome profiles.
+
+Stage Summary:
+- Ids are 1, 2, 3 … everywhere; LAST_INSERT_ID proven under 75 parallel inserts.
+- NOT VERIFIED: /reviews/[id] and /module-reviews/[id] pages in verify-page-apis (the fresh seed has no reviews; the role-flow suite still opens them); Linux-only scripts (mysql-correctness-test, mysql-baseline-test, start-tcms.sh, audit-500-hunt.sh) updated but NOT RUN on Windows.

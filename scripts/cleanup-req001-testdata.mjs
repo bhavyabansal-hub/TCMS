@@ -37,7 +37,8 @@ import {
   splitNoQacheck,
 } from './lib/r9-candidates.mjs'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// Row ids are INT UNSIGNED AUTO_INCREMENT numbers, passed as digit strings (Phase 5).
+const ID_RE = /^[1-9][0-9]*$/
 const ROOT_TABLES = ['modules', 'test_cases', 'bugs', 'wiki_documents', 'task_reports']
 const CHILD_TABLES = [
   'submodules', 'module_review_requests', 'review_requests', 'review_events',
@@ -70,9 +71,9 @@ function childDetail(r) {
 
 async function runDryRun(db, flags) {
   const groupIIds = flags['group-i'] ? String(flags['group-i']).split(',').map((s) => s.trim()).filter(Boolean) : []
-  const badIds = groupIIds.filter((id) => !UUID_RE.test(id))
+  const badIds = groupIIds.filter((id) => !ID_RE.test(id))
   if (badIds.length) {
-    console.log(`NOT RUN: --group-i ids must be UUIDs (${badIds.join(', ')})`)
+    console.log(`NOT RUN: --group-i ids must be numeric ids (${badIds.join(', ')})`)
     return 2
   }
   console.log(`MODE=DRY RUN (no write) groups=${DELETE_GROUPS.join(',')} groupI=${groupIIds.length}`)
@@ -142,7 +143,7 @@ function readApproved(file) {
   for (const t of ['module_review_requests', 'notifications']) {
     const ids = approved.extra[t]
     if (!Array.isArray(ids)) throw new Error(`approved file: extraModuleReviews.${t} missing`)
-    if (ids.some((id) => !UUID_RE.test(id))) throw new Error(`approved file: extraModuleReviews.${t} has a non-UUID id`)
+    if (ids.some((id) => !ID_RE.test(id))) throw new Error(`approved file: extraModuleReviews.${t} has a non-numeric id`)
   }
   return approved
 }

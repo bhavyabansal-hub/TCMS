@@ -50,18 +50,55 @@ export function describePool(): { connectionLimit: number | null; poolTimeoutSec
   }
 }
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
+// READABLE NUMERIC IDS (Phase 5): keys are INT UNSIGNED in MySQL, but the whole app
+// (services, API, UI, URLs) handles ids as digit strings ("42"). This one hook turns
+// every number in a column named `id` or `*_id` of every raw-query row into a string,
+// so a row id always compares equal to an id from a URL, the session or a request body.
+// Writes need nothing: MySQL compares and stores '42' in an INT column as 42.
+function idsAsStrings(row: unknown): unknown {
+  if (!row || typeof row !== 'object') return row
+  const record = row as Record<string, unknown>
+  for (const key of Object.keys(record)) {
+    const value = record[key]
+    if ((key === 'id' || key.endsWith('_id')) && (typeof value === 'number' || typeof value === 'bigint')) {
+      record[key] = String(value)
+    }
+  }
+  return record
 }
 
-export const db =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+function createClient(): PrismaClient {
+  const base = new PrismaClient({
     ...(DATABASE_URL ? { datasources: { db: { url: withPoolDefaults(DATABASE_URL) } } } : {}),
     // LOAD: 'query' logging writes one stdout line per SQL statement — useful
     // for debugging, but pure I/O overhead and log noise, so it is OFF unless
     // TCMS_LOG_SQL=true (any environment).
     log: LOG_SQL ? ['query', 'error'] : ['error'],
   })
+  const extended = base.$extends({
+    query: {
+      async $queryRaw({ args, query }) {
+        const rows = await query(args)
+        return Array.isArray(rows) ? rows.map(idsAsStrings) : rows
+      },
+    },
+  })
+  // Typed as the plain client: the extension changes values, not the API surface.
+  return extended as unknown as PrismaClient
+}
 
-if (!IS_PRODUCTION) globalForPrisma.prisma = db
+const globalForPrisma = globalThis as unknown as {
+  tcmsDb: PrismaClient | undefined
+  prisma: PrismaClient | undefined
+}
+
+// Dev hot reload keeps the client on globalThis. A client left there by an older code
+// version (key `prisma`, without the id hook) is closed once and replaced.
+if (globalForPrisma.prisma && !globalForPrisma.tcmsDb) {
+  void globalForPrisma.prisma.$disconnect().catch(() => undefined)
+  globalForPrisma.prisma = undefined
+}
+
+export const db = globalForPrisma.tcmsDb ?? createClient()
+
+if (!IS_PRODUCTION) globalForPrisma.tcmsDb = db

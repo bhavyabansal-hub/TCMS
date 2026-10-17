@@ -179,7 +179,7 @@ function buildMatrix(ctx, req, fx) {
     name: 'change other user role (manage_users; 404 on missing target)',
     // Points at a NON-EXISTENT user id: permission holders pass the gate and
     // hit 404; everyone else is stopped at 403. No real role ever changes.
-    run: (s) => req('PUT', '/api/users?id=00000000-0000-0000-0000-0000000000aa', { jar: s.jar, body: { role: 'vp' } }),
+    run: (s) => req('PUT', '/api/users?id=999999999', { jar: s.jar, body: { role: 'vp' } }),
     expect: M(true, true, false, false, false, false),
     // 404 = allowed-through; treat any non-403 4xx/2xx accordingly
     allow404: true,

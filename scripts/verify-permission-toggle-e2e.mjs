@@ -28,12 +28,12 @@
  *   (debug only: PERMTOGGLE_ACTIONS=a,b PERMTOGGLE_ROLES=developer limit the cells)
  * Exit: 0 all pass, 1 any FAIL, 2 NOT RUN, 130 Ctrl+C.
  */
-import { randomBytes, randomUUID } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { GuardAbort, openGuardedDb, sqlIn } from './lib/db-guard.mjs'
+import { GuardAbort, Prisma, insertReturningId, openGuardedDb, sqlIn } from './lib/db-guard.mjs'
 import { createFixtureUsers, findUsersByEmails, fixtureEmail } from './lib/fixture-users.mjs'
 import {
   BASE,
@@ -183,19 +183,17 @@ async function checkActivity(label, userId, action, entityType, entityId, t0, t1
 }
 
 async function sqlOwnCase(authorId, title) {
-  const id = randomUUID()
-  await ctx.db.$executeRaw`INSERT INTO test_cases (test_case_id, module_id, title, description, steps, priority, status, tags,
+  const id = await insertReturningId(ctx.db, Prisma.sql`INSERT INTO test_cases (module_id, title, description, steps, priority, status, tags,
       version, author_id, last_edited_by_id, attachments, created_at, updated_at)
-    VALUES (${id}, ${ctx.base.moduleId}, ${title}, 'permtoggle own case', CAST('[]' AS JSON), 'P1', 'draft',
-      CAST('["permtoggle"]' AS JSON), 1, ${authorId}, ${authorId}, CAST('[]' AS JSON), UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+    VALUES (${ctx.base.moduleId}, ${title}, 'permtoggle own case', CAST('[]' AS JSON), 'P1', 'draft',
+      CAST('["permtoggle"]' AS JSON), 1, ${authorId}, ${authorId}, CAST('[]' AS JSON), UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
   ctx.known.cases.push(id)
   return { id, title }
 }
 
 async function sqlOwnWiki(authorId, title) {
-  const id = randomUUID()
-  await ctx.db.$executeRaw`INSERT INTO wiki_documents (wiki_document_id, title, kind, content, tags, author_id, created_at, updated_at)
-    VALUES (${id}, ${title}, 'written', '<p>permtoggle own doc</p>', CAST('[]' AS JSON), ${authorId}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+  const id = await insertReturningId(ctx.db, Prisma.sql`INSERT INTO wiki_documents (title, kind, content, tags, author_id, created_at, updated_at)
+    VALUES (${title}, 'written', '<p>permtoggle own doc</p>', CAST('[]' AS JSON), ${authorId}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
   ctx.known.wikiDocs.push(id)
   return { id, title }
 }
@@ -344,7 +342,7 @@ async function checkUi(page, def, target, expectOn, label) {
   let first = true
   for (const view of def.ui) {
     const st = await visitView(page, view, target)
-    const where = `${label} UI ${view.path(target).replace(/[0-9a-f-]{36}/, '<id>')}`
+    const where = `${label} UI ${view.path(target).replace(/\/\d+(?=\/|\?|$)/, '/<id>')}`
     check(`${where}: page ready`, st.ready, `path=${st.path} alerts=${JSON.stringify(st.alerts)}`)
     if (first && def.link) {
       check(`${where}: sidebar "${def.link}" ${expectOn ? 'shown' : 'hidden'}`, st.nav.includes(def.link) === expectOn, `nav=${JSON.stringify(st.nav)}`)

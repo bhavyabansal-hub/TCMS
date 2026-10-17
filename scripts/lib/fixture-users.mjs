@@ -1,9 +1,10 @@
 // Stamped fixture users for the REQ-001 writing suites (R6, R7), created by raw SQL
 // (REQ-001 design (git history) 2.3, BE-R2): UTC_TIMESTAMP(3), notify_email = 0, notify_telegram = 0,
 // passwords generated in memory and never printed. No ORM model call.
-import { randomBytes, randomUUID } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import { Prisma } from '@prisma/client'
+import { insertReturningId } from './db-guard.mjs'
 
 /** Exact fixture e-mail: `<prefix>-<key>-<stamp>@tcms.test` (group J pattern `<prefix>-%-%@tcms.test`). */
 export function fixtureEmail(prefix, key, stamp) {
@@ -23,14 +24,13 @@ function generatePassword() {
 export async function createFixtureUsers(db, specs) {
   const created = []
   for (const spec of specs) {
-    const userId = randomUUID()
     const password = generatePassword()
     const passwordHash = await bcrypt.hash(password, 10)
-    await db.$executeRaw`
-      INSERT INTO users (user_id, email, full_name, password_hash, role, is_active,
+    const userId = await insertReturningId(db, Prisma.sql`
+      INSERT INTO users (email, full_name, password_hash, role, is_active,
                          notify_email, notify_telegram, notify_inapp, created_at, updated_at)
-      VALUES (${userId}, ${spec.email}, ${spec.name}, ${passwordHash}, ${spec.role}, 1,
-              0, 0, 1, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+      VALUES (${spec.email}, ${spec.name}, ${passwordHash}, ${spec.role}, 1,
+              0, 0, 1, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
     created.push({ ...spec, userId, password })
   }
   return created

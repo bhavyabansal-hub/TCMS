@@ -4,7 +4,7 @@
 
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
-import { newId } from '@/lib/server/id'
+import { insertReturningId } from '@/lib/server/insert'
 import type { BugSqlRow } from '@/types/sql-rows'
 
 /** Standard JOIN select — bug plus module/reportedBy/assignedTo refs
@@ -84,18 +84,17 @@ export interface BugInsert {
 }
 
 export async function insertBug(input: BugInsert): Promise<BugSqlRow> {
-  // MySQL has no RETURNING: generate the PK app-side, insert, then read back.
-  const bugId = newId()
-  await db.$executeRaw`
+  // MySQL has no RETURNING: insert, take the new key from LAST_INSERT_ID(), then read back.
+  const bugId = await insertReturningId(Prisma.sql`
     INSERT INTO bugs
-      (bug_id, title, description, severity, status, environment, steps_to_reproduce,
+      (title, description, severity, status, environment, steps_to_reproduce,
        expected_behaviour, actual_behaviour, reported_by_id, assigned_to_id,
        module_id, attachments, created_at, updated_at)
     VALUES
-      (${bugId}, ${input.title}, ${input.description}, ${input.severity}, 'open',
+      (${input.title}, ${input.description}, ${input.severity}, 'open',
        ${input.environment}, ${input.stepsToReproduce}, ${input.expectedBehaviour},
        ${input.actualBehaviour}, ${input.reportedById}, ${input.assignedToId},
-       ${input.moduleId}, CAST(${JSON.stringify([])} AS JSON), UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+       ${input.moduleId}, CAST(${JSON.stringify([])} AS JSON), UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
   const created = await findBugById(bugId)
   if (!created) throw new Error('Inserted bug could not be read back')
   return created

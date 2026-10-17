@@ -203,7 +203,7 @@ export function TasksView() {
       taskReportsApi.exportMonth(exportMonth, canViewAllReports ? effectiveUserId : undefined),
     onSuccess: (data) => {
       // Human-readable linked names resolved from the reference lists
-      // (a raw UUID column is useless in a report someone will read).
+      // (a bare id column is useless in a report someone will read).
       const moduleById = new Map(flatModules.map((m) => [m.moduleId, m.name]))
       const tcById = new Map(testCases.map((t) => [t.testCaseId, t.title]))
       const bugById = new Map(bugs.map((b) => [b.bugId, b.title]))

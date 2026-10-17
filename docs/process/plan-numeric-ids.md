@@ -1,6 +1,14 @@
 # Plan — readable numeric IDs (INT AUTO_INCREMENT)
 
-Status: **PLAN ONLY — waiting for the owner's OK** (2026-10-17). Nothing below is built yet.
+Status: **BUILT 2026-10-17** (owner OK: Q1 INT UNSIGNED, Q2 digit strings, Q4 reset + reseed).
+Changes against this plan, decided while building:
+- **Q3:** no drop-all migration — the three old migrations were REPLACED by one clean baseline
+  `20261017120000_baseline_numeric_ids` (production never ran a migration).
+- **activity_logs.entity_id** stays `VARCHAR(64)`: permission toggles log `role:action` keys there.
+- The seed also creates one wiki document (so `/wiki/[id]` is checked).
+- Row ids become digit strings in ONE place: a Prisma query hook in `src/lib/db.ts` (and the same
+  hook in `scripts/lib/db-guard.mjs` for the suites).
+Results: `docs/worklog.md` (task numeric-ids-2026-10-17).
 
 Goal: every table key becomes `1, 2, 3 …` (`INT UNSIGNED AUTO_INCREMENT`) instead of a
 `CHAR(36)` UUID. Production starts empty (decision D2), so no data is converted; the dev
