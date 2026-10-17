@@ -3,6 +3,7 @@
 // 400 ApiError so controllers stay thin and bad input never reaches services.
 
 import { z } from 'zod'
+import { optionalIdField } from '@/lib/server/id-field'
 import { ApiError, flattenZodError } from '@/lib/api'
 
 /** A work-log entry: description is required, minutes bounded to one day,
@@ -16,9 +17,9 @@ export const taskItemSchema = z.object({
     .int()
     .min(0)
     .max(1440, 'timeSpentMinutes cannot exceed one day (1440)'),
-  moduleId: z.string().nullable().optional(),
-  testCaseId: z.string().nullable().optional(),
-  bugId: z.string().nullable().optional(),
+  moduleId: optionalIdField(),
+  testCaseId: optionalIdField(),
+  bugId: optionalIdField(),
   status: z.enum(['done', 'in_progress', 'blocked']),
   linkUrl: z
     .string()

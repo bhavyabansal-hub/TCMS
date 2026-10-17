@@ -31,6 +31,7 @@ import { promisify } from 'node:util'
 import { Prisma } from '@prisma/client'
 import { logger } from '@/lib/logger'
 import { db } from '@/lib/db'
+import { BACKUP_DIR } from '@/lib/server/config'
 
 const execFileAsync = promisify(execFile)
 
@@ -54,8 +55,8 @@ let monitorStarted = false
 const utcDay = () => new Date().toISOString().slice(0, 10)
 
 function resolveBackupDir(): { dir: string; exists: boolean } {
-  const dir = process.env.TCMS_BACKUP_DIR
-    ? resolve(process.env.TCMS_BACKUP_DIR)
+  const dir = BACKUP_DIR
+    ? resolve(BACKUP_DIR)
     : resolve(process.cwd(), 'backups')
   return { dir, exists: existsSync(dir) }
 }

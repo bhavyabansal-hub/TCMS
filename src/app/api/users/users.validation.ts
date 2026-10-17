@@ -12,16 +12,17 @@ const createUserSchema = z.object({
   // created accounts normalize emails the same way, so a value like
   // " QA1@TCMS.com " can never create a second identity for qa1@tcms.com.
   email: z.string().trim().toLowerCase().email(),
-  fullName: z.string().min(2),
+  fullName: z.string().trim().min(2).max(80),
   password: z.string().min(6),
   role: roleSchema,
 })
 
 const updateUserSchema = z.object({
-  fullName: z.string().min(2).optional(),
+  fullName: z.string().trim().min(2).max(80).optional(),
   role: roleSchema.optional(),
   isActive: z.boolean().optional(),
-  avatarUrl: z.string().nullable().optional(),
+  // http(s) image URL only (no javascript:/data: — security test 2026-10-17).
+  avatarUrl: z.string().trim().max(500).refine((v) => v === '' || /^https?:\/\/\S+$/i.test(v), 'avatarUrl must be an http(s) URL').nullable().optional(),
 })
 
 function parseOrThrow<T>(schema: z.ZodType<T>, body: unknown): T {

@@ -25,17 +25,20 @@
 //   - TTLs mirror src/lib/auth.ts (ACCESS_TOKEN_TTL / REFRESH_TOKEN_TTL_DAYS).
 
 import { NextResponse } from 'next/server'
+import { IS_PRODUCTION_DEPLOYMENT, REFRESH_TOKEN_DAYS } from '@/lib/server/config'
 
 export const ACCESS_COOKIE = 'tcms-access'
 export const REFRESH_COOKIE = 'tcms-refresh'
 
-const ACCESS_TOKEN_TTL_SECONDS = 15 * 60
-const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60
+const REFRESH_TOKEN_TTL_SECONDS = REFRESH_TOKEN_DAYS * 24 * 60 * 60
 /** Cookie Max-Age = refresh window; see SECURITY MODEL note above. */
 const ACCESS_COOKIE_MAX_AGE_SECONDS = REFRESH_TOKEN_TTL_SECONDS
 
-/** True when the request arrived over https (directly or via proxy headers). */
+/** True when the cookies must carry Secure: always on the real server
+ *  (TCMS_DEPLOY_ENV=production — a spoofed x-forwarded-proto cannot drop it),
+ *  otherwise when the request arrived over https (directly or via the proxy). */
 export function isSecureRequest(req: Request): boolean {
+  if (IS_PRODUCTION_DEPLOYMENT) return true
   const proto = req.headers.get('x-forwarded-proto')
   if (proto) return proto.split(',')[0].trim() === 'https'
   return new URL(req.url).protocol === 'https:'

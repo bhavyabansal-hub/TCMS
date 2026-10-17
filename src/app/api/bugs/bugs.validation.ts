@@ -3,6 +3,7 @@
 // 400 ApiError so controllers stay thin and bad input never reaches services.
 
 import { z } from 'zod'
+import { idField, optionalIdField } from '@/lib/server/id-field'
 import { ApiError, flattenZodError } from '@/lib/api'
 import { expectedUpdatedAtField } from '@/lib/server/optimistic-lock'
 
@@ -23,9 +24,9 @@ export const createBugSchema = z.object({
   stepsToReproduce: z.string().max(4_000).optional(),
   expectedBehaviour: z.string().max(4_000).optional(),
   actualBehaviour: z.string().max(4_000).optional(),
-  moduleId: z.string().min(1).max(64),
-  assignedToId: z.string().max(64).optional().nullable(),
-  testCaseIds: z.array(z.string().max(64)).max(100).optional(),
+  moduleId: idField(),
+  assignedToId: optionalIdField(),
+  testCaseIds: z.array(idField()).max(100).optional(),
 })
 
 export const updateBugSchema = createBugSchema.partial().extend({
@@ -35,7 +36,7 @@ export const updateBugSchema = createBugSchema.partial().extend({
   expectedUpdatedAt: expectedUpdatedAtField,
 })
 
-const linkTestCaseSchema = z.object({ testCaseId: z.string().min(1) })
+const linkTestCaseSchema = z.object({ testCaseId: idField() })
 
 export type CreateBugInput = z.infer<typeof createBugSchema>
 export type UpdateBugInput = z.infer<typeof updateBugSchema>

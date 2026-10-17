@@ -7,7 +7,7 @@
 // outcome and never fail the caller.
 
 import { logger } from './logger'
-import { WS_NOTIFY_SECRET, WS_NOTIFY_URL } from '@/lib/server/config'
+import { WS_NOTIFY_SECRET, WS_NOTIFY_TIMEOUT_MS, WS_NOTIFY_URL } from '@/lib/server/config'
 import { findUserById } from './server/user.repository'
 import { insertNotification } from './server/notification.repository'
 import { deliverNotification } from './server/delivery'
@@ -61,7 +61,7 @@ async function broadcastToWs(payload: {
         ...(WS_NOTIFY_SECRET ? { 'x-notify-secret': WS_NOTIFY_SECRET } : {}),
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(3_000),
+      signal: AbortSignal.timeout(WS_NOTIFY_TIMEOUT_MS),
     })
   } catch {
     // Don't fail (or spam logs for) the main operation if the WS service is unavailable.

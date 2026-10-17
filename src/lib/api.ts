@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { ZodError } from 'zod'
 import { logger } from './logger'
-import { EXTRA_ALLOWED_HOSTS, READ_ONLY, SLOW_REQUEST_MS } from '@/lib/server/config'
+import { EXTRA_ALLOWED_HOSTS, MAX_JSON_BODY_BYTES, MAX_UPLOAD_MB, READ_ONLY, SLOW_REQUEST_MS } from '@/lib/server/config'
 import { READ_ONLY_MESSAGE, isBlockedInReadOnly } from '@/lib/server/read-only'
 import type { RequestMeta } from './activity'
 import { mapDatabaseError, mysqlErrno } from '@/lib/server/db-errors'
@@ -221,6 +221,31 @@ export function assertSameOrigin(req: Request): void {
 }
 
 /**
+ * Request size guard (security test 2026-10-17): route handlers buffer the whole
+ * body, so a huge body could exhaust memory before validation runs. Bodies larger
+ * than TCMS_MAX_JSON_BODY_KB (multipart uploads: TCMS_MAX_UPLOAD_MB + 1 MB) answer
+ * 413; a body without a declared length (chunked) answers 411.
+ */
+export function assertBodySize(req: Request): void {
+  const method = req.method.toUpperCase()
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return
+  const isMultipart = (req.headers.get('content-type') ?? '').toLowerCase().startsWith('multipart/form-data')
+  const limit = isMultipart ? (MAX_UPLOAD_MB + 1) * 1024 * 1024 : MAX_JSON_BODY_BYTES
+  const declared = req.headers.get('content-length')
+  if (declared === null) {
+    if (/chunked/i.test(req.headers.get('transfer-encoding') ?? '')) {
+      throw new ApiError(411, 'Request body must declare its length')
+    }
+    return
+  }
+  const size = Number(declared)
+  if (!Number.isFinite(size) || size < 0) throw ApiError.badRequest('Invalid Content-Length')
+  if (size > limit) {
+    throw new ApiError(413, `Request body too large — the limit is ${Math.floor(limit / 1024)} KB`)
+  }
+}
+
+/**
  * Wraps a controller handler with the standard error boundary + request log.
  * Every exported route handler should look like:
  *
@@ -236,6 +261,7 @@ export async function withApi(
   const url = new URL(req.url)
   try {
     assertSameOrigin(req)
+    assertBodySize(req)
     // Maintenance mode (TCMS_READ_ONLY=true): writes answer 503 before any work.
     if (READ_ONLY && isBlockedInReadOnly(req.method, url.pathname, url.searchParams)) {
       throw new ApiError(503, READ_ONLY_MESSAGE)

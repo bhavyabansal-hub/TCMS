@@ -10,12 +10,12 @@
 
 | | **Access token** | **Refresh token** |
 |---|---|---|
-| Format | JWT (HS256), payload `{ sub, email, role, fullName, jti }` | JWT with extra `nonce`, plus a random suffix for uniqueness |
-| Lifetime | **15 minutes** | **7 days** |
-| Stored where | httpOnly cookie `tcms-access` (path=/, SameSite=Lax, Secure on https) — **never** in JS-readable storage | httpOnly cookie `tcms-refresh` (path=/api/auth so it is only sent to auth endpoints, SameSite=Lax, Secure on https) |
+| Format | JWT (HS256 only), payload `{ sub, email, role, fullName, typ: "access", jti }` | JWT with `typ: "refresh"` and an extra random `nonce` |
+| Lifetime | **15 minutes** (`TCMS_ACCESS_TOKEN_MINUTES`) | **7 days** (`TCMS_REFRESH_TOKEN_DAYS`) |
+| Stored where | httpOnly cookie `tcms-access` (path=/, SameSite=Lax, Secure on https and always with `TCMS_DEPLOY_ENV=production`) — **never** in JS-readable storage | httpOnly cookie `tcms-refresh` (path=/api/auth so it is only sent to auth endpoints, SameSite=Lax, Secure on https) |
 | Sent how | Automatically by the browser on every same-origin API/page request | Automatically on calls to `/api/auth/*` only |
-| Server validation | `jsonwebtoken.verify` with `process.env.JWT_SECRET` | verify + lookup in `RefreshToken` table (must exist, not revoked, not expired) |
-| Persisted server-side? | No (stateless) | Yes — one `RefreshToken` row enables revocation |
+| Server validation | `jsonwebtoken.verify` (HS256 only) with `JWT_SECRET`, `typ` must be `access`, not revoked (logout / password change) | verify (`typ` must be `refresh`) + lookup in `RefreshToken` table (must exist, not revoked, not expired) |
+| Persisted server-side? | No — revoked token ids + a per-user "not before" time are kept in memory (one instance) | Yes — one `RefreshToken` row enables revocation |
 
 **Why cookies:** JavaScript can never read an httpOnly cookie, so a successful XSS
 attack cannot exfiltrate the session — the strongest practical mitigation for a SPA.
@@ -100,8 +100,10 @@ validation fails outright → `clearStoredUser()`.
 **Logout:** `POST /api/auth?path=logout` (server reads the refresh cookie) revokes the
 `RefreshToken` row (always 200) **and clears both httpOnly cookies** via
 `Set-Cookie … Max-Age=0`. The client wipes the local display profile and the auth
-store. The 15-minute access token may technically still work until expiry —
-acceptable for this threat model; revocation protects the *renewal* path.
+store. The access token stops working at once too (its id is revoked in memory —
+security test 2026-10-17; before, a copied access token kept working up to 15 minutes).
+A password change ends every other session the same way and gives this browser a fresh
+cookie pair. A refresh token is never accepted as an access token (`typ` claim).
 
 ## 4. Automatic token refresh (the invisible 401 dance)
 

@@ -23,7 +23,10 @@ export async function registerNode() {
   // it prints the one-line state ("production guard ACTIVE" / "OFF (sandbox
   // mode)") that the go-live smoke test greps for. Full contract:
   // src/lib/server/startup-guard.ts + .env.example.
-  const { assertAppStartup } = await import('./lib/server/startup-guard')
+  // REQUIRED SETTINGS first, in every mode: a missing .env key is named and the
+  // process exits 1, instead of a confusing error on the first request.
+  const { assertAppStartup, assertRequiredSettings } = await import('./lib/server/startup-guard')
+  assertRequiredSettings()
   assertAppStartup()
 
   // PRODUCTION DB SETTINGS GUARD — the SECOND boot gate (task

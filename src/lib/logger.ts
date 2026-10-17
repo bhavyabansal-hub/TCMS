@@ -31,10 +31,12 @@ import {
   IS_PRODUCTION,
   LOG_DIR as LOG_DIR_ENV,
   LOG_RETENTION_DAYS as RETENTION_DAYS_ENV,
+  TELEGRAM_API_URL,
   TELEGRAM_LOG_BOT_TOKEN,
   TELEGRAM_LOG_CHAT_ID,
   TELEGRAM_LOG_LEVEL,
   TELEGRAM_LOG_MIN_INTERVAL_MS,
+  TELEGRAM_TIMEOUT_MS,
 } from '@/lib/server/config'
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error'
@@ -94,11 +96,11 @@ async function flushTelegramQueue(): Promise<void> {
   if (batch.length === 0) return
 
   try {
-    const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_LOG_BOT_TOKEN}/sendMessage`, {
+    const res = await fetch(`${TELEGRAM_API_URL}/bot${TELEGRAM_LOG_BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: TELEGRAM_LOG_CHAT_ID, text: batch.join('\n') + dropNote }),
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(TELEGRAM_TIMEOUT_MS),
     })
     if (res.ok) {
       telegramState.failureNotified = false // recovered — re-arm the one-time note

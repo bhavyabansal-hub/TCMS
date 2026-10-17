@@ -55,9 +55,10 @@ const passwordChangeSchema = z.object({
 })
 
 const profileUpdateSchema = z.object({
-  fullName: z.string().min(1).optional(),
-  avatarUrl: z.string().nullable().optional(),
-  telegramChatId: z.string().nullable().optional(),
+  fullName: z.string().trim().min(1).max(80).optional(),
+  // http(s) image URL only (no javascript:/data: — security test 2026-10-17).
+  avatarUrl: z.string().trim().max(500).refine((v) => v === '' || /^https?:\/\/\S+$/i.test(v), 'avatarUrl must be an http(s) URL').nullable().optional(),
+  telegramChatId: z.string().trim().max(64).nullable().optional(),
   notifyEmail: z.boolean().optional(),
   notifyTelegram: z.boolean().optional(),
   notifyInapp: z.boolean().optional(),

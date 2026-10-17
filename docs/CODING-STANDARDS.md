@@ -53,6 +53,10 @@ starts empty + `scripts/create-first-vp.mjs` (D2).
    `parseJson()` (`src/lib/activity.ts`); client HTTP → `src/lib/client/api.ts`; CSV
    parsing → `src/lib/server/csv.ts`; CSV export → `src/lib/csv-export.ts`; roles →
    `src/lib/roles.ts`; env → `src/lib/server/config.ts` (the only file that reads `process.env`).
+   **Settings live in `.env` only:** never hard-code a URL, host, port, email, key, password or
+   timeout — add a key to `.env.example` (one comment: what, example, required/optional) and read
+   it in `config.ts`; a required key goes into `missingRequiredSettings()` (startup-guard.ts).
+   Row ids in validators use `idField()` / `optionalIdField()` (`src/lib/server/id-field.ts`).
 6. **Raw SQL only** — every query is a tagged template (`db.$queryRaw` / `db.$executeRaw`)
    inside a repository file; values are always bound parameters:
 

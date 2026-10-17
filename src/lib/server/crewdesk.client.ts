@@ -96,6 +96,8 @@ export function crewDeskMode(): CrewDeskMode {
 }
 
 export function crewDeskAuthMode(): CrewDeskAuthMode {
+  // No CREWDESK_BASE_URL in .env = the integration is off (no built-in address).
+  if (!CREWDESK_BASE_URL) return 'none'
   if (CREWDESK_AUTH === 'token' || CREWDESK_AUTH === 'login') return CREWDESK_AUTH
   // Auto: a fixed token wins; otherwise password login when both parts exist.
   if (CREWDESK_TOKEN) return 'token'
@@ -339,7 +341,7 @@ function authHeaders(): Record<string, string> {
     }
     return { Authorization: `Bearer ${CREWDESK_TOKEN}` }
   }
-  throw new CrewDeskError('config', 'Crew Desk integration is not configured (no credentials). Ask an admin to set CREWDESK_TOKEN or the login variables.')
+  throw new CrewDeskError('config', 'Crew Desk integration is not configured (no credentials). Ask an admin to set CREWDESK_BASE_URL and CREWDESK_TOKEN (or the login variables) in .env.')
 }
 
 async function requestJson(
@@ -349,7 +351,7 @@ async function requestJson(
 ): Promise<unknown> {
   const { baseUrl, timeoutMs, authMode } = crewDeskConfig()
   if (authMode === 'none') {
-    throw new CrewDeskError('config', 'Crew Desk integration is not configured. Ask an admin to set CREWDESK_TOKEN or the login variables.')
+    throw new CrewDeskError('config', 'Crew Desk integration is not configured. Ask an admin to set CREWDESK_BASE_URL and CREWDESK_TOKEN (or the login variables) in .env.')
   }
   if (authMode === 'login') {
     // Proactive: refresh before expiry; reactive: one retry after a 401 below.

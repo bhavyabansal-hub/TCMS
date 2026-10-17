@@ -19,10 +19,18 @@ import { ApiError } from './api'
 import type { PermissionAction } from '@/types'
 import { can, ensurePermissionsLoaded } from './permissions'
 import { findUserById } from './server/user.repository'
-import { JWT_SECRET } from '@/lib/server/config'
+import { ACCESS_TOKEN_MINUTES, JWT_SECRET, REFRESH_TOKEN_DAYS } from '@/lib/server/config'
 
-const ACCESS_TOKEN_TTL = '15m'
-const REFRESH_TOKEN_TTL_DAYS = 7
+// Lifetimes come from .env (TCMS_ACCESS_TOKEN_MINUTES / TCMS_REFRESH_TOKEN_DAYS).
+const ACCESS_TOKEN_TTL_SECONDS = ACCESS_TOKEN_MINUTES * 60
+const REFRESH_TOKEN_TTL_DAYS = REFRESH_TOKEN_DAYS
+/** Only HS256 is accepted (no algorithm confusion, no 'none'). */
+const JWT_ALGORITHM = 'HS256' as const
+
+/** Token kind claim: an access token is never accepted where a refresh token
+ *  belongs and vice versa (security test 2026-10-17: a 7-day refresh token used
+ *  to work as a Bearer access token, even after logout). */
+export type TokenKind = 'access' | 'refresh'
 
 export interface JwtPayload {
   sub: string
@@ -45,24 +53,72 @@ export function verifyPassword(plain: string, hash: string): boolean {
 
 export function signAccessToken(payload: JwtPayload): string {
   // Include a unique jti so tokens issued within the same second don't collide.
-  return jwt.sign({ ...payload, jti: randomUUID() }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_TTL })
+  return jwt.sign({ ...payload, typ: 'access', jti: randomUUID() }, JWT_SECRET, {
+    algorithm: JWT_ALGORITHM,
+    expiresIn: ACCESS_TOKEN_TTL_SECONDS,
+  })
 }
 
 export function signRefreshToken(payload: JwtPayload): string {
   // Refresh tokens MUST be unique — add jti + random entropy.
   return jwt.sign(
-    { ...payload, jti: randomUUID(), nonce: Math.random().toString(36).slice(2) },
+    { ...payload, typ: 'refresh', jti: randomUUID(), nonce: randomUUID() },
     JWT_SECRET,
-    { expiresIn: `${REFRESH_TOKEN_TTL_DAYS}d` }
+    { algorithm: JWT_ALGORITHM, expiresIn: REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 }
   )
 }
 
-export function verifyToken<T = JwtPayload>(token: string): T | null {
+/** Verifies signature, expiry and the token kind; null when any check fails. */
+export function verifyToken<T = JwtPayload>(token: string, kind: TokenKind = 'access'): T | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as T
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: [JWT_ALGORITHM] }) as T & { typ?: string }
+    return payload.typ === kind ? payload : null
   } catch {
     return null
   }
+}
+
+// ---------- Session revocation (logout / password change) ----------
+//
+// Access JWTs are stateless, so logout used to leave the copied access token
+// working until it expired. Revoked access-token ids (until their own expiry)
+// and a per-user "not before" time live on globalThis: every route module copy
+// sees the same store. Single instance by design (HLD); a second instance needs
+// a shared store (backlog).
+
+interface RevocationStore {
+  jtis: Map<string, number>
+  userNotBefore: Map<string, number>
+}
+const globalForRevocation = globalThis as unknown as { tcmsRevocations?: RevocationStore }
+const revocations: RevocationStore =
+  globalForRevocation.tcmsRevocations ?? (globalForRevocation.tcmsRevocations = { jtis: new Map(), userNotBefore: new Map() })
+
+interface TokenTimes {
+  jti?: string
+  iat?: number
+  exp?: number
+}
+
+/** Logout: the given access token stops working at once. */
+export function revokeAccessToken(token: string | null | undefined): void {
+  if (!token) return
+  const payload = verifyToken<JwtPayload & TokenTimes>(token)
+  if (!payload?.jti || !payload.exp) return
+  const now = Date.now()
+  for (const [jti, expiresAt] of revocations.jtis) if (expiresAt < now) revocations.jtis.delete(jti)
+  revocations.jtis.set(payload.jti, payload.exp * 1000)
+}
+
+/** Password change: every access token issued to this user before now stops working. */
+export function revokeUserSessions(userId: string): void {
+  revocations.userNotBefore.set(userId, Math.floor(Date.now() / 1000))
+}
+
+function isRevoked(payload: JwtPayload & TokenTimes): boolean {
+  if (payload.jti && revocations.jtis.has(payload.jti)) return true
+  const notBefore = revocations.userNotBefore.get(payload.sub)
+  return notBefore !== undefined && (payload.iat ?? 0) < notBefore
 }
 
 export function refreshTtlDays(): number {
@@ -123,8 +179,8 @@ async function revalidateUser(sub: string): Promise<{ role: string; email: strin
 export async function getCurrentUser(): Promise<SessionUser | null> {
   const token = await resolveSessionToken()
   if (!token) return null
-  const payload = verifyToken<JwtPayload>(token)
-  if (!payload) return null
+  const payload = verifyToken<JwtPayload & TokenTimes>(token)
+  if (!payload || isRevoked(payload)) return null
   const fresh = await revalidateUser(payload.sub)
   if (!fresh) return null
   return {

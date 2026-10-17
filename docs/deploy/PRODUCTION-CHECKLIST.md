@@ -16,6 +16,14 @@ socket registry are per process — `docs/architecture/HLD.md`).
 
 ## 1. Environment (`/etc/tcms/tcms.env`, owner `tcms`, `chmod 600`)
 
+**One place for every setting.** Every URL, key, password, host, port and timeout is read from the
+env file only (`.env` locally, `/etc/tcms/tcms.env` on the server) — there is no other config file
+and no built-in address. **To change any URL, key or password: edit the env file only, then restart
+the service** (`NEXT_PUBLIC_*` keys also need `npm run build`). A missing required key stops the app
+at boot with `[TCMS] FATAL (tcms-app): missing required setting(s) in .env:` and the key name.
+Every key with a one-line comment: `.env.example`; tidy an existing file with
+`node scripts/clean-env.mjs` (dry run) / `--write` (backs up to `.env.bak`).
+
 Generate every secret fresh on the server: `openssl rand -hex 32` (≥ 32 characters; the
 startup guard refuses shorter, placeholder or sandbox values and names the variable).
 
@@ -27,10 +35,10 @@ startup guard refuses shorter, placeholder or sandbox values and names the varia
 | `DATABASE_URL` | `mysql://tcms_app:<pw>@<db-host>:<port>/tcms?sslaccept=strict&connection_limit=40&pool_timeout=10` | App user, **DML only**. Non-root, real password, not the sandbox `127.0.0.1:5500`. Percent-encode special characters in `<pw>`. |
 | `DIRECT_URL` | `mysql://tcms_migrate:<pw>@<db-host>:<port>/tcms?sslaccept=strict` | Migration user (DDL). Used only by `npx prisma migrate deploy`. |
 | `BACKUP_DATABASE_URL` | `mysql://tcms_backup:<pw>@<db-host>:<port>/tcms` | Read-only dump user for `scripts/backup-db-mysql.sh`. |
-| `JWT_SECRET` | `openssl rand -hex 32` | Signs sessions. Changing it signs everyone out. |
+| `JWT_SECRET` | `openssl rand -hex 32` | Signs sessions. Changing it signs everyone out. With `TCMS_DEPLOY_ENV=production` the session cookies are always `Secure` — serve the app over HTTPS only. |
 | `WS_NOTIFY_SECRET` | `openssl rand -hex 24` (≥ 32 chars) | Shared by app + WS service (tickets and `/notify`). Same value in both processes. |
 | `WS_CORS_ORIGIN` | `https://tcms.<company-domain>` | WS service refuses to start when unset or `*`. |
-| `TCMS_PUBLIC_ORIGIN` | `https://tcms.<company-domain>` | Public URL used in links (Crew Desk comments). |
+| `TCMS_PUBLIC_ORIGIN` | `https://tcms.<company-domain>` | Public app URL used in links (Crew Desk comments). **Required** — the app refuses to start without it in production. |
 
 ### 1.2 Must stay OFF / unset in production
 
@@ -66,15 +74,19 @@ startup guard refuses shorter, placeholder or sandbox values and names the varia
 
 | Key | Default | Notes |
 |---|---|---|
-| `SMTP_HOST` `SMTP_PORT` `SMTP_SECURE` `SMTP_USER` `SMTP_PASS` `SMTP_FROM` | unset | Email channel. Test: `node scripts/send-test-notification.mjs --email=<you>` |
-| `TELEGRAM_BOT_TOKEN` | unset | Telegram channel. Test: `node scripts/send-test-notification.mjs --chat=<id>` |
+| `SMTP_HOST` `SMTP_PORT` `SMTP_SECURE` `SMTP_USER` `SMTP_PASS` `SMTP_FROM` `SMTP_TIMEOUT_MS` | unset / `587` / `8000` | Email channel; `SMTP_FROM` is required once `SMTP_HOST` is set. Test: `node scripts/send-test-notification.mjs --email=<you>` |
+| `TELEGRAM_BOT_TOKEN` `TELEGRAM_API_URL` `TELEGRAM_TIMEOUT_MS` | unset / `https://api.telegram.org` / `5000` | Telegram channel. Test: `node scripts/send-test-notification.mjs --chat=<id>` |
 | `TELEGRAM_LOG_BOT_TOKEN` `TELEGRAM_LOG_CHAT_ID` `TELEGRAM_LOG_LEVEL` `TELEGRAM_LOG_MIN_INTERVAL_MS` | unset / `error` / `2000` | Ops log mirror to a Telegram chat. |
 | `TCMS_DB_CONNECTION_LIMIT` `TCMS_DB_POOL_TIMEOUT` | URL value, else `40` / `10` | Pool per process; the boot log prints the effective numbers (`DB pool {...}`). `TCMS_DB_CONNECTION_LIMIT` overrides the URL. |
 | `TCMS_SLOW_REQUEST_MS` | `1000` | Requests slower than this are logged as warnings (fast successful reads are not logged in production). |
 | `LOG_DIR` `LOG_RETENTION_DAYS` | `logs` / `14` | Rotating `app-*.log` / `error-*.log`. Use `/var/log/tcms`. |
 | `TCMS_LOGIN_IP_MAX_FAILURES` `TCMS_LOGIN_IP_WINDOW_SECONDS` | `30` / `900` | Per-IP failed sign-in limit → 429. |
+| `TCMS_LOGIN_MAX_FAILURES` `TCMS_LOGIN_LOCK_SECONDS` | `5` / `60` | Per-email lock after failed sign-ins. |
+| `TCMS_ACCESS_TOKEN_MINUTES` `TCMS_REFRESH_TOKEN_DAYS` | `15` / `7` | Session lifetimes. |
+| `TCMS_MAX_JSON_BODY_KB` `TCMS_MAX_UPLOAD_MB` | `2048` / `10` | Request size limits (bigger → 413). |
+| `WS_NOTIFY_TIMEOUT_MS` | `3000` | Timeout of one realtime broadcast. |
 | `TCMS_EXTRA_ALLOWED_HOSTS` | unset | Only if a gateway rewrites the Host header. |
-| `CREWDESK_*` | unset | Crew Desk integration; leave `CREWDESK_MODE=test` (one ticket) until the owner approves `live`. |
+| `CREWDESK_*` | unset | Crew Desk integration. No built-in address: without `CREWDESK_BASE_URL` the integration is off. `CREWDESK_MODE=manual` = off, `test` = one ticket (keep until the owner approves `live`). |
 | `NODE_ENV` | set by `next start` | Do not use it as the production switch (that is `TCMS_DEPLOY_ENV`). |
 
 ---

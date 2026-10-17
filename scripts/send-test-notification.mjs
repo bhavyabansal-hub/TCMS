@@ -25,8 +25,10 @@ const ENV_FILE = path.join(ROOT, '.env')
 if (existsSync(ENV_FILE)) process.loadEnvFile(ENV_FILE) // existing env vars win
 const env = (k) => (process.env[k] ?? '').trim()
 
-const EMAIL_TIMEOUT_MS = 10_000 // same as delivery.ts
-const TELEGRAM_TIMEOUT_MS = 8_000
+// Same keys and defaults as src/lib/server/config.ts (.env only).
+const EMAIL_TIMEOUT_MS = Number(env('SMTP_TIMEOUT_MS')) || 8_000
+const TELEGRAM_TIMEOUT_MS = Number(env('TELEGRAM_TIMEOUT_MS')) || 5_000
+const TELEGRAM_API_URL = (env('TELEGRAM_API_URL') || 'https://api.telegram.org').replace(/\/+$/, '')
 const SECRETS = [env('SMTP_PASS'), env('TELEGRAM_BOT_TOKEN')].filter((s) => s.length >= 4)
 
 /** Error text with every secret value masked. */
@@ -44,7 +46,7 @@ function smtpSettings() {
     secure: env('SMTP_SECURE').toLowerCase() === 'true' || env('SMTP_PORT') === '465',
     user: env('SMTP_USER'),
     pass: env('SMTP_PASS'),
-    from: env('SMTP_FROM') || 'tcms@localhost',
+    from: env('SMTP_FROM'),
   }
 }
 
@@ -82,7 +84,7 @@ async function sendTestTelegram(chatId) {
   const token = env('TELEGRAM_BOT_TOKEN')
   if (!token) return { ok: false, notConfigured: true, message: 'TELEGRAM_BOT_TOKEN is not set' }
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    const res = await fetch(`${TELEGRAM_API_URL}/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text: `TCMS test notification (${new Date().toISOString()})` }),

@@ -3,6 +3,7 @@
 // 400 ApiError so controllers stay thin and bad input never reaches services.
 
 import { z } from 'zod'
+import { idField, optionalIdField } from '@/lib/server/id-field'
 import { ApiError, flattenZodError } from '@/lib/api'
 import { expectedUpdatedAtField } from '@/lib/server/optimistic-lock'
 
@@ -20,14 +21,14 @@ const createTestCaseSchema = z.object({
   // CAPS (audit 2026-10-09): these fields used to be length-unbounded — a
   // single request could store a 60 MB title (and duplicate it into the
   // activity log). The caps mirror the DB-friendly limits used by the UI.
-  moduleId: z.string().min(1, 'Module is required').max(64),
+  moduleId: idField('Module is required'),
   title: z.string().min(1, 'Title is required').max(200),
   description: z.string().min(1, 'Description is required').max(2_000),
   preconditions: z.string().max(2_000).optional(),
   expectedResult: z.string().max(2_000).optional(),
   priority: priorityField.default('P2'),
   tags: tagsField.default([]),
-  assigneeId: z.string().max(64).optional().nullable(),
+  assigneeId: optionalIdField('Invalid assignee'),
 })
 
 const updateTestCaseSchema = createTestCaseSchema.partial().extend({
@@ -37,7 +38,7 @@ const updateTestCaseSchema = createTestCaseSchema.partial().extend({
 })
 
 const submitReviewSchema = z.object({
-  reviewerId: z.string().optional().nullable(),
+  reviewerId: optionalIdField('Invalid reviewer'),
   dueDate: z
     .string()
     .optional()
@@ -52,7 +53,7 @@ const submitReviewSchema = z.object({
  *  Row-level correctness (title present, priority enum, step format) is the
  *  service's job — here we only guarantee the REQUEST itself is sound. */
 const importTestCasesSchema = z.object({
-  moduleId: z.string().min(1, 'Choose the module or submodule to import into'),
+  moduleId: idField('Choose the module or submodule to import into'),
   fileName: z
     .string()
     .refine((v) => v.toLowerCase().endsWith('.csv'), 'Only .csv files can be imported'),

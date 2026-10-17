@@ -1686,3 +1686,23 @@ Verification (2026-10-17):
 Stage Summary:
 - Ids are 1, 2, 3 … everywhere; LAST_INSERT_ID proven under 75 parallel inserts.
 - NOT VERIFIED: /reviews/[id] and /module-reviews/[id] pages in verify-page-apis (the fresh seed has no reviews; the role-flow suite still opens them); Linux-only scripts (mysql-correctness-test, mysql-baseline-test, start-tcms.sh, audit-500-hunt.sh) updated but NOT RUN on Windows.
+
+---
+Task ID: security-2026-10-17
+Agent: Main (Claude Code, Opus 5.5) — fast mode, no subagents
+Task: (A) every setting from .env only + clean .env / .env.example; (B) full deep security test of the whole site, fix Critical/High. Commit, do not push.
+
+Work Log:
+- A: config.ts reads every setting (no built-in Crew Desk URL — unset = off; no default SMTP_FROM; new keys for SMTP/Telegram/WS timeouts, Telegram API URL, session lifetimes, login lock, body/upload limits, backup dir, signup flag). process.env readers outside config.ts moved in (auth.service, backup-health, db-settings-guard; startup-guard stays deliberate). WS /notify CORS header removed. startup-guard assertRequiredSettings(): every mode, names each missing required key, exit 1 (proven on a copy without DATABASE_URL/JWT_SECRET). .env.example rewritten (9 sections, one comment per key). scripts/clean-env.mjs (dry run / --write, .env.bak, value self-check, key names only): owner .env tidied — 8 keys kept byte-identical, 54 commented placeholders, 0 removed, 0 required missing. scripts/send-test-notification.mjs uses the same keys.
+- B findings (docs/qa/SECURITY-TEST-2026-10-17.md): F1 Critical next 16.1.3 (RCE on Windows hosts, proxy bypass, …) -> 16.4.2 via npm audit fix (no --force; Prisma CLI kept at 6.19.2 = client); F2 High refresh token accepted as access token -> typ claim + HS256 pin; F3 High manager could deactivate/rename a VP -> canManageAccount rank rule; F4 logout / password change now end sessions at once (in-memory revocation, fresh cookies for the changing browser); F5 open redirect /\evil.com in safeNextPath; F6 request body limits (413/411); F7 Crew Desk default real URL removed; F8 TCMS_PUBLIC_ORIGIN required in production; F9 strict digit-string ids (src/lib/server/id-field.ts, 7 validators) + MySQL 1265 -> 400; F10 Secure cookies forced with TCMS_DEPLOY_ENV=production; F11 avatarUrl http(s) only, name/chat-id caps; F12 WS CORS. Backlog B31–B35 (nonce CSP + X-Powered-By need next.config.ts, multi-instance revocation, nodemailer major, dev-only advisories, password policy).
+- New scripts/verify-security.mjs (13 sections, self-cleaning). Test fixes: verify-import expects 400 for a malformed module id and 404 for a well-formed missing one; verify-permission-toggle-e2e retries the bug-dialog Edit click (missed while the dialog animated on next 16.4.2) and reports the failing step.
+- Incident: the memory reaper stopped the production server and the first production toggle run mid-way; its leftovers (qa_engineer:edit_own_wiki_doc OFF + 7 permtoggle fixtures with 31 cases, 12 bugs, 10 modules, 7 wiki, 4 work logs, 381 activity rows) were removed with owner OK (cell restored via VP API, rows via suite-cleanup, residue 0), then the toggle suite re-ran alone.
+
+Verification (2026-10-17/18):
+- tsc 0 · eslint 0 errors (1 old warning) · audit-standards 0 violations · npm run build OK on next 16.4.2 (separate copy, deleted) · npm audit 28 -> 13 (0 critical)
+- Dev (:3000, next 16.1.3 node_modules) / Production (:3999, next 16.4.2): verify-security 162/0 / 162/0 · verify-numeric-ids 40/0 / 40/0 · verify-import 36/0 / 36/0 · verify-permissions 37/0 / 37/0 · verify-notifications 31/0 / 31/0 · verify-review-matrix 36/0 / 36/0 · verify-concurrency 34/0 / 34/0 · verify-db-errors 21/0 / 21/0 · verify-flagged-fields 10/0 / 10/0 · verify-safety 27/0 / 27/0 · create-first-vp-test 15/0 / 15/0 · verify-ui-gates 159/0 / 159/0 · verify-page-apis 748/0 / 748/0 · verify-role-flows-e2e 556/0 / 556/0 · verify-permission-toggle-e2e 1494/0 / 1488/0 (re-run after the retry fix)
+- R9 dry run 0 rows; role_permissions 0 rows (126 default); no leftover Chrome profile; .env values identical to .env.bak.
+
+Stage Summary:
+- One settings source (.env), clear boot message for a missing key, and every Critical/High security finding fixed and covered by a repeatable suite.
+- NOT VERIFIED: dev node_modules still on next 16.1.3 until the owner runs npm install; the dev toggle run (1494/0) used the script before the Edit-click retry; real HTTPS / TCMS_DEPLOY_ENV=production cookies; multiple instances; WS service attacks (Linux-only probe NOT RUN ON WINDOWS); expired-token forging; live Crew Desk / SMTP / Telegram.

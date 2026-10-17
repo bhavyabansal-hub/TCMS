@@ -23,6 +23,8 @@ import type { NextRequest } from 'next/server'
 import { withApi, ok, ApiError, getQueryParams, extractRequestMeta } from '@/lib/api'
 import { requireUser } from '@/lib/auth'
 import {
+  ACCESS_COOKIE,
+  applySessionCookies,
   clearedAuthResponse,
   readRefreshCookie,
   refreshedResponse,
@@ -46,6 +48,12 @@ import {
   validateLoginBody,
   validateRegisterBody,
 } from './auth.validation'
+
+/** Access token sent by API consumers in the Authorization header (logout revokes it). */
+function bearerToken(req: NextRequest): string | null {
+  const authz = req.headers.get('authorization')
+  return authz?.startsWith('Bearer ') ? authz.slice('Bearer '.length).trim() || null : null
+}
 
 /** POST /api/auth?path=login|refresh|logout */
 export async function POST(req: NextRequest) {
@@ -72,7 +80,7 @@ export async function POST(req: NextRequest) {
       case 'logout': {
         const refreshToken =
           validateLogoutBody(body).refreshToken ?? readRefreshCookie(req) ?? undefined
-        await logoutSession(refreshToken)
+        await logoutSession(refreshToken, req.cookies.get(ACCESS_COOKIE)?.value ?? bearerToken(req))
         // Clears both cookies regardless — never leave stale session state.
         return clearedAuthResponse(req)
       }
@@ -101,7 +109,11 @@ export async function PUT(req: NextRequest) {
     const body = await req.json().catch(() => ({}))
     const { path } = getQueryParams(req)
     if (path === 'password') {
-      return ok(await changePassword(me, validatePasswordChangeBody(body), extractRequestMeta(req)))
+      // Every older session ends; this browser keeps working with a fresh cookie pair.
+      const { accessToken, refreshToken } = await changePassword(me, validatePasswordChangeBody(body), extractRequestMeta(req))
+      const res = ok({ success: true })
+      applySessionCookies(req, res, { accessToken, refreshToken })
+      return res
     }
     return ok(await updateProfile(me, validateProfileUpdateBody(body), extractRequestMeta(req)))
   })

@@ -26,3 +26,18 @@ export const DEFAULT_INVITE_ROLE: Role = 'viewer'
 export function canAssignRoles(actorRole: Role | string): boolean {
   return actorRole === 'vp'
 }
+
+/** Rank from ROLE_OPTIONS order (vp highest); unknown roles rank lowest. */
+function roleRank(role: Role | string): number {
+  const index = ROLE_OPTIONS.findIndex((option) => option.value === role)
+  return index < 0 ? -1 : ROLE_OPTIONS.length - index
+}
+
+/**
+ * Account-management rule (security test 2026-10-17): a manage_users holder who is
+ * not a VP may only edit or deactivate accounts BELOW their own rank — a manager
+ * can no longer deactivate or rename a VP or another manager. A VP manages everyone.
+ */
+export function canManageAccount(actorRole: Role | string, targetRole: Role | string): boolean {
+  return actorRole === 'vp' || roleRank(actorRole) > roleRank(targetRole)
+}

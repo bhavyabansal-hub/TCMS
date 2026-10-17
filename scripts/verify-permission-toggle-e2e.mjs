@@ -320,21 +320,30 @@ async function visitView(page, view, target) {
       st = await page.waitFor(probeView, [{ ...spec, markerCardTitle: name }], 20_000)
     } else if (view.interact === 'bugDialog' || view.interact === 'bugEdit') {
       await page.clickAt(locateByText, '[role=tab]', 'Table')
-      await page.waitFor(hasText, ['tbody td', target.title], 20_000)
+      const row = await page.waitFor(hasText, ['tbody td', target.title], 20_000)
       await page.clickAt(locateByText, 'tbody td', target.title)
       const dlg = { ...spec, markerDialogText: target.title, scopeSelector: '[role=dialog]' }
       st = await page.waitFor(probeView, [dlg], 20_000)
+      let step = row?.ready ? (st.ready ? 'dialog' : 'dialog-missing') : 'row-missing'
       if (view.interact === 'bugEdit' && st.ready && st.buttons.includes('Edit')) {
-        await page.clickAt(locateByText, 'button', 'Edit', '[role=dialog]')
-        st = await page.waitFor(probeView, [{ ...dlg, markerDialogEdit: true }], 20_000)
+        // A click that lands while the dialog is still animating in can miss the button:
+        // retry the click (up to 3 times) until the dialog shows its edit form.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          await sleep(400)
+          await page.clickAt(locateByText, 'button', 'Edit', '[role=dialog]')
+          st = await page.waitFor(probeView, [{ ...dlg, markerDialogEdit: true }], 8_000)
+          if (st.ready) break
+        }
+        step = st.ready ? 'edit' : 'edit-missing'
       }
+      st = { ...st, step }
       spec.scopeSelector = '[role=dialog]'
       spec.markerDialogText = target.title
     }
   }
   await sleep(700)
   const final = await page.evaluate(probeView, spec).catch(() => st)
-  return { ...final, ready: st.ready && final.ready }
+  return { ...final, step: st.step, ready: st.ready && final.ready }
 }
 
 /** Evaluates the UI expectations of one action for the given phase. */
@@ -343,7 +352,7 @@ async function checkUi(page, def, target, expectOn, label) {
   for (const view of def.ui) {
     const st = await visitView(page, view, target)
     const where = `${label} UI ${view.path(target).replace(/\/\d+(?=\/|\?|$)/, '/<id>')}`
-    check(`${where}: page ready`, st.ready, `path=${st.path} alerts=${JSON.stringify(st.alerts)}`)
+    check(`${where}: page ready`, st.ready, `path=${st.path} alerts=${JSON.stringify(st.alerts)} nav=${st.nav?.length ?? 0} step=${st.step ?? '-'} buttons=${JSON.stringify((st.buttons ?? []).slice(0, 12))}`)
     if (first && def.link) {
       check(`${where}: sidebar "${def.link}" ${expectOn ? 'shown' : 'hidden'}`, st.nav.includes(def.link) === expectOn, `nav=${JSON.stringify(st.nav)}`)
     }

@@ -3,6 +3,7 @@
 // 400 ApiError so controllers stay thin and bad input never reaches services.
 
 import { z } from 'zod'
+import { idField } from '@/lib/server/id-field'
 import { ApiError, flattenZodError } from '@/lib/api'
 import { expectedUpdatedAtField } from '@/lib/server/optimistic-lock'
 
@@ -25,7 +26,7 @@ const bulkVerdictSchema = z.object({
 
 // POST ?id=...&action=change-reviewer — the new reviewer's user id.
 const changeReviewerSchema = z.object({
-  reviewerId: z.string().min(1, 'Reviewer is required'),
+  reviewerId: idField('Reviewer is required'),
 })
 
 function parseOrThrow<T>(schema: z.ZodType<T>, body: unknown): T {

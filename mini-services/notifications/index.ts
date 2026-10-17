@@ -133,15 +133,8 @@ function verifyWsTicket(token: string | undefined): string | null {
 // ---------- Loopback broadcast endpoint (secret-checked) ----------
 
 function handleNotifyRequest(req: IncomingMessage, res: any) {
-  // Loopback-only endpoint; the secret header proves the caller is the app.
-  res.setHeader('Access-Control-Allow-Origin', 'http://127.0.0.1:3000')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-notify-secret')
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204)
-    res.end()
-    return
-  }
+  // Loopback-only, server-to-server endpoint; the secret header proves the caller
+  // is the app. No CORS headers: browsers must never be able to call it.
   if (req.method === 'POST' && (req.url ?? '').split('?')[0] === '/notify') {
     if (!SECRET || req.headers['x-notify-secret'] !== SECRET) {
       res.writeHead(401, { 'Content-Type': 'application/json' })

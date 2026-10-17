@@ -3,6 +3,13 @@
 Reverse-chronological list of user-visible and architectural changes. Task-level
 detail lives in [`worklog.md`](./worklog.md).
 
+## 2026-10-17 — SECURITY settings from .env only + deep security test
+
+- **One place for settings:** every URL, key, password, host, port and timeout comes from `.env` (no built-in Crew Desk address, no default sender, timeouts and session lifetimes as keys). `.env.example` rewritten in 9 sections with one comment per key; `node scripts/clean-env.mjs` tidies an existing `.env` without touching values. A missing required key stops the app with a message naming it.
+- **Fixed (security test):** Next.js 16.1.3 → 16.4.2 (critical advisories incl. remote code execution on Windows hosts); a refresh token no longer works as an access token; logout and password change end the session at once; managers can no longer deactivate or change a VP or another manager; `?next=/\evil.com` no longer leaves the site; request bodies are size-limited (413/411); ids must be digit strings; avatar URLs http(s) only; Secure cookies always on the real server; `TCMS_PUBLIC_ORIGIN` required in production.
+- **New suite:** `scripts/verify-security.mjs` (IDOR for every role × endpoint, sessions, SQL injection, XSS in Chrome, CSRF/CORS, CSV, headers, error leaks, bundle/log secrets, mass assignment, limits, Crew Desk). Report: `docs/qa/SECURITY-TEST-2026-10-17.md`.
+- **Everyone signs in once more** after this update (old session tokens carry no token type).
+
 ## 2026-10-17 — REQ readable numeric ids
 
 - **Every id is a readable number:** test cases, bugs, modules, users, reviews, wiki pages … are `1, 2, 3 …` instead of UUIDs (URLs like `/test-cases/42`; the bug and test-case lists show the full id). Keys are `INT UNSIGNED AUTO_INCREMENT`; the API and the UI keep ids as digit strings (`"42"`).

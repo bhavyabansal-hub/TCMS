@@ -12,6 +12,8 @@ import {
   signAccessToken,
   signRefreshToken,
   verifyToken,
+  revokeAccessToken,
+  revokeUserSessions,
   refreshTtlDays,
   effectivePermissionsFresh,
   type JwtPayload,
@@ -25,7 +27,7 @@ import { createNotification } from '@/lib/notifications'
 import { serializeUser, type SerializedUser } from '@/lib/serializers'
 import { findUserById, findUserByEmail } from '@/lib/server/user.repository'
 import { signWsTicket, WS_TICKET_TTL_SECONDS } from '@/lib/server/ws-ticket'
-import { WS_NOTIFY_SECRET } from '@/lib/server/config'
+import { ALLOW_SIGNUP, WS_NOTIFY_SECRET } from '@/lib/server/config'
 import {
   countUsers,
   createUser,
@@ -153,7 +155,7 @@ export async function loginUser(
  * false and seeds its first VP via /api/seed (TCMS_ENABLE_SEED first boot).
  */
 export function isSignupAllowed(): boolean {
-  return process.env.TCMS_ALLOW_SIGNUP === 'true'
+  return ALLOW_SIGNUP
 }
 
 /**
@@ -224,7 +226,7 @@ export async function refreshSession(refreshToken: string): Promise<{ accessToke
   if (!stored || stored.revoked || stored.expires_at < new Date()) {
     throw ApiError.unauthorized('Invalid or expired refresh token')
   }
-  const payload = verifyToken<JwtPayload>(refreshToken)
+  const payload = verifyToken<JwtPayload>(refreshToken, 'refresh')
   if (!payload) throw ApiError.unauthorized('Invalid refresh token')
   const user = await findUserById(payload.sub)
   if (!user || !user.is_active) throw ApiError.unauthorized('User inactive')
@@ -238,8 +240,11 @@ export async function refreshSession(refreshToken: string): Promise<{ accessToke
   return { accessToken: session.accessToken, refreshToken: session.refreshToken }
 }
 
-export async function logoutSession(refreshToken?: string): Promise<{ success: true }> {
+/** Ends this session: the refresh token is revoked in the DB and the access
+ *  token stops working at once (not only when it expires). */
+export async function logoutSession(refreshToken?: string, accessToken?: string | null): Promise<{ success: true }> {
   if (refreshToken) await revokeRefreshToken(refreshToken)
+  revokeAccessToken(accessToken)
   return { success: true }
 }
 
@@ -257,7 +262,7 @@ export async function changePassword(
   me: SessionUser,
   input: { currentPassword: string; newPassword: string },
   meta: RequestMeta
-): Promise<{ success: true }> {
+): Promise<{ success: true; accessToken: string; refreshToken: string }> {
   const user = await findUserById(me.userId)
   if (!user) throw ApiError.unauthorized()
   if (!verifyPassword(input.currentPassword, user.password_hash)) {
@@ -267,6 +272,8 @@ export async function changePassword(
   // Security: a password change invalidates every live refresh token, so a
   // stolen session on another device cannot outlive the new credential.
   const revokedCount = await revokeAllRefreshTokensForUser(me.userId)
+  // ...and every access token issued before now; this browser gets a fresh pair below.
+  revokeUserSessions(me.userId)
   logger.info('Password changed', { userId: me.userId, revokedRefreshTokens: revokedCount })
   await logActivity({
     userId: me.userId,
@@ -285,7 +292,8 @@ export async function changePassword(
     entityType: 'user',
     entityId: me.userId,
   })
-  return { success: true }
+  const session = await createSessionForUser(user)
+  return { success: true, ...session }
 }
 
 export async function updateProfile(

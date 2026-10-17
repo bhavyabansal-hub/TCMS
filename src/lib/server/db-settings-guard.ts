@@ -52,6 +52,7 @@
 
 import { db } from '@/lib/db'
 import { isProductionDeployment } from '@/lib/server/startup-guard'
+import { DATABASE_URL } from '@/lib/server/config'
 
 /** sql_mode flags the app is verified correct under (full default sql_mode
  *  audit, task db-settings-guard-1: zero GROUP BY/DISTINCT/aggregate
@@ -81,7 +82,7 @@ interface SchemaCharsetRow {
 /** host:port of DATABASE_URL for error messages — credentials NEVER. */
 function dbEndpoint(): string {
   try {
-    const url = new URL((process.env.DATABASE_URL ?? '').trim())
+    const url = new URL(DATABASE_URL.trim())
     return `${url.hostname}:${url.port || '3306'}`
   } catch {
     return '(DATABASE_URL not parseable)'
@@ -91,7 +92,7 @@ function dbEndpoint(): string {
 /** The schema name from the DATABASE_URL path (Prisma connects into it). */
 function schemaNameFromUrl(): string {
   try {
-    const url = new URL((process.env.DATABASE_URL ?? '').trim())
+    const url = new URL(DATABASE_URL.trim())
     return decodeURIComponent(url.pathname.replace(/^\//, '').split('/')[0] ?? '')
   } catch {
     return ''

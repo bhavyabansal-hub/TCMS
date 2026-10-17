@@ -27,6 +27,7 @@ const MYSQL_ERRNO: Record<string, MappedDbError> = {
   '1264': { status: 400, kind: 'out_of_range', message: 'A value is out of range.' },
   '1366': { status: 400, kind: 'bad_value', message: 'A value has the wrong format.' },
   '1292': { status: 400, kind: 'bad_value', message: 'A value has the wrong format.' },
+  '1265': { status: 400, kind: 'bad_value', message: 'A value has the wrong format.' },
   '3140': { status: 400, kind: 'bad_json', message: 'A value has the wrong format.' },
   '1213': { status: 409, kind: 'deadlock', message: 'Someone else is saving the same item right now — try again.' },
   '1205': { status: 409, kind: 'lock_timeout', message: 'Someone else is saving the same item right now — try again.' },

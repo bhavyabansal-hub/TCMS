@@ -81,7 +81,7 @@ export async function listUserOptions(): Promise<UserOption[]> {
 /** POST /api/users — invite (create) a user. Only a VP may pick a role other than
  *  DEFAULT_INVITE_ROLE (src/lib/roles.ts canAssignRoles). */
 import { clearIdentityCache } from '../integrations/crewdesk/crewdesk.identity'
-import { DEFAULT_INVITE_ROLE, canAssignRoles } from '@/lib/roles'
+import { DEFAULT_INVITE_ROLE, canAssignRoles, canManageAccount } from '@/lib/roles'
 
 export async function createUser(
   me: SessionUser,
@@ -126,6 +126,10 @@ export async function updateUserFields(
   ensurePermission(me, 'manage_users', 'Admin only')
   const before = await findUserById(userId)
   if (!before) throw ApiError.notFound('User not found')
+  if (userId !== me.userId && !canManageAccount(me.role, before.role)) {
+    throw ApiError.forbidden('You can only change accounts below your own role')
+  }
+  if (userId === me.userId && input.isActive === false) throw ApiError.badRequest('You cannot deactivate yourself')
   // Role changes (deep-test R2-3): never your own role; otherwise only a VP.
   if (input.role !== undefined && input.role !== before.role) {
     if (userId === me.userId) throw ApiError.forbidden('You cannot change your own role')
@@ -164,6 +168,9 @@ export async function deactivateUserAccount(
   if (userId === me.userId) throw ApiError.badRequest('Cannot delete yourself')
   const before = await findUserById(userId)
   if (!before) throw ApiError.notFound('User not found')
+  if (!canManageAccount(me.role, before.role)) {
+    throw ApiError.forbidden('You can only deactivate accounts below your own role')
+  }
   await deactivateUser(userId)
   logger.info('User deactivated', { userId, actorId: me.userId })
   await logActivity({

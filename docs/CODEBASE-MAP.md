@@ -164,7 +164,8 @@ reconnect + tab visible, no polling timers).
 | `src/lib/notifications.ts` | createNotification → DB row + WS POST :3004 + email/Telegram (never throws) |
 | `src/lib/db.ts` | Prisma singleton |
 | `src/lib/logger.ts` | console + `logs/app|error-YYYY-MM-DD.log` + optional Telegram log bot |
-| `src/lib/server/config.ts` | central env inventory (intended sole `process.env` reader) |
+| `src/lib/server/config.ts` | reads every setting from `.env` (no built-in URLs or keys; only `startup-guard.ts` also reads env, before config loads) |
+| `src/lib/server/id-field.ts` | `idField()` / `optionalIdField()` — digit-string row ids in every validator |
 | `src/lib/server/insert.ts` | `insertReturningId()` — INSERT + `LAST_INSERT_ID()` in one transaction, returns the key as a digit string |
 | `src/lib/db.ts` | Prisma singleton + the id hook: numeric `id` / `*_id` row values become digit strings |
 | `src/lib/server/cache.ts` | TTL cache, coalesced loaders, 500 cap, prefix invalidation |
@@ -177,7 +178,7 @@ reconnect + tab visible, no polling timers).
 | `src/lib/server/read-only.ts` | `TCMS_READ_ONLY` rule: writes → 503 except login/refresh/logout |
 | `src/lib/server/login-rate-limit.ts` | per-IP failed sign-in limit (in memory, last X-Forwarded-For entry) |
 | `src/lib/csv-export.ts` | `csvCell`/`toCsv`: RFC-4180 quoting + formula-injection guard (all CSV exports) |
-| `src/lib/server/startup-guard.ts` | `TCMS_DEPLOY_ENV=production` secret/DB-URL checks, exit 1 |
+| `src/lib/server/startup-guard.ts` | `assertRequiredSettings()` (every mode: names each missing required `.env` key, exit 1) + `TCMS_DEPLOY_ENV=production` secret/DB-URL checks |
 | `src/lib/server/db-settings-guard.ts` | production: sql_mode/time_zone/charset checks, 5×3 s retry |
 | `src/lib/server/backup-health.ts` | daily stale-backup (>26 h) alert notifications |
 | `src/lib/server/crewdesk.client.ts` | only Crew Desk HTTP client |
@@ -230,6 +231,9 @@ hand-edited collations + JSON defaults; production never ran an earlier migratio
 - **Performance (2026-10-17):** `verify-page-apis.mjs` (per page × role: API calls, duplicates,
   401/403 calls, loading phases, p95 — run against a production build) and `loadtest-1000.mjs`
   (realistic 1000 users + stress, p50/p95, DB connection peak). Results: `docs/architecture/HLD.md` §7.
+- **Security (2026-10-17):** `verify-security.mjs` (13 sections: IDOR every role × endpoint, sessions, open redirect,
+  SQL injection, XSS in Chrome, CSRF/CORS, CSV, headers, error leaks, bundle/log secrets, mass assignment, limits,
+  Crew Desk) — report `docs/qa/SECURITY-TEST-2026-10-17.md`. `clean-env.mjs` tidies `.env` (names only).
 - **Ops scripts:** `create-first-vp.mjs` (first VP in production, `docs/deploy/operations-runbook.md` §6),
   `send-test-notification.mjs` (one test email / Telegram message, `--check`).
 - **Infra verifiers:** `startup-guard-test.mjs` (17), `db-settings-guard-test.mjs` (11),
@@ -247,8 +251,7 @@ See `docs/CODING-STANDARDS.md` §5 — the single source (not repeated here).
 
 1. Services import `db` to open `db.$transaction` (test-cases, reviews, module-reviews);
    `docs/architecture/LLD.md` says transactions belong in repositories (seed/modules do it right).
-2. `process.env` read outside config.ts: `auth.service.ts` (TCMS_ALLOW_SIGNUP),
-   `backup-health.ts`, `db-settings-guard.ts` (startup-guard is deliberate).
+2. ~~`process.env` read outside config.ts~~ — fixed 2026-10-17 (startup-guard reads env on purpose, before config loads).
 3. Raw SQL outside repositories: `backup-health.ts`, `db-settings-guard.ts`.
 4. `users.service.ts` imports `clearIdentityCache` from crewdesk resource internals.
 5. Duplicated SET-builders in test-cases.repository (`updateTestCase` vs `updateTestCaseIfVersion`).

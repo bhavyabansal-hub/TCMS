@@ -147,9 +147,14 @@ async function main() {
   // ---------- 7. bad requests ----------
   const noModule = await fetch(`${BASE}/api/test-cases?action=import`, {
     method: 'POST', headers: H(qa.token),
-    body: JSON.stringify({ moduleId: 'not-a-real-module', fileName: 'x.csv', csv: 'title\nabc' }),
+    body: JSON.stringify({ moduleId: '999999999', fileName: 'x.csv', csv: 'title\nabc' }),
   })
   check('import into missing module -> 404', noModule.status === 404)
+  const badModuleId = await fetch(`${BASE}/api/test-cases?action=import`, {
+    method: 'POST', headers: H(qa.token),
+    body: JSON.stringify({ moduleId: 'not-a-real-module', fileName: 'x.csv', csv: 'title\nabc' }),
+  })
+  check('import with a malformed module id -> 400', badModuleId.status === 400)
   const noTitleCol = await fetch(`${BASE}/api/test-cases?action=import`, {
     method: 'POST', headers: H(qa.token),
     body: JSON.stringify({ moduleId: target.moduleId, fileName: 'x.csv', csv: 'name,desc\nabc,def' }),

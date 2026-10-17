@@ -4,12 +4,13 @@
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { insertReturningId } from '@/lib/server/insert'
+import { LOGIN_LOCK_SECONDS, LOGIN_MAX_FAILURES } from '@/lib/server/config'
 import type { UserSqlRow, RefreshTokenSqlRow, LoginAttemptSqlRow } from '@/types/sql-rows'
 
-// ---------- Login attempts (brute-force guard: 5 fails -> 1 min lock) ----------
+// ---------- Login attempts (brute-force guard: TCMS_LOGIN_MAX_FAILURES fails -> TCMS_LOGIN_LOCK_SECONDS lock) ----------
 
-export const MAX_LOGIN_ATTEMPTS = 5
-export const LOGIN_LOCK_SECONDS = 60
+export const MAX_LOGIN_ATTEMPTS = LOGIN_MAX_FAILURES
+export { LOGIN_LOCK_SECONDS }
 
 export async function findLoginAttempt(email: string): Promise<LoginAttemptSqlRow | null> {
   const rows = await db.$queryRaw<LoginAttemptSqlRow[]>`

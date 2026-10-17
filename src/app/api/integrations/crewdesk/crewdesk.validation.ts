@@ -1,6 +1,7 @@
 // Crew Desk validation — zod schemas + param guards for the integrations API.
 
 import { z } from 'zod'
+import { idField } from '@/lib/server/id-field'
 import { ApiError } from '@/lib/api'
 
 export const NOTE_MAX_LENGTH = 300
@@ -39,7 +40,7 @@ export const optionalTicketIdSchema = z
   .default('')
 
 export const linkCreateSchema = z.object({
-  moduleId: z.string().trim().min(1, 'Module is required').max(64),
+  moduleId: idField('Module is required'),
   ticketId: ticketIdSchema,
   // Free text the linker wants visible on the ticket (name/email/anything).
   // Optional; sanitized (control chars removed) and capped at 300 chars.
