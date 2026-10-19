@@ -1721,3 +1721,8 @@ Verification (2026-10-19):
 - Dev (:3000, next 16.4.2): CSP script-src 'self' 'unsafe-inline' 'unsafe-eval'; verify-page-apis 748/0, page errors (console + exception + overlay + boundary + empty) 0 on every page x role; verify-security 162/0.
 - Production build (separate copy): CSP script-src 'self' 'unsafe-inline' (no unsafe-eval); verify-security 164/0 (2 new checks).
 - tsc 0 · eslint 0 errors.
+- Follow-up (same task, 2026-10-19): the first production verify:all failed only eslint — after npm install, eslint-config-next 16.4.2 adds react-hooks/set-state-in-effect: 2 errors (test-cases.tsx selection reset, wiki-doc-detail.tsx editor sync) fixed with React's reset-during-render pattern (same behaviour); 2 warnings removed (unused disable in rich-text-editor.tsx; documented disable for the intentional full-page login redirect in src/lib/client/api.ts). eslint now 0 problems.
+- npm run verify:all, production build (rebuilt with the fixes, separate copy, deleted): 18 of 18 steps — tsc OK · eslint 0 errors · audit 0 violations · security 164/0 · numeric-ids 40/0 · import 36/0 · permissions 37/0 · notifications 31/0 · review-matrix 36/0 · concurrency 34/0 · db-errors 21/0 · flagged-fields 10/0 · safety 27/0 · first-vp 15/0 · ui-gates 159/0 · page-apis 748/0 · role-flows 556/0 · permission-toggle 1492/0.
+- npm run verify:all, dev (:3000): 18 of 18 steps — same counts except security 162/0 (the 2 no-unsafe-eval checks run on production only) and permission-toggle 1501/0.
+- The memory reaper stopped the background shells twice; the server and verify-all processes survived and finished (no restart). R9 dry run 0 rows; role_permissions 0 rows; no leftover Chrome profile.
+- NOT VERIFIED: nothing new; Linux-only suites NOT RUN ON WINDOWS.

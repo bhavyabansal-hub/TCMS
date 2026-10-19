@@ -125,6 +125,9 @@ async function request<T>(
       clearStoredUser()
       if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
         const target = `${window.location.pathname}${window.location.search}`
+        // A full page load on purpose (not router.push): it drops every in-memory cache and
+        // store of the dead session. This module is not a component, so no router exists here.
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
         window.location.assign(`/login?next=${encodeURIComponent(target)}`)
       }
       throw new Error('Session expired')

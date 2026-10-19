@@ -231,6 +231,8 @@ hand-edited collations + JSON defaults; production never ran an earlier migratio
 - **Performance (2026-10-17):** `verify-page-apis.mjs` (per page × role: API calls, duplicates,
   401/403 calls, loading phases, p95 — run against a production build) and `loadtest-1000.mjs`
   (realistic 1000 users + stress, p50/p95, DB connection peak). Results: `docs/architecture/HLD.md` §7.
+- **One command (2026-10-19):** `npm run verify:all` → `scripts/verify-all.mjs` (static checks + 15 suites,
+  serial, memory check, per-suite time limit, results table, logs in `<tmp>/tcms-verify-all/`).
 - **Security (2026-10-17):** `verify-security.mjs` (13 sections: IDOR every role × endpoint, sessions, open redirect,
   SQL injection, XSS in Chrome, CSRF/CORS, CSV, headers, error leaks, bundle/log secrets, mass assignment, limits,
   Crew Desk) — report `docs/qa/SECURITY-TEST-2026-10-17.md`. `clean-env.mjs` tidies `.env` (names only).

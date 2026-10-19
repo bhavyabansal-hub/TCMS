@@ -196,7 +196,9 @@ starts empty + `scripts/create-first-vp.mjs` (D2).
 6. `node scripts/verify-notifications.mjs` → 0 failed.
 7. `node scripts/verify-review-matrix.mjs` → `36 passed, 0 failed`.
 
-Also run `node scripts/audit-standards.mjs` (report only). UI changes: also
+**One command for all of it:** `npm run verify:all` (tsc, eslint, audit-standards and every suite
+one at a time, memory check before each, one results table; `TCMS_BASE_URL=http://localhost:3999`
+for a production build, `-- --only=<suite,…>` for a subset). Also run `node scripts/audit-standards.mjs` (report only). UI changes: also
 `verify-ui-gates.mjs`; page data or API changes: also `verify-page-apis.mjs` (against a
 production build in a folder copy, `TCMS_BASE_URL`). Linux-only suites (`scripts/*.sh`, infra `*-test.mjs`) are reported
 as **NOT RUN ON WINDOWS** (backlog B11).

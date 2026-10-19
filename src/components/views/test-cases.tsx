@@ -76,10 +76,14 @@ export function TestCasesView() {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  // Any filter/page change invalidates what the ticks point at — clear them.
-  useEffect(() => {
+  // Any filter/page change invalidates what the ticks point at — clear them (reset during
+  // render when the key changes, React's pattern instead of a setState-in-effect).
+  const selectionKey = `${search}|${statusFilter}|${priorityFilter}|${moduleFilter}|${page}`
+  const [selectionFor, setSelectionFor] = useState(selectionKey)
+  if (selectionFor !== selectionKey) {
+    setSelectionFor(selectionKey)
     setSelected(new Set())
-  }, [search, statusFilter, priorityFilter, moduleFilter, page])
+  }
   // Cross-account safety: an import tab state must never outlive its permission.
   const activeTab: 'all' | 'import' = tab === 'import' && canCreate ? 'import' : 'all'
 

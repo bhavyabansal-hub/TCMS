@@ -8,7 +8,7 @@
 //   delete:       author OR delete_wiki_doc holders — same rose confirm
 //                 dialog pattern as the test-case bulk delete
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, CalendarDays, Download, FileText, FileUp, Loader2, Paperclip,
@@ -67,13 +67,14 @@ export function WikiDocDetailView() {
     // retries: global policy (a 403/404 is never retried — no duplicate call)
   })
 
-  // Keep the editor buffer in sync with the loaded doc (initial load, refetch).
-  useEffect(() => {
-    if (doc) {
-      setEditTitle(doc.title)
-      setEditContent(doc.content ?? '')
-    }
-  }, [doc])
+  // Keep the editor buffer in sync with the loaded doc (initial load, refetch): reset during
+  // render when a new doc object arrives (React's pattern instead of a setState-in-effect).
+  const [syncedDoc, setSyncedDoc] = useState<typeof doc>(undefined)
+  if (doc && doc !== syncedDoc) {
+    setSyncedDoc(doc)
+    setEditTitle(doc.title)
+    setEditContent(doc.content ?? '')
+  }
 
   if (!id) {
     return (
