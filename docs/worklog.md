@@ -1726,3 +1726,17 @@ Verification (2026-10-19):
 - npm run verify:all, dev (:3000): 18 of 18 steps — same counts except security 162/0 (the 2 no-unsafe-eval checks run on production only) and permission-toggle 1501/0.
 - The memory reaper stopped the background shells twice; the server and verify-all processes survived and finished (no restart). R9 dry run 0 rows; role_permissions 0 rows; no leftover Chrome profile.
 - NOT VERIFIED: nothing new; Linux-only suites NOT RUN ON WINDOWS.
+
+---
+Task ID: settings-env-deny-2026-10-19
+Agent: Main (Claude Code, Opus 5.5) — fast mode, no subagents
+Task: Owner request — the deny rule Write(./.env) in .claude/settings.json does not work; keep Edit(./.env) instead, keep all other rules. Commit, do not push.
+
+Work Log:
+- Why: Claude Code permission rules have no separate Write matcher; an Edit(path) rule covers every built-in file-editing tool (Edit and Write), so Write(./.env) was a dead rule and Edit(./.env) is the one that blocks both.
+- .claude/settings.json: removed "Write(./.env)" from permissions.deny; "Edit(./.env)" (already present) stays; all other deny/ask rules unchanged.
+
+Verification (2026-10-19):
+- settings.json parses as JSON (node require); deny 43 -> 42 rules, ask 13 unchanged; .env rules left: Read(./.env), Edit(./.env).
+- No app code changed, so tsc / eslint / suites not re-run.
+- NOT VERIFIED: a live attempt to write .env being blocked (not tried on purpose — .env must not be touched).

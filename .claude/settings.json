@@ -43,8 +43,7 @@
       "PowerShell(cat *.env)",
       "PowerShell(cat *.env *)",
       "Read(./.env)",
-      "Edit(./.env)",
-      "Write(./.env)"
+      "Edit(./.env)"
     ],
     "ask": [
       "Bash(git push:*)",
