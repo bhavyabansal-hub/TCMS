@@ -544,6 +544,17 @@ async function csvImport(s, e) {
 
 async function headers() {
   section('8 security headers')
+  // Dev mode is recognised by the Next.js dev tools in the page; a production build ships none.
+  const isDevServer = (await (await fetch(`${BASE}/login`)).text()).includes('next-devtools')
+  console.log(`      server mode: ${isDevServer ? 'development (next dev)' : 'production build'}`)
+  for (const url of ['/login', '/api/ready']) {
+    const evalCsp = (await fetch(`${BASE}${url}`)).headers.get('content-security-policy') ?? ''
+    if (isDevServer) {
+      if (/'unsafe-eval'/.test(evalCsp) && url === '/login') info('CSP unsafe-eval', "allowed on the dev server only (React needs eval() in development; next.config.ts DEV_SCRIPT_EVAL)")
+    } else {
+      check(`${url}: production CSP has no 'unsafe-eval'`, !/'unsafe-eval'/.test(evalCsp), evalCsp.match(/script-src[^;]*/)?.[0] ?? '')
+    }
+  }
   for (const url of ['/login', '/api/ready']) {
     const r = await fetch(`${BASE}${url}`)
     const csp = r.headers.get('content-security-policy') ?? ''

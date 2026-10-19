@@ -3,6 +3,11 @@
 Reverse-chronological list of user-visible and architectural changes. Task-level
 detail lives in [`worklog.md`](./worklog.md).
 
+## 2026-10-19 — FIX dev console error after Next 16.4.2
+
+- Every page in `npm run dev` showed "eval() is not supported … unsafe-eval": React needs eval() in development. The CSP now adds `'unsafe-eval'` to `script-src` **only** when `NODE_ENV=development`; the production CSP is unchanged (checked by `verify-security.mjs`).
+- New `npm run verify:all`: tsc, eslint, audit-standards and every suite one at a time with one results table.
+
 ## 2026-10-17 — SECURITY settings from .env only + deep security test
 
 - **One place for settings:** every URL, key, password, host, port and timeout comes from `.env` (no built-in Crew Desk address, no default sender, timeouts and session lifetimes as keys). `.env.example` rewritten in 9 sections with one comment per key; `node scripts/clean-env.mjs` tidies an existing `.env` without touching values. A missing required key stops the app with a message naming it.

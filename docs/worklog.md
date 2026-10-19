@@ -1706,3 +1706,18 @@ Verification (2026-10-17/18):
 Stage Summary:
 - One settings source (.env), clear boot message for a missing key, and every Critical/High security finding fixed and covered by a repeatable suite.
 - NOT VERIFIED: dev node_modules still on next 16.1.3 until the owner runs npm install; the dev toggle run (1494/0) used the script before the Edit-click retry; real HTTPS / TCMS_DEPLOY_ENV=production cookies; multiple instances; WS service attacks (Linux-only probe NOT RUN ON WINDOWS); expired-token forging; live Crew Desk / SMTP / Telegram.
+
+---
+Task ID: dev-csp-eval-2026-10-19
+Agent: Main (Claude Code, Opus 5.5) — fast mode, no subagents
+Task: Owner bug — after npm install (next 16.4.2) every dev page logged "eval() is not supported … unsafe-eval". Add 'unsafe-eval' to script-src only in development; production unchanged; security check; then the verify:all request.
+
+Work Log:
+- next.config.ts (owner-requested edit; it restarted the dev server by itself): DEV_SCRIPT_EVAL = " 'unsafe-eval'" only when NODE_ENV=development (next dev); next build / next start = production → none.
+- scripts/verify-security.mjs section 8: detects the server mode (Next dev tools in the page); production → FAIL if any CSP carries 'unsafe-eval'; dev → INFO.
+- verify:all (owner chose "Add npm run verify:all"): scripts/verify-all.mjs + package.json script — tsc, eslint, audit-standards, then 15 suites serially; free-memory check before each (VERIFY_MIN_FREE_MB 2000), per-suite time limit (VERIFY_SUITE_TIMEOUT_MIN 40), dev → PAGE_APIS_P95_MS=5000, logs in <tmp>/tcms-verify-all/<stamp>/, one results table, exit 1 on any failure.
+
+Verification (2026-10-19):
+- Dev (:3000, next 16.4.2): CSP script-src 'self' 'unsafe-inline' 'unsafe-eval'; verify-page-apis 748/0, page errors (console + exception + overlay + boundary + empty) 0 on every page x role; verify-security 162/0.
+- Production build (separate copy): CSP script-src 'self' 'unsafe-inline' (no unsafe-eval); verify-security 164/0 (2 new checks).
+- tsc 0 · eslint 0 errors.

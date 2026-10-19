@@ -33,7 +33,7 @@ or in the backlog (B31–B35).
 | F10 | Low | session cookies | `Secure` depended only on `x-forwarded-proto` | Always `Secure` with `TCMS_DEPLOY_ENV=production` | Fixed (code + header simulation; not run live, see §4) |
 | F11 | Low | `PUT /api/auth`, `PUT /api/users` | `avatarUrl` accepted `javascript:` / any text; `fullName`, `telegramChatId` unbounded | http(s) URL only (≤ 500), name ≤ 80, chat id ≤ 64 | Fixed — section 5 |
 | F12 | Low | WS service `/notify` | Sent `Access-Control-Allow-Origin: http://127.0.0.1:3000` on a server-to-server endpoint | CORS headers removed | Fixed |
-| F13 | Low | all pages | `X-Powered-By: Next.js`; CSP still has `script-src 'unsafe-inline'` | Needs `next.config.ts` edits (owner rule: not edited) | Backlog B31 |
+| F13 | Low | all pages | `X-Powered-By: Next.js`; CSP still has `script-src 'unsafe-inline'` (2026-10-19: `'unsafe-eval'` is added on the dev server only — React needs eval() in development; production CSP has none, checked by section 8) | Needs `next.config.ts` edits (owner rule: not edited) | Backlog B31 |
 | F14 | Low | logout / limiter | Revocation list and per-IP limiter are in memory (one instance, as designed) | Shared store for a second instance | Backlog B32 |
 | F15 | Low | per-IP sign-in limit | Keyed on the last `X-Forwarded-For` entry: reached directly (no nginx) a client can rotate it; the per-email lock (5 → 60 s) still applies | Run behind nginx only (PRODUCTION-CHECKLIST) | Accepted |
 | F16 | Low | password policy | 6+ characters with a letter and a digit | Raise for production accounts | Backlog B35 |
