@@ -1737,6 +1737,6 @@ Work Log:
 - .claude/settings.json: removed "Write(./.env)" from permissions.deny; "Edit(./.env)" (already present) stays; all other deny/ask rules unchanged.
 
 Verification (2026-10-19):
-- settings.json parses as JSON (node require); deny 43 -> 42 rules, ask 13 unchanged; .env rules left: Read(./.env), Edit(./.env).
+- settings.json parses as JSON (node require); deny 44 -> 43 rules, ask 13 unchanged; .env rules left: Read(./.env), Edit(./.env).
 - No app code changed, so tsc / eslint / suites not re-run.
 - NOT VERIFIED: a live attempt to write .env being blocked (not tried on purpose — .env must not be touched).
