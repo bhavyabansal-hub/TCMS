@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Tidies .env into the sections and comments of .env.example WITHOUT changing or
-// printing any value. Prints key NAMES only.
+// Tidies .env into the sections and short comments of .env.example WITHOUT changing
+// or printing any value. Prints key NAMES only.
 //
 //   node scripts/clean-env.mjs           dry run: shows what would change, writes nothing
 //   node scripts/clean-env.mjs --write   copies .env to .env.bak (git-ignored), then rewrites .env
@@ -8,12 +8,15 @@
 // Rules:
 //   - every existing value is kept byte for byte (quotes included);
 //   - keys are ordered by the sections of .env.example and get its comment line;
-//   - optional keys you have not set are added as commented placeholders (`# KEY=`),
+//   - "Required ..." sections are always written; an unset key there becomes a
+//     commented placeholder (`# KEY=`) so you see what to fill;
+//   - optional keys you have not set are left out (the full list is .env.example),
 //     so nothing changes in behaviour;
 //   - keys that .env.example does not know are REMOVED only when no file in src/,
 //     scripts/, mini-services/ or prisma/ mentions them; otherwise they are kept in
 //     an "Other keys" section;
-//   - required keys that are missing are listed by name (exit code 2).
+//   - keys of "Required (every machine)" that are missing are listed by name (exit
+//     code 2); unset "Required on the live server" keys are listed for information.
 // Cross-platform Node, no dependencies.
 
 import fs from 'node:fs'
@@ -36,7 +39,8 @@ function parseTemplate(text) {
   for (const line of text.split(/\r?\n/)) {
     const section = line.match(/^#\s*====\s*(.+?)\s*====\s*$/)
     if (section) {
-      current = { title: section[1], keys: [] }
+      const title = section[1]
+      current = { title, keys: [], required: /^Required\b/.test(title), always: /^Required \(every machine\)/.test(title) }
       sections.push(current)
       pendingComments = []
       continue
@@ -44,7 +48,7 @@ function parseTemplate(text) {
     const key = line.match(KEY_LINE)
     if (key && current) {
       const comment = pendingComments.join('\n')
-      current.keys.push({ name: key[2], comment, required: /\bRequired\b/.test(comment) && !/Required (in production|when|for|to|on)/.test(comment) })
+      current.keys.push({ name: key[2], comment })
       pendingComments = []
       continue
     }
@@ -119,23 +123,24 @@ function main() {
   const known = new Set(template.sections.flatMap((s) => s.keys.map((k) => k.name)))
 
   const kept = []
-  const placeholders = []
+  const liveNotSet = []
   const missingRequired = []
-  const out = [...template.header, '']
+  const out = [...template.header, '# Only the keys in use are listed here; every key is in .env.example.', '']
   for (const section of template.sections) {
-    out.push(`# ==== ${section.title} ====`)
+    const lines = []
     for (const key of section.keys) {
-      if (key.comment) out.push(key.comment)
       if (values.has(key.name)) {
-        out.push(`${key.name}=${values.get(key.name)}`)
+        if (key.comment) lines.push(key.comment)
+        lines.push(`${key.name}=${values.get(key.name)}`)
         kept.push(key.name)
-      } else {
-        out.push(`# ${key.name}=`)
-        if (key.required) missingRequired.push(key.name)
-        else placeholders.push(key.name)
+      } else if (section.required) {
+        if (key.comment) lines.push(key.comment)
+        lines.push(`# ${key.name}=`)
+        if (section.always) missingRequired.push(key.name)
+        else liveNotSet.push(key.name)
       }
     }
-    out.push('')
+    if (lines.length) out.push(`# ==== ${section.title} ====`, ...lines, '')
   }
 
   const unknown = entries.filter((e) => !known.has(e.name))
@@ -151,7 +156,7 @@ function main() {
   const list = (names) => (names.length ? names.join(', ') : '-')
   console.log(`kept (value unchanged)        : ${kept.length} — ${list(kept)}`)
   console.log(`kept, not in .env.example     : ${keptUnknown.length} — ${list(keptUnknown.map((e) => e.name))}`)
-  console.log(`added as commented placeholder: ${placeholders.length} — ${list(placeholders)}`)
+  console.log(`live-server keys not set      : ${liveNotSet.length} — ${list(liveNotSet)} (fine on a dev machine)`)
   console.log(`removed (unused)              : ${removed.length} — ${list(removed)}`)
   console.log(`MISSING REQUIRED              : ${missingRequired.length} — ${list(missingRequired)}`)
 

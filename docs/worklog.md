@@ -1740,3 +1740,22 @@ Verification (2026-10-19):
 - settings.json parses as JSON (node require); deny 44 -> 43 rules, ask 13 unchanged; .env rules left: Read(./.env), Edit(./.env).
 - No app code changed, so tsc / eslint / suites not re-run.
 - NOT VERIFIED: a live attempt to write .env being blocked (not tried on purpose — .env must not be touched).
+
+---
+Task ID: env-simple-2026-10-22
+Agent: Main (Claude Code, Opus 5.5) — fast mode, no subagents
+Task: Owner request — keep .env / .env.example to the keys needed to go live, remove the long text, simple steps only; push .env.example only, never .env.
+
+Work Log:
+- Why: the 2026-10-17 .env.example had a long what/example/required comment on every key and clean-env wrote 54 commented placeholders into .env — hard to read, hard to see what must be filled.
+- .env.example: 4-line header (copy, fill, restart, rebuild for NEXT_PUBLIC_*); sections by importance — "Required (every machine)", "Required on the live server", Email, Telegram, Crew Desk, Backups, Sign-in and accounts, Live updates, Tuning, Dev / maintenance only; one short comment per key (what or default). Key set unchanged (62 keys, diffed against HEAD).
+- scripts/clean-env.mjs: required = section title (was a regex on each comment); "Required" sections always written (unset key -> `# KEY=`); optional keys written only when set; empty sections left out; "live-server keys not set" listed for information; exit 2 only for a missing "Required (every machine)" key.
+- Owner .env rewritten with --write (backup .env.bak): 8 keys kept, values identical (compared key by key, names only), 0 removed, 0 missing; ~140 lines -> 37. .env / .env.bak stay git-ignored; only .env.example is committed.
+- Docs: CODING-STANDARDS §2 env rule (short comment), PRODUCTION-CHECKLIST header + §1, operations-runbook tidy row, CODEBASE-MAP, CHANGELOG.
+
+Verification (2026-10-22):
+- node --check clean-env.mjs OK; dry run then --write: kept 8, removed 0, MISSING REQUIRED 0; values vs .env.bak: no differences.
+- Dev server (:3000) after the rewrite: /api/ready {"status":"ready","database":"ok"}; /login 200.
+- git check-ignore: .env and .env.bak ignored.
+- No app code changed, so tsc / eslint / suites not re-run.
+- NOT VERIFIED: a fresh copy of .env.example booting a new machine (needs real passwords).

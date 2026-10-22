@@ -235,7 +235,7 @@ hand-edited collations + JSON defaults; production never ran an earlier migratio
   serial, memory check, per-suite time limit, results table, logs in `<tmp>/tcms-verify-all/`).
 - **Security (2026-10-17):** `verify-security.mjs` (13 sections: IDOR every role × endpoint, sessions, open redirect,
   SQL injection, XSS in Chrome, CSRF/CORS, CSV, headers, error leaks, bundle/log secrets, mass assignment, limits,
-  Crew Desk) — report `docs/qa/SECURITY-TEST-2026-10-17.md`. `clean-env.mjs` tidies `.env` (names only).
+  Crew Desk) — report `docs/qa/SECURITY-TEST-2026-10-17.md`. `clean-env.mjs` tidies `.env` into the `.env.example` layout (required keys + keys in use only; names only).
 - **Ops scripts:** `create-first-vp.mjs` (first VP in production, `docs/deploy/operations-runbook.md` §6),
   `send-test-notification.mjs` (one test email / Telegram message, `--check`).
 - **Infra verifiers:** `startup-guard-test.mjs` (17), `db-settings-guard-test.mjs` (11),

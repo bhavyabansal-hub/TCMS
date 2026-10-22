@@ -301,7 +301,7 @@ Verifier (sandbox only, everything rolled back): `node scripts/create-first-vp-t
 |---|---|
 | Deploy an app change | checkout the release tag → `npm ci` → `npm run build` → restart `tcms-app` (PRODUCTION-CHECKLIST §3) |
 | Change any URL, key, password or timeout | edit the env file only (`.env` / `/etc/tcms/tcms.env`) → restart the service (`NEXT_PUBLIC_*` needs a rebuild). No other config file exists; a missing required key is named at boot |
-| Tidy the env file | `node scripts/clean-env.mjs` (dry run, key names only) → `--write` (backup `.env.bak`, values unchanged) |
+| Tidy the env file | `node scripts/clean-env.mjs` (dry run, key names only) → `--write` (backup `.env.bak`, values unchanged; keeps the required keys + the keys in use, short comments) |
 | Create tables on a fresh DB | `npx prisma migrate deploy` (applies `prisma/migrations/`) |
 | First admin | `scripts/create-first-vp.mjs` (`docs/deploy/operations-runbook.md` §6) |
 | Pause all writes | `TCMS_READ_ONLY=true` + restart |

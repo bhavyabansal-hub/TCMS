@@ -2,7 +2,7 @@
 
 > Written 2026-10-16. One page for the person who installs TCMS on the company server.
 > What IT must provide first: [`it-request-mysql.md`](./it-request-mysql.md).
-> Background: `.env.example` (every key, annotated), `docs/deploy/reverse-proxy-websocket.md`
+> Background: `.env.example` (every key; go-live keys in the two "Required" sections at the top), `docs/deploy/reverse-proxy-websocket.md`
 > (nginx/WS details), `docs/deploy/operations-runbook.md` (backup, restore, first admin),
 > `docs/architecture/HLD.md` (why one instance). Production is a fresh start
 > (decision D2): empty MySQL + first VP (§4).
@@ -21,7 +21,7 @@ env file only (`.env` locally, `/etc/tcms/tcms.env` on the server) — there is 
 and no built-in address. **To change any URL, key or password: edit the env file only, then restart
 the service** (`NEXT_PUBLIC_*` keys also need `npm run build`). A missing required key stops the app
 at boot with `[TCMS] FATAL (tcms-app): missing required setting(s) in .env:` and the key name.
-Every key with a one-line comment: `.env.example`; tidy an existing file with
+Every key with a short comment: `.env.example` (sections "Required (every machine)" and "Required on the live server" first); tidy an existing file with
 `node scripts/clean-env.mjs` (dry run) / `--write` (backs up to `.env.bak`).
 
 Generate every secret fresh on the server: `openssl rand -hex 32` (≥ 32 characters; the

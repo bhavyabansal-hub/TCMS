@@ -3,6 +3,11 @@
 Reverse-chronological list of user-visible and architectural changes. Task-level
 detail lives in [`worklog.md`](./worklog.md).
 
+## 2026-10-22 — MAINT simple .env.example / .env
+
+- `.env.example` is short and ordered by importance: **Required (every machine)** (DATABASE_URL, DIRECT_URL, JWT_SECRET), then **Required on the live server** (TCMS_DEPLOY_ENV, TCMS_PUBLIC_ORIGIN, WS_CORS_ORIGIN, WS_NOTIFY_SECRET, BACKUP_DATABASE_URL, TCMS_BACKUP_DIR), then Email, Telegram, Crew Desk, Backups, Sign-in, Live updates, Tuning, Dev-only. One short comment per key; same 62 keys as before.
+- `node scripts/clean-env.mjs --write` now keeps only the required keys and the keys you set (no long comments, no 50 empty placeholders); values are never changed.
+
 ## 2026-10-19 — FIX dev console error after Next 16.4.2
 
 - Every page in `npm run dev` showed "eval() is not supported … unsafe-eval": React needs eval() in development. The CSP now adds `'unsafe-eval'` to `script-src` **only** when `NODE_ENV=development`; the production CSP is unchanged (checked by `verify-security.mjs`).
