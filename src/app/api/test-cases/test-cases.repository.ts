@@ -176,6 +176,44 @@ export async function updateTestCaseIfVersion(
   return Number(changed) > 0
 }
 
+/** Ids of the cases in these modules with one of these statuses, row-locked
+ *  until the transaction ends (id order, so two submits never deadlock). */
+export async function lockCaseIdsInModules(moduleIds: string[], statuses: string[], tx: SqlExecutor): Promise<string[]> {
+  if (moduleIds.length === 0) return []
+  const rows = await tx.$queryRaw<{ test_case_id: string }[]>`
+    SELECT test_case_id FROM test_cases
+    WHERE module_id IN (${Prisma.join(moduleIds)}) AND status IN (${Prisma.join(statuses)})
+    ORDER BY test_case_id
+    FOR UPDATE`
+  return rows.map((row) => String(row.test_case_id))
+}
+
+/** Module delete: the module's reviews (and their case reviews) cascade away,
+ *  so a case still "in_review" through one of them goes back to "draft" —
+ *  otherwise it stays in review forever and can never be resubmitted. */
+export async function resetCasesReviewedInModules(moduleIds: string[], tx: SqlExecutor): Promise<number> {
+  if (moduleIds.length === 0) return 0
+  const changed = await tx.$executeRaw`
+    UPDATE test_cases tc
+    SET tc.status = 'draft', tc.updated_at = UTC_TIMESTAMP(3)
+    WHERE tc.status = 'in_review'
+      AND EXISTS (
+        SELECT 1 FROM review_requests r
+        JOIN module_review_requests m ON m.module_review_request_id = r.module_review_id
+        WHERE r.test_case_id = tc.test_case_id
+          AND r.status IN ('pending', 'in_progress')
+          AND m.module_id IN (${Prisma.join(moduleIds)}))`
+  return Number(changed)
+}
+
+/** Locks the case row until the transaction ends and returns its current
+ *  status (null = deleted). Serializes parallel submit-review calls. */
+export async function lockTestCaseStatus(testCaseId: string, tx: SqlExecutor): Promise<string | null> {
+  const rows = await tx.$queryRaw<{ status: string }[]>`
+    SELECT status FROM test_cases WHERE test_case_id = ${testCaseId} FOR UPDATE`
+  return rows[0]?.status ?? null
+}
+
 export async function updateTestCaseStatus(
   testCaseId: string,
   status: string,

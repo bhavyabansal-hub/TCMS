@@ -29,6 +29,7 @@ import {
   listTestCaseOptionRows,
   listTestCases,
   listTestCasesByIds,
+  lockTestCaseStatus,
   updateTestCaseIfVersion,
   updateTestCaseStatus,
   type TestCaseFilters,
@@ -41,6 +42,12 @@ import {
   listEventsByRequestIds,
   listReviewsByTestCase,
 } from '../reviews/reviews.repository'
+import {
+  completeModuleReviewsWithNothingOpen,
+  listOpenModuleReviewIdsForCases,
+  lockCaseReviewsOfCases,
+  lockModuleReviews,
+} from '../module-reviews/module-reviews.repository'
 
 // ---------- Queries ----------
 
@@ -280,13 +287,25 @@ export async function submitTestCaseForReview(
   }
   if (!reviewerId) throw ApiError.badRequest('No reviewer available. Assign a reviewer first.')
 
-  const cycle = (await findLatestCycleForTestCase(testCaseId)) + 1
   // Review request + status flip commit together: a crash can never leave a
   // pending review whose test case still reads "draft" (or vice versa).
   // The old open cycle (e.g. after needs_revision) is closed in the same unit, so a
   // late verdict on it is refused and the queue holds one open review (R2-1).
-  const review = await db.$transaction(async (tx) => {
+  // The case row is locked and its status re-checked first: two parallel
+  // submits used to both pass the check above and open two reviews (chaos 2026-10-22).
+  const { review, cycle } = await db.$transaction(async (tx) => {
+    // Lock order: module reviews -> case reviews -> case (see lockModuleReviews).
+    const supersededModuleReviews = await listOpenModuleReviewIdsForCases([testCaseId], tx)
+    await lockModuleReviews(supersededModuleReviews, tx)
+    await lockCaseReviewsOfCases([testCaseId], tx)
+    const status = await lockTestCaseStatus(testCaseId, tx)
+    if (status === null) throw ApiError.notFound('Test case not found')
+    if (NOT_SUBMITTABLE_STATUSES.has(status)) {
+      throw ApiError.badRequest(`This test case is ${status.replace('_', ' ')} — it cannot be submitted for review again`)
+    }
+    const cycle = (await findLatestCycleForTestCase(testCaseId, tx)) + 1
     await closeOpenReviewsForTestCases([testCaseId], tx)
+    await completeModuleReviewsWithNothingOpen(supersededModuleReviews, tx)
     const created = await insertReviewRequest(
       {
         testCaseId,
@@ -298,7 +317,7 @@ export async function submitTestCaseForReview(
       tx
     )
     await updateTestCaseStatus(testCaseId, 'in_review', tx)
-    return created
+    return { review: created, cycle }
   })
 
   await logActivity({
@@ -343,7 +362,16 @@ export async function deleteTestCasePermanently(
     throw ApiError.forbidden('Only the author of this test case or a role with delete rights can delete it.')
   }
 
-  const removed = await hardDeleteTestCase(testCaseId)
+  // The case's reviews cascade away with it; a module review left with nothing
+  // to review is completed in the same transaction (chaos test 2026-10-22).
+  const removed = await db.$transaction(async (tx) => {
+    const moduleReviewIds = await listOpenModuleReviewIdsForCases([testCaseId], tx)
+    await lockModuleReviews(moduleReviewIds, tx) // lock order: module reviews -> case reviews -> case
+    await lockCaseReviewsOfCases([testCaseId], tx)
+    const count = await hardDeleteTestCase(testCaseId, tx)
+    await completeModuleReviewsWithNothingOpen(moduleReviewIds, tx)
+    return count
+  })
   if (removed === 0) throw ApiError.notFound('Test case not found')
 
   await logActivity({
@@ -393,8 +421,17 @@ export async function deleteTestCasesPermanently(
     )
   }
 
-  // One DELETE for the whole selection (cascades history, reviews, bug links).
-  const deleted = await hardDeleteTestCases(deletable.map((tc) => tc.test_case_id))
+  // One DELETE for the whole selection (cascades history, reviews, bug links);
+  // module reviews left with nothing to review are completed with it.
+  const deletableIds = deletable.map((tc) => tc.test_case_id)
+  const deleted = await db.$transaction(async (tx) => {
+    const moduleReviewIds = await listOpenModuleReviewIdsForCases(deletableIds, tx)
+    await lockModuleReviews(moduleReviewIds, tx) // lock order: module reviews -> case reviews -> cases
+    await lockCaseReviewsOfCases(deletableIds, tx)
+    const count = await hardDeleteTestCases(deletableIds, tx)
+    await completeModuleReviewsWithNothingOpen(moduleReviewIds, tx)
+    return count
+  })
 
   await logActivity({
     userId: me.userId,

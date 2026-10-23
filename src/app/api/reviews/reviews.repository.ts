@@ -26,8 +26,8 @@ export async function findReviewRequestById(id: string): Promise<ReviewRequestSq
   return rows[0] ?? null
 }
 
-export async function findLatestCycleForTestCase(testCaseId: string): Promise<number> {
-  const rows = await db.$queryRaw<{ cycle: number | bigint }[]>`
+export async function findLatestCycleForTestCase(testCaseId: string, tx: SqlExecutor = db): Promise<number> {
+  const rows = await tx.$queryRaw<{ cycle: number | bigint }[]>`
     SELECT COALESCE(MAX(cycle), 0) AS cycle
     FROM review_requests WHERE test_case_id = ${testCaseId}`
   return Number(rows[0]?.cycle ?? 0)
@@ -178,14 +178,15 @@ export interface ModuleCaseReviewInsert {
  *  set explicitly: updated_at has no DB default and raw SQL bypasses
  *  Prisma's @updatedAt. */
 export async function insertReviewRequestsForModuleReview(
-  inputs: ModuleCaseReviewInsert[]
+  inputs: ModuleCaseReviewInsert[],
+  tx: SqlExecutor = db
 ): Promise<void> {
   if (inputs.length === 0) return
   const values = inputs.map(
     (input) => Prisma.sql`(${input.testCaseId}, ${input.reviewerId}, ${input.requesterId},
       'pending', ${input.dueDate}, ${input.cycle}, ${input.moduleReviewId}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
   )
-  await db.$executeRaw`
+  await tx.$executeRaw`
     INSERT INTO review_requests
       (test_case_id, reviewer_id, requester_id, status, due_date, cycle, module_review_id,
        created_at, updated_at)

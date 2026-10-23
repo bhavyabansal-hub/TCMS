@@ -146,8 +146,12 @@ manager (4) < vp (5)`. VP is the top admin.
 `role_permissions` table (one row per toggled cell). The VP opens the
 **Permissions** panel and flips any cell (e.g. "let Developers create test
 cases") — the change applies immediately: `PUT /api/permissions` upserts the
-override, invalidates the in-memory cache, and the next permission check
-everywhere uses the new value. 21 togglable actions × 6 roles = 126 cells
+override (or deletes it when the cell goes back to its default — one statement
+either way, so overlapping toggles never fail), invalidates the cache and reloads
+it before answering. The cache is ONE copy per process on `globalThis` (every route
+sees the reload at once); a toggle keeps the last known matrix instead of falling
+back to bare defaults, and a reload that started before a toggle is discarded
+(generation counter). A second process sees a toggle within the 3 s TTL. 21 togglable actions × 6 roles = 126 cells
 (`PERMISSION_ACTIONS` in `src/types/index.ts`; the `PUT` reply says `source: 'default'`
 when the toggle removed the override row).
 
@@ -157,6 +161,20 @@ override cache first, then falls back to defaults; services gate through
 Session payloads (login/register/me) carry the user's effective `permissions`
 array, and the UI gates with `useAuthStore.can(action)` — so hiding a panel and
 enforcing an API rule are the same source of truth.
+
+**Role and active state come from the database.** `getCurrentUser()` re-reads the
+user row at most every 30 s (cache on `globalThis`, `src/lib/auth.ts`), and
+`PUT /api/users` / `DELETE /api/users` drop that user's entry at once
+(`forgetUserSession`): a deactivated user gets 401 and a changed role counts on the
+very next request (chaos test 2026-10-22, `scripts/verify-chaos-fixes.mjs`).
+
+**Password rule (2026-10-23):** one rule wherever a password is SET — register,
+Settings → Users (new account), Settings → Profile (change password): at least 10
+characters, a letter and a number, at most 72 bytes (bcrypt reads only the first 72).
+Source: `src/lib/password-policy.ts` (the forms use it for hints and checks) and
+`src/lib/server/password-field.ts` (the validators). Sign-in is not checked, so a
+password set before the rule keeps working until it is changed. The first VP
+(`scripts/create-first-vp.mjs`) needs 12+. Test: `scripts/verify-password-policy.mjs`.
 
 Two enforcement layers exist and both are always applied:
 

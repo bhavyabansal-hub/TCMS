@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { insertReturningId } from '@/lib/server/insert'
 import type { ModuleSqlRow } from '@/types/sql-rows'
+import type { SqlExecutor } from '../test-cases/test-cases.repository'
 
 /** All modules ordered by name, each with its owner reference
  *  (userId/fullName/email) and its SUBTREE test-case count (module + descendants). */
@@ -64,8 +65,8 @@ export async function listSubmodules(parentId: string): Promise<ModuleSqlRow[]> 
 }
 
 /** All strict descendants (children, grandchildren, ...) of a module. */
-export async function listDescendantModuleIds(moduleId: string): Promise<string[]> {
-  const rows = await db.$queryRaw<{ module_id: string }[]>`
+export async function listDescendantModuleIds(moduleId: string, tx: SqlExecutor = db): Promise<string[]> {
+  const rows = await tx.$queryRaw<{ module_id: string }[]>`
     WITH RECURSIVE descendants AS (
       SELECT module_id FROM modules WHERE parent_id = ${moduleId}
       UNION ALL
@@ -145,9 +146,17 @@ export async function updateModuleIfUnchanged(
  *  crew_desk_links has NO FK by design (raw-SQL repository is its only
  *  writer) — remove its rows explicitly in the same transaction so no
  *  orphaned integration history survives the module. */
-export async function deleteModule(moduleId: string): Promise<void> {
-  await db.$transaction([
-    db.$executeRaw`DELETE FROM crew_desk_links WHERE module_id = ${moduleId}`,
-    db.$executeRaw`DELETE FROM modules WHERE module_id = ${moduleId}`,
-  ])
+/** Locks the module row until the transaction ends; false when it is gone.
+ *  Serializes a module submit-review against a parallel module delete. */
+export async function lockModule(moduleId: string, tx: SqlExecutor): Promise<boolean> {
+  const rows = await tx.$queryRaw<{ module_id: string }[]>`
+    SELECT module_id FROM modules WHERE module_id = ${moduleId} FOR UPDATE`
+  return rows.length > 0
+}
+
+/** Deletes the module (children, module reviews and their case reviews cascade).
+ *  Runs on the caller's transaction. */
+export async function deleteModule(moduleId: string, tx: SqlExecutor): Promise<void> {
+  await tx.$executeRaw`DELETE FROM crew_desk_links WHERE module_id = ${moduleId}`
+  await tx.$executeRaw`DELETE FROM modules WHERE module_id = ${moduleId}`
 }

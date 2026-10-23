@@ -139,14 +139,34 @@ export interface SessionUser {
 // token with an invented sub) kept working for up to 15 minutes. Now the
 // user row is re-checked at most every 30s per user: one tiny indexed SELECT,
 // and role/is_active decisions always come from the DATABASE.
+// The cache lives on globalThis (one copy for every route module) and a user
+// change drops the entry at once (forgetUserSession) — chaos test 2026-10-22:
+// a deactivated or demoted user kept working for up to 30s.
 const DB_REVALIDATION_TTL_MS = 30_000
-const userRevalidationCache = new Map<string, { role: string; email: string; fullName: string; checkedAt: number }>()
+type RevalidatedUser = { role: string; email: string; fullName: string; checkedAt: number }
+const globalForUserCache = globalThis as unknown as {
+  tcmsUserRevalidation?: Map<string, RevalidatedUser>
+  tcmsUserGeneration?: Map<string, number>
+}
+const userRevalidationCache: Map<string, RevalidatedUser> =
+  globalForUserCache.tcmsUserRevalidation ?? (globalForUserCache.tcmsUserRevalidation = new Map())
+// Bumped by every forget: a DB read that started before the change must not
+// put the old row back into the cache.
+const userGeneration: Map<string, number> =
+  globalForUserCache.tcmsUserGeneration ?? (globalForUserCache.tcmsUserGeneration = new Map())
+
+/** Role / active / name changed: the user's next request re-reads the database. */
+export function forgetUserSession(userId: string): void {
+  userGeneration.set(userId, (userGeneration.get(userId) ?? 0) + 1)
+  userRevalidationCache.delete(userId)
+}
 
 async function revalidateUser(sub: string): Promise<{ role: string; email: string; fullName: string } | null> {
   const cached = userRevalidationCache.get(sub)
   if (cached && Date.now() - cached.checkedAt < DB_REVALIDATION_TTL_MS) {
     return { role: cached.role, email: cached.email, fullName: cached.fullName }
   }
+  const generation = userGeneration.get(sub) ?? 0
   try {
     // Read through the shared user repository (raw SQL lives ONLY in
     // repositories by project rule). The repository normalizes MySQL's
@@ -155,6 +175,10 @@ async function revalidateUser(sub: string): Promise<{ role: string; email: strin
     if (!row || !row.is_active) {
       userRevalidationCache.delete(sub)
       return null
+    }
+    if ((userGeneration.get(sub) ?? 0) !== generation) {
+      // The user changed while we read: answer with this read, do not cache it.
+      return { role: row.role, email: row.email, fullName: row.full_name }
     }
     userRevalidationCache.set(sub, { role: row.role, email: row.email, fullName: row.full_name, checkedAt: Date.now() })
     return { role: row.role, email: row.email, fullName: row.full_name }

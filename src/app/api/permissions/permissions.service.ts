@@ -43,21 +43,23 @@ export async function togglePermission(
 
   const before = await findRolePermissionOverride(input.role, input.action)
 
-  const saved = await upsertRolePermission({
-    role: input.role,
-    action: input.action,
-    enabled: input.enabled,
-    updatedById: me.userId,
-  })
-
   // Toggling back to the default value removes the override row entirely
   // (defaults live in src/lib/permissions.ts — single source of truth).
+  // Either branch is ONE statement, so overlapping toggles of the same cell
+  // never see a half-done state (chaos test 2026-10-22).
   const isDefault = (DEFAULT_PERMISSIONS[input.role as keyof typeof DEFAULT_PERMISSIONS] ?? []).includes(
     input.action as never
   )
   const isBackToDefault = input.enabled === isDefault
   if (isBackToDefault) {
     await deleteRolePermissionOverride(input.role, input.action)
+  } else {
+    await upsertRolePermission({
+      role: input.role,
+      action: input.action,
+      enabled: input.enabled,
+      updatedById: me.userId,
+    })
   }
 
   // Drop stale overrides, then RELOAD synchronously before answering: the
@@ -84,9 +86,9 @@ export async function togglePermission(
   })
 
   return {
-    role: saved.role as PermissionToggle['role'],
-    action: saved.action as PermissionToggle['action'],
-    enabled: saved.enabled,
+    role: input.role as PermissionToggle['role'],
+    action: input.action as PermissionToggle['action'],
+    enabled: input.enabled,
     // Matches GET /api/permissions: no override row left = default (T1-5).
     source: isBackToDefault ? 'default' : 'override',
   }

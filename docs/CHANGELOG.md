@@ -3,6 +3,20 @@
 Reverse-chronological list of user-visible and architectural changes. Task-level
 detail lives in [`worklog.md`](./worklog.md).
 
+## 2026-10-23 — SECURITY nodemailer 10 + one password rule
+
+- **Passwords:** one rule everywhere a password is set (Create account, Settings → Users, Settings → Profile): **at least 10 characters with a letter and a number** (was 6; a new account made by a VP needed only 6 of anything). The forms show the rule and check it before sending. Existing passwords keep working until they are changed.
+- **Email library upgraded:** nodemailer 6 → 10.0.16, which fixes 16 published security advisories (wrong-recipient, header injection, denial of service). Emails were re-tested end to end.
+- **sanitize-html 2.18.0 → 2.18.1:** fixes a crash that crafted wiki content could cause.
+
+## 2026-10-22 — FIX chaos-test findings (6 live users in parallel)
+
+- **Deactivating a user or changing their role now applies on their very next request** (it took up to 30 s; a deactivated viewer could still create bugs and a demoted manager could still delete).
+- **Permission switches never fail and apply everywhere at once:** two people switching the same cell at the same time no longer gives a server error, and other permissions no longer flicker back to their defaults for a moment.
+- **A test case can be sent for review only once**, even when Submit is clicked several times at the same moment; module reviews are created in one locked step.
+- **Deleting a module under review puts its test cases back to Draft** so they can be resubmitted (they stayed "In review" forever).
+- New: `scripts/chaos-live-users.mjs` (6 roles working in parallel, report in `docs/qa/`) and the regression suite `scripts/verify-chaos-fixes.mjs`.
+
 ## 2026-10-22 — MAINT simple .env.example / .env
 
 - `.env.example` is short and ordered by importance: **Required (every machine)** (DATABASE_URL, DIRECT_URL, JWT_SECRET), then **Required on the live server** (TCMS_DEPLOY_ENV, TCMS_PUBLIC_ORIGIN, WS_CORS_ORIGIN, WS_NOTIFY_SECRET, BACKUP_DATABASE_URL, TCMS_BACKUP_DIR), then Email, Telegram, Crew Desk, Backups, Sign-in, Live updates, Tuning, Dev-only. One short comment per key; same 62 keys as before.

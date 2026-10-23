@@ -82,15 +82,16 @@ export interface ModuleReviewRequestInsert {
  *  created_at/updated_at are set explicitly: updated_at has no DB default
  *  and raw SQL bypasses Prisma's @updatedAt. */
 export async function insertModuleReviewRequest(
-  input: ModuleReviewRequestInsert
+  input: ModuleReviewRequestInsert,
+  tx: SqlExecutor = db
 ): Promise<ModuleReviewRequestSqlRow> {
   const moduleReviewRequestId = await insertReturningId(Prisma.sql`
     INSERT INTO module_review_requests
       (module_id, reviewer_id, requester_id, status, due_date, cycle, created_at, updated_at)
     VALUES
       (${input.moduleId}, ${input.reviewerId}, ${input.requesterId}, 'pending',
-       ${input.dueDate}, ${input.cycle}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
-  const rows = await db.$queryRaw<ModuleReviewRequestSqlRow[]>`
+       ${input.dueDate}, ${input.cycle}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`, tx)
+  const rows = await tx.$queryRaw<ModuleReviewRequestSqlRow[]>`
     SELECT * FROM module_review_requests WHERE module_review_request_id = ${moduleReviewRequestId} LIMIT 1`
   if (!rows[0]) throw new Error('Inserted module review request could not be read back')
   return rows[0]
@@ -108,8 +109,8 @@ export async function findModuleReviewRequestById(
 
 /** Highest review cycle number used for a module (module-review cycles are
  *  per MODULE, not per test case — legacy semantics). */
-export async function findLatestModuleReviewCycle(moduleId: string): Promise<number> {
-  const rows = await db.$queryRaw<{ cycle: number | bigint }[]>`
+export async function findLatestModuleReviewCycle(moduleId: string, tx: SqlExecutor = db): Promise<number> {
+  const rows = await tx.$queryRaw<{ cycle: number | bigint }[]>`
     SELECT COALESCE(MAX(cycle), 0) AS cycle
     FROM module_review_requests WHERE module_id = ${moduleId}`
   return Number(rows[0]?.cycle ?? 0)
@@ -162,11 +163,14 @@ export async function listModuleReviewRequestsByModule(
 /** Case reviews belonging to one module review, oldest first. */
 export async function listCaseReviewsByModuleReview(
   moduleReviewId: string,
-  statuses?: string[]
+  statuses?: string[],
+  tx: SqlExecutor = db,
+  { lock = false }: { lock?: boolean } = {}
 ): Promise<ReviewRequestSqlRow[]> {
-  return db.$queryRaw<ReviewRequestSqlRow[]>(Prisma.sql`
+  // lock: holds the case-review rows until the caller's transaction ends.
+  return tx.$queryRaw<ReviewRequestSqlRow[]>(Prisma.sql`
     ${CASE_REVIEW_SELECT} ${caseReviewFilter(moduleReviewId, statuses)}
-    ORDER BY r.created_at ASC`)
+    ORDER BY r.created_at ASC${lock ? Prisma.sql` FOR UPDATE OF r` : Prisma.empty}`)
 }
 
 /** Number of case reviews of one module review (optionally by status). */
@@ -182,6 +186,73 @@ export async function countCaseReviews(
 // ---------- Updates ----------
 
 /** Marks a module review's status + bumps updated_at (part of verdict flow). */
+/** Open module reviews that hold an open case review of one of these cases. */
+export async function listOpenModuleReviewIdsForCases(testCaseIds: string[], tx: SqlExecutor = db): Promise<string[]> {
+  if (testCaseIds.length === 0) return []
+  const rows = await tx.$queryRaw<{ module_review_id: string }[]>`
+    SELECT DISTINCT r.module_review_id FROM review_requests r
+    JOIN module_review_requests m ON m.module_review_request_id = r.module_review_id
+    WHERE r.test_case_id IN (${Prisma.join(testCaseIds)})
+      AND r.status <> 'completed' AND m.status <> 'completed'`
+  return rows.map((row) => String(row.module_review_id))
+}
+
+/** Row-locks these module reviews (id order) until the transaction ends.
+ *  Lock order for every review write (chaos test 2026-10-22), so two writers
+ *  never deadlock: module -> module reviews -> case reviews -> test cases —
+ *  the order the single and bulk verdicts already used. */
+export async function lockModuleReviews(moduleReviewIds: string[], tx: SqlExecutor): Promise<void> {
+  if (moduleReviewIds.length === 0) return
+  await tx.$queryRaw`
+    SELECT module_review_request_id FROM module_review_requests
+    WHERE module_review_request_id IN (${Prisma.join(moduleReviewIds)})
+    ORDER BY module_review_request_id
+    FOR UPDATE`
+}
+
+/** Row-locks every case review of these test cases (id order). */
+export async function lockCaseReviewsOfCases(testCaseIds: string[], tx: SqlExecutor): Promise<void> {
+  if (testCaseIds.length === 0) return
+  await tx.$queryRaw`
+    SELECT review_request_id FROM review_requests
+    WHERE test_case_id IN (${Prisma.join(testCaseIds)})
+    ORDER BY review_request_id
+    FOR UPDATE`
+}
+
+/** Row-locks every case review inside these module reviews (id order). */
+export async function lockCaseReviewsOfModuleReviews(moduleReviewIds: string[], tx: SqlExecutor): Promise<void> {
+  if (moduleReviewIds.length === 0) return
+  await tx.$queryRaw`
+    SELECT review_request_id FROM review_requests
+    WHERE module_review_id IN (${Prisma.join(moduleReviewIds)})
+    ORDER BY review_request_id
+    FOR UPDATE`
+}
+
+/** Ids of every module review raised on one of these modules (any status). */
+export async function listModuleReviewIdsForModules(moduleIds: string[], tx: SqlExecutor = db): Promise<string[]> {
+  if (moduleIds.length === 0) return []
+  const rows = await tx.$queryRaw<{ module_review_request_id: string }[]>`
+    SELECT module_review_request_id FROM module_review_requests WHERE module_id IN (${Prisma.join(moduleIds)})`
+  return rows.map((row) => String(row.module_review_request_id))
+}
+
+/** Completes the given module reviews that have no open case review left —
+ *  after a resubmit closed or a delete removed their last one (chaos test
+ *  2026-10-22: such a module review stayed open forever). Returns how many. */
+export async function completeModuleReviewsWithNothingOpen(moduleReviewIds: string[], tx: SqlExecutor = db): Promise<number> {
+  if (moduleReviewIds.length === 0) return 0
+  const changed = await tx.$executeRaw`
+    UPDATE module_review_requests m
+    SET m.status = 'completed', m.updated_at = UTC_TIMESTAMP(3)
+    WHERE m.module_review_request_id IN (${Prisma.join(moduleReviewIds)})
+      AND m.status <> 'completed'
+      AND NOT EXISTS (SELECT 1 FROM review_requests r
+        WHERE r.module_review_id = m.module_review_request_id AND r.status <> 'completed')`
+  return Number(changed)
+}
+
 export async function updateModuleReviewRequestStatus(
   moduleReviewRequestId: string,
   status: string,

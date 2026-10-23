@@ -3,6 +3,7 @@
 
 import { z } from 'zod'
 import { ApiError, flattenZodError } from '@/lib/api'
+import { newPasswordField } from '@/lib/server/password-field'
 
 const loginSchema = z.object({
   // trim+toLowerCase parity with register (task mysql-backup-1): an email
@@ -25,11 +26,7 @@ const loginSchema = z.object({
 const registerSchema = z.object({
   fullName: z.string().trim().min(2, 'Full name is too short').max(80),
   email: z.string().trim().toLowerCase().email(),
-  password: z
-    .string()
-    .min(6, 'Password must be at least 6 characters')
-    .regex(/[a-zA-Z]/, 'Password must contain a letter')
-    .regex(/[0-9]/, 'Password must contain a number'),
+  password: newPasswordField(), // shared rule: src/lib/password-policy.ts
 })
 
 const refreshSchema = z.object({
@@ -44,14 +41,8 @@ const logoutSchema = z.object({
 
 const passwordChangeSchema = z.object({
   currentPassword: z.string().min(1),
-  // PARITY with the register policy (audit 2026-10-09): a change could
-  // previously downgrade to a 6-char letters-only password that signup
-  // itself would reject.
-  newPassword: z
-    .string()
-    .min(6, 'Password must be at least 6 characters')
-    .regex(/[a-zA-Z]/, 'Password must contain a letter')
-    .regex(/[0-9]/, 'Password must contain a number'),
+  // Same rule as register and new accounts (src/lib/password-policy.ts).
+  newPassword: newPasswordField(),
 })
 
 const profileUpdateSchema = z.object({

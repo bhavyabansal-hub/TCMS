@@ -52,7 +52,7 @@ Action dispatch: `?path=register | login | refresh | logout` (falls back to an
 
 | Endpoint | Auth | Request | Success response |
 |---|---|---|---|
-| `POST ?path=register` | 🔓 | `{ email, fullName(min 2), password(min 8), role? }` | `{ user, accessToken, refreshToken }` |
+| `POST ?path=register` | 🔓 | `{ email, fullName(min 2), password (10+ chars, a letter and a number, max 72 bytes — `src/lib/password-policy.ts`), role? }` | `{ user, accessToken, refreshToken }` |
 | `POST ?path=login` | 🔓 | `{ email, password }` | same |
 | `POST ?path=refresh` | 🔓 | `{ refreshToken }` | `{ accessToken, refreshToken }` (rotated) |
 | `POST ?path=logout` | 🔓 | `{ refreshToken }` | `{ "success": true }` |
@@ -107,7 +107,7 @@ returns **200** `{ error: 'Unknown action' }` (elsewhere it's 400).
 | `POST` 🛡 `create_module` | body `{ name(min 1), description?, parentId? }` | Root: `path=''`, depth 0. Child: parent 404-checked; `path=parent.path + '.' + parentId`, `depth+1`. **`ownerId` is never taken from the client — owner = creator.** Logs `CREATE/module` |
 | `PUT ?id=` 🛡 `edit_module` | body `{ name?, description?, ownerId? }` | Ownership transfer allowed; `createdById` immutable (governs delete rights). Sets `updatedById`. Logs `UPDATE/module` with before/after |
 | `PUT ?id=&action=submit-review` 🛡 `submit_review` | body `{ reviewerId?, dueDate?, includeSubmodules=true }` | **Module-level review** — see below |
-| `DELETE ?id=` 🛡 | creator **or** `edit_module`; else 403 `Only the creator of this module or a role with edit-module rights can delete it.` | **Hard delete**; DB cascades children/permissions/module reviews; cases get `moduleId=null`. Logs `DELETE/module` |
+| `DELETE ?id=` 🛡 | creator **or** `edit_module`; else 403 `Only the creator of this module or a role with edit-module rights can delete it.` | **Hard delete**; DB cascades children/permissions/module reviews; cases get `moduleId=null`. One transaction: cases still `in_review` through a module review of the deleted tree go back to `draft` first (else they stay in review forever). Logs `DELETE/module` (`after.casesBackToDraft` when any) |
 
 ### `action=submit-review` step by step
 
@@ -116,6 +116,9 @@ returns **200** `{ error: 'Unknown action' }` (elsewhere it's 400).
 2. Target set = module (+ all descendants when `includeSubmodules` — iterative stack walk).
 3. Eligible cases = in targets ∧ `status ∈ ['draft','needs_revision']`; none → 400
    `No eligible test cases (draft or needs_revision) found in this module.`
+   Steps 3–4 run in ONE transaction that first locks the module row and the eligible
+   case rows (re-read under lock): parallel submits / a parallel delete wait, the
+   loser gets the 400 above or 404 — never two open reviews for one case.
 4. `cycle = max(existing module cycles) + 1` → create `ModuleReviewRequest(pending)`;
    `createMany` child `ReviewRequest` per case (same cycle, `moduleReviewId` set);
    `updateMany` cases → **`in_review`**.
@@ -151,8 +154,11 @@ returns **200** `{ error: 'Unknown action' }` (elsewhere it's 400).
 
 Reviewer resolution: body `reviewerId` → case `assigneeId` → first active
 manager, then VP (400 `No reviewer available. Assign a reviewer first.`).
-Refused with 400 when the case is already `in_review` or `approved`; the case's old
-open review is closed in the same transaction (one open review per case).
+Refused with 400 when the case is already `in_review` or `approved` — re-checked
+inside the transaction with the case row locked, so parallel submits give exactly one
+200; the case's old open review is closed in the same transaction (one open review per case).
+When that closes the last open case review of a module review, the module review is
+completed too (same for deleting a case) — no module review stays open with nothing inside.
 `cycle = max(case review cycles) + 1` → create `ReviewRequest(pending)`; case →
 **`in_review`** (version NOT bumped). Logs `REVIEW_SUBMITTED/test_case`; notifies
 reviewer (`review_assigned`, entityType `review`). Returns the review row.
@@ -201,6 +207,9 @@ For each: `ReviewEvent(approved, comment)` → review `completed` → its case �
 **`approved`**. Parent module review → `completed`. Logs
 `REVIEW_VERDICT/module_review`; notifies requester (`review_approved`, title
 `Module review approved`). Returns `{ approvedCount, moduleReviewStatus: 'completed' }`.
+Bulk verdict and approve-all re-read the open case reviews inside the transaction,
+after the guarded module-review update, with the rows locked — a case resubmitted
+or decided in between is left alone (chaos test 2026-10-22).
 
 ## 9. `/api/bugs` — bug tracker (`bugs/route.ts`)
 
@@ -263,7 +272,7 @@ Everything is scoped to the logged-in user.
 | Endpoint | Behaviour |
 |---|---|
 | `GET` | Paginated `publicUser`s (pageSize 50), filters `role`, `isActive`; sort `createdAt asc` |
-| `POST` | Invite: `{ email, fullName(min 2), password(min 8), role }`; duplicate email → 400 `Email already registered`. Logs `CREATE/user` |
+| `POST` | Invite: `{ email, fullName(min 2), password (10+ chars, a letter and a number, max 72 bytes — `src/lib/password-policy.ts`), role }`; duplicate email → 400 `Email already registered`. Logs `CREATE/user` |
 | `PUT ?id=` | `{ fullName?, role?, isActive?, avatarUrl? }`. Logs `UPDATE/user` (before/after role+active+name) |
 | `DELETE ?id=` | **Soft delete**: `isActive: false`; self-delete → 400 `Cannot delete yourself`. Logs `DELETE/user` |
 
@@ -341,6 +350,12 @@ in the same request, so two simultaneous saves still produce one 200 and one 409
 A malformed value → 400. The guarded UPDATE runs before any child insert (history,
 review events), so parallel saves wait for each other instead of deadlocking.
 Race test: `node scripts/verify-concurrency.mjs` → `34 passed, 0 failed` (2026-10-16).
+
+**Lock order for review writes (2026-10-22):** every transaction that touches reviews
+takes its row locks in ONE order — module → module reviews → case reviews → test
+cases (single / bulk verdict, single / module submit-review, case delete, module
+delete). Two writers on the same review therefore wait for each other and never
+deadlock. Race test: `node scripts/verify-chaos-fixes.mjs` section 8.
 
 ## 15c. Database errors → API errors (`src/lib/server/db-errors.ts`, used by `withApi`)
 

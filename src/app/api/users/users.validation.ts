@@ -4,6 +4,7 @@
 
 import { z } from 'zod'
 import { ApiError, flattenZodError } from '@/lib/api'
+import { newPasswordField } from '@/lib/server/password-field'
 
 const roleSchema = z.enum(['vp', 'manager', 'product', 'developer', 'qa_engineer', 'viewer'])
 
@@ -13,7 +14,7 @@ const createUserSchema = z.object({
   // " QA1@TCMS.com " can never create a second identity for qa1@tcms.com.
   email: z.string().trim().toLowerCase().email(),
   fullName: z.string().trim().min(2).max(80),
-  password: z.string().min(6),
+  password: newPasswordField(), // shared rule (was only 6+ characters): src/lib/password-policy.ts
   role: roleSchema,
 })
 

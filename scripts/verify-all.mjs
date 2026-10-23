@@ -46,6 +46,8 @@ const SUITES = [
   'verify-notifications',
   'verify-review-matrix',
   'verify-concurrency',
+  'verify-chaos-fixes',
+  'verify-password-policy',
   'verify-db-errors',
   'verify-flagged-fields',
   'verify-safety',

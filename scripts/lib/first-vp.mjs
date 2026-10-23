@@ -15,9 +15,14 @@ export function validateIdentity(rawEmail, rawName) {
   return { email, fullName }
 }
 
-/** Password rule: app rule (letter + number) with a stronger minimum for the first admin. */
+// bcrypt only reads the first 72 bytes (same limit as src/lib/password-policy.ts).
+const MAX_PASSWORD_BYTES = 72
+
+/** Password rule: the app rule (src/lib/password-policy.ts: letter + number, max 72
+ *  bytes) with a stronger minimum (12 instead of 10) for the first admin. */
 export function checkPasswordStrength(password) {
   if (password.length < MIN_PASSWORD_LENGTH) return `password must be at least ${MIN_PASSWORD_LENGTH} characters`
+  if (Buffer.byteLength(password, 'utf8') > MAX_PASSWORD_BYTES) return `password is too long (at most ${MAX_PASSWORD_BYTES} bytes)`
   if (!/[a-zA-Z]/.test(password)) return 'password must contain a letter'
   if (!/[0-9]/.test(password)) return 'password must contain a number'
   return null

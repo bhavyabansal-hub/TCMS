@@ -171,7 +171,9 @@ reconnect + tab visible, no polling timers).
 | `src/lib/server/cache.ts` | TTL cache, coalesced loaders, 500 cap, prefix invalidation |
 | `src/lib/server/auth-cookies.ts` | tcms-access / tcms-refresh httpOnly cookie helpers |
 | `src/lib/server/ws-ticket.ts` | 60 s HMAC WS tickets |
-| `src/lib/server/delivery.ts` | SMTP (nodemailer) + Telegram delivery |
+| `src/lib/server/delivery.ts` | SMTP (nodemailer 10) + Telegram delivery |
+| `src/lib/password-policy.ts` | The one password rule (10+ chars, letter + number, max 72 bytes) — server and forms |
+| `src/lib/server/password-field.ts` | `newPasswordField()` zod field for every validator that sets a password |
 | `src/lib/server/csv.ts` | RFC4180 parser, MAX_IMPORT_ROWS 200 |
 | `src/lib/server/optimistic-lock.ts` | `expectedUpdatedAtField` (zod) + `resolveExpectedUpdatedAt` for guarded updates (409) |
 | `src/lib/server/db-errors.ts` | pure MySQL/Prisma error → `{status,message,kind}` mapper used by `withApi` |
@@ -228,6 +230,11 @@ hand-edited collations + JSON defaults; production never ran an earlier migratio
   (headers, /api/ready, read-only, CSV, per-IP limit), `create-first-vp-test.mjs`, `verify-ui-gates.mjs`.
   Shared cleanup: `scripts/lib/suite-cleanup.mjs` (ID-scoped, DB guard + lock) — the DoD suites remove
   the rows they create (B16). R9 dry run: `cleanup-req001-testdata.mjs` (dry run by default).
+- **Chaos test (2026-10-22):** `chaos-live-users.mjs` (6 roles in parallel for `CHAOS_MINUTES`, races,
+  hostile input, report `docs/qa/CHAOS-FINDINGS-<date>.txt`) and its regression suite
+  `verify-chaos-fixes.mjs` (in `verify:all`). Shared cleanup by fixture users: `scripts/lib/fixture-cleanup.mjs`.
+- **Password rule (2026-10-23):** `verify-password-policy.mjs` (in `verify:all`) — register, new account,
+  change password, old-password sign-in, first-VP rule.
 - **Performance (2026-10-17):** `verify-page-apis.mjs` (per page × role: API calls, duplicates,
   401/403 calls, loading phases, p95 — run against a production build) and `loadtest-1000.mjs`
   (realistic 1000 users + stress, p50/p95, DB connection peak). Results: `docs/architecture/HLD.md` §7.

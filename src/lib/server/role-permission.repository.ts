@@ -32,8 +32,9 @@ export async function findRolePermissionOverride(
 }
 
 /** Inserts or flips ONE matrix cell, remembering who changed it.
- *  MySQL: no RETURNING — upsert (new values are the bound params, so the
- *  DUPLICATE-KEY branch re-sets them directly), then read the row back. */
+ *  One atomic statement; the stored values are exactly the bound params, so
+ *  there is no read-back (chaos test 2026-10-22: a parallel toggle back to the
+ *  default could delete the row between upsert and read-back -> 500). */
 export async function upsertRolePermission(input: {
   role: string
   action: string
@@ -47,13 +48,7 @@ export async function upsertRolePermission(input: {
       enabled = ${input.enabled},
       updated_by_id = ${input.updatedById},
       updated_at = UTC_TIMESTAMP(3)`
-  const rows = await db.$queryRaw<RolePermissionSqlRow[]>`
-    SELECT role, action, enabled
-    FROM role_permissions
-    WHERE role = ${input.role} AND action = ${input.action}
-    LIMIT 1`
-  if (!rows[0]) throw new Error('Upserted role permission could not be read back')
-  return rows[0]
+  return { role: input.role, action: input.action, enabled: input.enabled } as RolePermissionOverride
 }
 
 /** Deletes one override so the cell falls back to its default. */

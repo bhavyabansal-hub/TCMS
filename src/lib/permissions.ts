@@ -69,54 +69,74 @@ export const DEFAULT_PERMISSIONS: Record<Role, PermissionAction[]> = {
 // the very next request after a toggle already sees the new matrix.
 const PERMISSION_CACHE_TTL_MS = 3_000
 
-const overrides = new Map<string, boolean>()
-let loadedAt = 0
-let loadPromise: Promise<void> | null = null
+// One cache per process on globalThis, so every route module copy sees the
+// same matrix (a toggle reloads it for all routes at once). `generation` is
+// bumped by every toggle: a load that STARTED before the toggle is thrown away
+// instead of putting the old matrix back. Chaos test 2026-10-22.
+interface PermissionCacheState {
+  overrides: Map<string, boolean>
+  loadedAt: number
+  generation: number
+  loadPromise: Promise<void> | null
+  loadGeneration: number
+}
+const globalForPermissions = globalThis as unknown as { tcmsPermissionCache?: PermissionCacheState }
+const cache: PermissionCacheState =
+  globalForPermissions.tcmsPermissionCache ??
+  (globalForPermissions.tcmsPermissionCache = { overrides: new Map(), loadedAt: 0, generation: 0, loadPromise: null, loadGeneration: -1 })
 
 function cacheKey(role: string, action: string): string {
   return `${role}:${action}`
 }
 
-async function loadOverrides(): Promise<void> {
-  const rows: RolePermissionOverride[] = await listRolePermissionOverrides()
-  overrides.clear()
-  for (const row of rows) overrides.set(cacheKey(row.role, row.action), row.enabled)
-  loadedAt = Date.now()
+/** Swaps in a freshly read matrix — unless a toggle happened while it was read. */
+function commitOverrides(rows: RolePermissionOverride[], generation: number): void {
+  if (generation !== cache.generation) return
+  cache.overrides = new Map(rows.map((row) => [cacheKey(row.role, row.action), row.enabled]))
+  cache.loadedAt = Date.now()
+}
+
+async function loadOverrides(generation: number): Promise<void> {
+  commitOverrides(await listRolePermissionOverrides(), generation)
 }
 
 /** Called before any auth decision that can afford async work (login, me). */
 export async function ensurePermissionsLoaded(force = false): Promise<void> {
-  if (!force && loadedAt > 0 && Date.now() - loadedAt < PERMISSION_CACHE_TTL_MS) return
-  if (!loadPromise) {
-    loadPromise = loadOverrides()
+  if (!force && cache.loadedAt > 0 && Date.now() - cache.loadedAt < PERMISSION_CACHE_TTL_MS) return
+  // Join a load only when it started after the latest toggle.
+  if (!cache.loadPromise || cache.loadGeneration !== cache.generation) {
+    const generation = cache.generation
+    const promise: Promise<void> = loadOverrides(generation)
       .catch(() => {
-        // Cache load failure is non-fatal: defaults remain in effect.
+        // Cache load failure is non-fatal: the last known matrix stays in effect.
       })
       .finally(() => {
-        loadPromise = null
+        if (cache.loadPromise === promise) cache.loadPromise = null
       })
+    cache.loadPromise = promise
+    cache.loadGeneration = generation
   }
-  await loadPromise
+  await cache.loadPromise
 }
 
 /** Invalidates immediately — called by the permissions service after a toggle.
- *  MUST also drop the stale override rows: keeping them would make `can()`
-  *  keep serving the pre-toggle answer forever (loadedAt=0 alone never
- *  triggers a reload once the map is non-empty). */
+ *  Keeps the last known overrides (never falls back to bare defaults for the
+ *  other cells) and makes every in-flight load stale; the caller then forces a
+ *  reload, and `can()` reloads in the background until it lands. */
 export function invalidatePermissionCache(): void {
-  loadedAt = 0
-  overrides.clear()
+  cache.generation++
+  cache.loadedAt = 0
 }
 
 // ---------- The decision function (sync, used everywhere) ----------
 
 export function can(role: string, action: PermissionAction): boolean {
-  if (loadedAt === 0) {
-    // Cold or invalidated cache: serve defaults immediately and warm the
-    // cache in the background (converges within one request).
+  if (cache.loadedAt === 0) {
+    // Cold or invalidated cache: serve the last known matrix (defaults when
+    // cold) and warm the cache in the background (converges within one request).
     void ensurePermissionsLoaded()
   }
-  const override = overrides.get(cacheKey(role, action))
+  const override = cache.overrides.get(cacheKey(role, action))
   if (override !== undefined) return override
   return (DEFAULT_PERMISSIONS[role as Role] ?? []).includes(action)
 }
@@ -131,12 +151,12 @@ export function effectivePermissionsFor(role: string): PermissionAction[] {
  *  instance cache, so a toggle made in any process instance is reflected
  *  in the very next session. Also refreshes the local cache as a bonus. */
 export async function effectivePermissionsFresh(role: string): Promise<PermissionAction[]> {
+  const generation = cache.generation
   const rows = await listRolePermissionOverrides()
-  overrides.clear()
-  for (const row of rows) overrides.set(cacheKey(row.role, row.action), row.enabled)
-  loadedAt = Date.now()
+  commitOverrides(rows, generation)
+  const fresh = new Map(rows.map((row) => [cacheKey(row.role, row.action), row.enabled]))
   return PERMISSION_ACTIONS.filter((action) => {
-    const override = overrides.get(cacheKey(role, action))
+    const override = fresh.get(cacheKey(role, action))
     return override ?? (DEFAULT_PERMISSIONS[role as Role] ?? []).includes(action)
   })
 }
@@ -152,7 +172,7 @@ export function effectiveMatrix(): PermissionToggle[] {
   const toggles: PermissionToggle[] = []
   for (const role of Object.keys(ROLE_HIERARCHY)) {
     for (const action of PERMISSION_ACTIONS) {
-      const override = overrides.get(cacheKey(role, action))
+      const override = cache.overrides.get(cacheKey(role, action))
       toggles.push({
         role: role as Role,
         action,

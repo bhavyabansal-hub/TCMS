@@ -1759,3 +1759,86 @@ Verification (2026-10-22):
 - git check-ignore: .env and .env.bak ignored.
 - No app code changed, so tsc / eslint / suites not re-run.
 - NOT VERIFIED: a fresh copy of .env.example booting a new machine (needs real passwords).
+
+---
+Task ID: chaos-6-users-2026-10-22
+Agent: Main (Claude Code, Opus 5.5) — fast mode, no subagents
+Task: Owner request — six live users (vp, manager, product, developer, qa_engineer, viewer) in parallel for ~6-7 min doing real work, permission / role / active changes mid-action, try to break the app, write every failure to a txt file. Find only; fixes later.
+
+Work Log:
+- New scripts/chaos-live-users.mjs (CHAOS_MINUTES default 6.5): stamped fixture users (raw SQL, DB guard + tcms_verify lock), six role loops + 12 planned race scenarios + hostile inputs + /api/ready poll; precondition role_permissions = 0 rows; end-of-run DB data checks; cleanup by fixture ids in one transaction (+ role_permissions back to 0).
+- Run on dev :3000, 6.5 min, 4889 requests. Report: docs/qa/CHAOS-FINDINGS-2026-10-22.txt (triaged summary at the top).
+- Bugs found (NOT fixed): (1) CRITICAL deactivated / demoted user keeps working up to 30 s — auth.ts userRevalidationCache not cleared on PUT /api/users; (2) HIGH PUT /api/permissions 500 "Upserted role permission could not be read back" when two toggles of one cell overlap; (3) HIGH double submit-review at once -> two open reviews for one case; (4) MEDIUM case status vs open review out of step (4 + 11 rows), cause to investigate; (5) LOW permission toggle visible late within the documented 3 s cache window (test allowed 1.5 s).
+
+Verification (2026-10-22):
+- Cleanup: users 6, test_cases 290, bugs 166, review_requests 136, module_review_requests 22, modules 33 (+ cascaded children), wiki 16, task_reports 4, notifications 959, activity_logs 1745 removed; residue users/cases/bugs/modules 0, role_permissions 0 rows.
+- /api/ready after the run: ready, database ok.
+- NOT VERIFIED: production build (:3999) not run; the 4 permission-window findings not re-tested with a 3.5 s window.
+
+---
+Task ID: chaos-fixes-2026-10-22
+Agent: Main (Claude Code, Opus 5.5) — fast mode, no subagents
+Task: Owner request — fix every chaos-test finding properly. Owner rule mid-task: NO commit, NO push (owner reviews the changes first).
+
+Work Log:
+- Bug 1 (CRITICAL) deactivated / demoted user served up to 30 s: src/lib/auth.ts — user re-validation cache on globalThis + forgetUserSession() (generation counter so a read started before the change is not cached); users.service calls it after PUT and DELETE /api/users.
+- Bug 2 (HIGH) PUT /api/permissions 500 on overlapping toggles: permissions.service — back-to-default = DELETE only, else one upsert; role-permission.repository upsert no longer reads back.
+- Check 5 (permission seen late / flicker to defaults): src/lib/permissions.ts — one cache per process on globalThis (all route copies), toggle keeps the last known matrix (no clear), generation counter drops loads that started before a toggle, atomic map swap.
+- Bug 3 (HIGH) double submit-review: test-cases.service — case row locked (lockTestCaseStatus, SELECT … FOR UPDATE) and status re-checked inside the transaction; cycle read inside it.
+- Bug 4 (MEDIUM) case "in_review" with no review: (a) module delete now one transaction — lockModule, resetCasesReviewedInModules (in_review via a module review of the deleted tree -> draft), then delete; (b) module submit-review now one transaction — module row + eligible case rows locked (lockCaseIdsInModules, id order); (c) bulk verdict / approve-all re-read open case reviews under lock (FOR UPDATE OF r) after the guarded module-review update.
+- Found on the re-run, fixed: module review left open with no open case review (resubmit closed / case delete removed the last one) -> listOpenModuleReviewIdsForCases + completeModuleReviewsWithNothingOpen in single submit, module submit, single and bulk case delete (deletes now in a transaction).
+- Repos got optional tx params: findLatestCycleForTestCase, insertReviewRequestsForModuleReview, insertModuleReviewRequest, findLatestModuleReviewCycle, listCaseReviewsByModuleReview (+lock), listDescendantModuleIds; deleteModule takes the caller's tx.
+- Tests: new scripts/verify-chaos-fixes.mjs (7 sections, 35 checks, no waiting; added to verify:all); shared scripts/lib/fixture-cleanup.mjs (chaos script uses it); chaos script: gate judged at start AND end of a request, toggle marked as changing before it is sent, needs_revision + in_progress review no longer counted as a data error.
+- Docs: auth-and-permissions (caches), api-reference (module delete, both submit-reviews, bulk verdict), CODEBASE-MAP, CHANGELOG, findings file status.
+
+Verification (2026-10-22, dev :3000):
+- verify-chaos-fixes on the OLD code (src stashed, then restored): 22/8 FAIL (catches bugs 1-4); on the fixed code: 35/0.
+- tsc 0 · eslint 0 · audit-standards 0 violations · verify-concurrency 34/0 · verify-review-matrix 36/0 · verify-permissions 37/0 · verify-import 36/0 · verify-notifications 31/0 · verify-numeric-ids 40/0 · verify-db-errors 21/0 · verify-flagged-fields 10/0 · verify-safety 27/0 · create-first-vp-test 15/0 · verify-security 160/0 (SECURITY_SKIP_BROWSER=1).
+- Chaos re-runs (6.5 min each): run 2 = 4 findings (3 test-timing, 1 real -> fixed); run 3 = 0 findings, 2879 requests, all data checks 0, residue 0, role_permissions 0 rows.
+- NOT RUN: npm run verify:all refused (free memory ~800-1000 MB < 2000 MB; the owner's Chrome/VS Code hold the RAM) -> the Chrome suites verify-ui-gates, verify-page-apis, verify-role-flows-e2e, verify-permission-toggle-e2e and the browser part of verify-security were NOT RUN; production build (npm run build + :3999) NOT RUN. Not committed, not pushed (owner request).
+
+---
+Task ID: go-live-check-2026-10-22
+Agent: Main (Claude Code, Opus 5.5) — fast mode, no subagents
+Task: Owner question — is the app ready to go live, best build, no errors, and do the recent changes break anything else? Check everything, then answer. No commit, no push.
+
+Work Log:
+- Self-review of the chaos-fix diff found one side effect of my own change: the new submit-review case lock (case -> review) was the reverse of the verdict order (review -> case), so the two could deadlock (clean 409 "try again", no data damage). Fixed with ONE lock order for every review write — module -> module reviews -> case reviews -> test cases: new lockModuleReviews, lockCaseReviewsOfCases, lockCaseReviewsOfModuleReviews, listModuleReviewIdsForModules (module-reviews.repository) used in single / module submit-review, case + bulk delete, module delete. Documented in api-reference §15b.
+- verify-chaos-fixes section 8 (8 rounds x 5 parallel review writes on one module review: no deadlock answer, no 5xx) -> 37 checks.
+- Production build in a separate copy (%TEMP%\tcms-prodcopy, deleted afterwards), run on :3999; dev :3000 untouched.
+
+Verification (2026-10-22/23):
+- npm run build OK twice (before and after the lock-order fix); 3 build warnings, all old (Cache-Control header in next.config.ts, dynamic fs in logger.ts and backup-health.ts).
+- npm run verify:all on the production build: 19 of 19 — tsc · eslint 0 · audit 0 · security 164/0 · numeric-ids 40/0 · import 36/0 · permissions 37/0 · notifications 31/0 · review-matrix 36/0 · concurrency 34/0 · chaos-fixes 35/0 · db-errors 21/0 · flagged-fields 10/0 · safety 27/0 · first-vp 15/0 · ui-gates 159/0 · page-apis 748/0 · role-flows 556/0 · permission-toggle 1489/0.
+- Rebuilt with the lock-order fix (production :3999): chaos-fixes 37/0 · concurrency 34/0 · review-matrix 36/0 · import 36/0 · permissions 37/0 · role-flows-e2e 556/0 · chaos test 6.5 min 6375 requests -> 0 findings, all data checks 0 (docs/qa/CHAOS-FINDINGS-2026-10-22-production.txt).
+- tsc 0 · eslint 0 · audit 0 on the final code. DB after all runs: role_permissions 0 rows, 0 chaos users, 0 chaos cases.
+- NOT VERIFIED: the 4 Chrome suites ran on the build before the lock-order fix (only role-flows re-ran after it); section 8 was not shown to fail on the old lock order; Linux-only scripts NOT RUN ON WINDOWS; real server / HTTPS / IT MySQL / SMTP / Telegram not available here. Nothing committed or pushed (owner request).
+
+---
+Task ID: nodemailer-password-2026-10-23
+Agent: Main (Claude Code, Opus 5.5) — fast mode, no subagents
+Task: Owner request — fix backlog B33 (nodemailer advisory) and B35 (password rule) properly, one password rule everywhere. NO commit, NO push.
+
+Work Log:
+- B33: nodemailer ^6.10.1 -> ^10.0.16 (lock 10.0.16; all 16 advisories fixed from 10.0.10; 10.0.16 chosen as ~2 weeks old instead of the 1-day-old 10.2.1); @types/nodemailer removed (v10 ships its own types). App code unchanged (createTransport + sendMail; both import shapes work). scripts/send-test-notification.mjs now sets the same three timeouts as delivery.ts (it had only connectionTimeout, so a dead server took 30 s instead of SMTP_TIMEOUT_MS).
+- Extra (found by npm audit while checking): sanitize-html 2.18.0 -> 2.18.1 (production dependency, wiki; GHSA-c9rx-x947-fp3h stack overflow from crafted iframe content; patch release, 8 days old).
+- B35: new src/lib/password-policy.ts (10+ chars, a letter, a number, max 72 bytes — bcrypt reads only 72) used by the forms (auth-screen register, settings-users new account, settings-profile change password: hint, minLength, check before submit) and by src/lib/server/password-field.ts newPasswordField() in auth.validation (register, password change) and users.validation (new account — was z.string().min(6), no letter/number). Old UI bugs fixed on the way: profile + users forms checked < 8 but said "at least 6". Sign-in unchanged (old passwords keep working). scripts/lib/first-vp.mjs keeps 12+ and gets the 72-byte cap.
+- Tests: new scripts/verify-password-policy.mjs (24 checks, in verify:all); verify-security two invite passwords lengthened to 10+ so they still test the permission rule, not validation.
+- Docs: api-reference (register + invite rule), auth-and-permissions (password rule), CODEBASE-MAP, CHANGELOG, backlog B33 + B35 Done.
+
+Verification (2026-10-23):
+- tsc 0 · eslint 0 · audit-standards 0 violations (206 files) · npm audit: nodemailer and sanitize-html gone; left = dev tools (B34) + the Prisma CLI used only for migrations (needs Prisma 7).
+- Email with nodemailer 10 against a local fake SMTP server: relay without login OK, relay with login OK (AUTH PLAIN), silent server -> timeout after 3 s (= SMTP_TIMEOUT_MS). Through the APP (production build with SMTP_* pointed at the fake server): bug assigned -> "[TCMS] Bug assigned to you" delivered to the developer, right sender and body (6/0); 35 app emails during verify:all, no send errors.
+- Production build (separate copy, deleted): npm run build OK (same 3 old warnings). verify:all on it: 18 of 20 first (role-flows lost its Chrome connection after the first check and hung to the 40-min limit; its lock left permission-toggle NOT RUN; its 6 fixture users removed with --cleanup-stamp=1792704360963, residue 0). Re-run directly: verify-role-flows-e2e 556/0 · verify-permission-toggle-e2e 1491/0. So all 20 suites green on this build: security 164/0, chaos-fixes 37/0, password-policy 24/0, ui-gates 159/0, page-apis 748/0, others as before.
+- DB after all runs: role_permissions 0, *@tcms.test users 0, tcms_verify lock free. Dev :3000 untouched.
+- NOT VERIFIED: a real company SMTP server (only the local fake); the dev server still has the old nodemailer/sanitize-html in memory until it is restarted (owner's server, not restarted); Linux-only scripts NOT RUN ON WINDOWS. Nothing committed or pushed (owner request).
+
+---
+Task ID: commit-cleanup-2026-10-23
+Agent: Main (Claude Code, Opus 5.5) — fast mode, no subagents
+Task: Owner request — remove temporary files that are not needed, commit the rest (no push).
+
+Work Log:
+- Removed: docs/qa/CHAOS-FINDINGS-2026-10-22-after-fix.txt (intermediate dev run, superseded by the production report) and the two chaos *.live.log progress logs (git-ignored). The "before" report's status block now points at CHAOS-FINDINGS-2026-10-22-production.txt.
+- Kept, git-ignored, not touched: .env, .env.bak (owner's secrets backup — owner may delete it), logs/, dev.log, next-env.d.ts, tsconfig.tsbuildinfo.
+- Committed everything else from the chaos-fix, go-live-check and nodemailer/password tasks in one commit. Not pushed.

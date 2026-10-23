@@ -16,6 +16,7 @@ import type { Role, User } from '@/types'
 import { DEFAULT_INVITE_ROLE, ROLE_OPTIONS, canAssignRoles } from '@/lib/roles'
 import { formatDate, roleColor } from '@/lib/format'
 import { handleApiError } from '@/lib/errors'
+import { PASSWORD_MIN_LENGTH, PASSWORD_RULE_TEXT, passwordProblem } from '@/lib/password-policy'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { PermissionDenied } from '@/components/shared/permission-denied'
@@ -160,8 +161,9 @@ export function SettingsUsersView() {
 
   function handleInviteSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (invitePassword.length < 8) {
-      toast.error('Password must be at least 6 characters')
+    const problem = passwordProblem(invitePassword)
+    if (problem) {
+      toast.error(problem)
       return
     }
     createMutation.mutate({
@@ -442,10 +444,10 @@ export function SettingsUsersView() {
                 id="invite-password"
                 type="password"
                 required
-                minLength={6}
+                minLength={PASSWORD_MIN_LENGTH}
                 value={invitePassword}
                 onChange={(e) => setInvitePassword(e.target.value)}
-                placeholder="Min. 6 characters"
+                placeholder={PASSWORD_RULE_TEXT}
               />
             </div>
             <div className="space-y-2">

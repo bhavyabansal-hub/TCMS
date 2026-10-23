@@ -7,7 +7,7 @@
 
 import type { RequestMeta } from '@/lib/activity'
 import { ApiError, paginate, type PaginatedResponse } from '@/lib/api'
-import { ensurePermission, hashPassword, type SessionUser } from '@/lib/auth'
+import { ensurePermission, forgetUserSession, hashPassword, type SessionUser } from '@/lib/auth'
 import { effectivePermissionsFor } from '@/lib/permissions'
 import { logActivity } from '@/lib/activity'
 import { logger } from '@/lib/logger'
@@ -143,6 +143,7 @@ export async function updateUserFields(
   if (input.isActive !== undefined) fields.isActive = input.isActive
   if (input.avatarUrl !== undefined) fields.avatarUrl = input.avatarUrl
   const updated = Object.keys(fields).length > 0 ? await updateUser(userId, fields) : before
+  forgetUserSession(userId) // new role / active state counts from the next request
 
   await logActivity({
     userId: me.userId,
@@ -172,6 +173,7 @@ export async function deactivateUserAccount(
     throw ApiError.forbidden('You can only deactivate accounts below your own role')
   }
   await deactivateUser(userId)
+  forgetUserSession(userId) // the deactivated user is signed out from the next request
   logger.info('User deactivated', { userId, actorId: me.userId })
   await logActivity({
     userId: me.userId,

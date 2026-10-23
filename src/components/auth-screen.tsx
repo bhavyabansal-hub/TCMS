@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Bug, Loader2, ShieldCheck, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { nextFromLocation } from '@/lib/routes'
+import { PASSWORD_MIN_LENGTH, PASSWORD_RULE_TEXT, passwordProblem } from '@/lib/password-policy'
 import { cn } from '@/lib/utils'
 
 type AuthMode = 'signin' | 'register'
@@ -75,6 +76,11 @@ export function AuthScreen() {
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault()
+    const problem = passwordProblem(password)
+    if (problem) {
+      toast.error(problem)
+      return
+    }
     if (password !== confirmPassword) {
       toast.error('Passwords do not match')
       return
@@ -268,10 +274,10 @@ export function AuthScreen() {
                       id="reg-password"
                       type="password"
                       required
-                      minLength={6}
+                      minLength={PASSWORD_MIN_LENGTH}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="At least 6 characters, one number"
+                      placeholder={PASSWORD_RULE_TEXT}
                       autoComplete="new-password"
                       className="h-10"
                     />

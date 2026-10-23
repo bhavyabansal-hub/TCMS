@@ -66,7 +66,10 @@ async function sendTestEmail(to) {
       port: s.port,
       secure: s.secure,
       auth: s.user ? { user: s.user, pass: s.pass } : undefined,
+      // Same three timeouts as the app (src/lib/server/delivery.ts).
       connectionTimeout: EMAIL_TIMEOUT_MS,
+      greetingTimeout: EMAIL_TIMEOUT_MS,
+      socketTimeout: EMAIL_TIMEOUT_MS,
     })
     const info = await transporter.sendMail({
       from: s.from,

@@ -207,7 +207,7 @@ async function accessControl(s, u, e) {
     ['POST wiki without create_wiki_doc', 'POST', '/api/wiki', { title: `sec denied ${STAMP}` }, ['developer', 'viewer']],
     ['POST work log without create_task_report', 'POST', '/api/task-reports', { reportDate: '2001-03-02', tasks: [] }, ['viewer']],
     ['PUT permission toggle', 'PUT', '/api/permissions', { role: 'viewer', action: 'create_bug', enabled: false }, ['manager', 'product', 'developer', 'qa', 'viewer']],
-    ['POST user without manage_users', 'POST', '/api/users', { email: `sec-denied-${STAMP}@tcms.test`, fullName: 'Denied', password: 'Denied123', role: 'viewer' }, ['product', 'developer', 'qa', 'viewer']],
+    ['POST user without manage_users', 'POST', '/api/users', { email: `sec-denied-${STAMP}@tcms.test`, fullName: 'Denied', password: 'Denied12345', role: 'viewer' }, ['product', 'developer', 'qa', 'viewer']],
     ['PUT a VP account (manager included)', 'PUT', `/api/users?id=${u.vp.userId}`, { fullName: 'hijacked' }, ['manager', 'product', 'developer', 'qa', 'viewer']],
     ['DELETE (deactivate) a VP account (manager included)', 'DELETE', `/api/users?id=${u.vp.userId}`, undefined, ['manager', 'product', 'developer', 'qa', 'viewer']],
     ['PUT another manager (manager)', 'PUT', `/api/users?id=${u.manager.userId}`, { isActive: false }, ['product', 'developer', 'qa', 'viewer']],
@@ -677,7 +677,7 @@ async function massAssignment(s, u, e) {
   const mod = await http('POST', '/api/modules', { token: s.manager, body: { name: `sec mass ${STAMP}`, ownerId: u.vp.userId } })
   if (mod.json?.moduleId) created.modules.push(mod.json.moduleId)
   check('module create: owner = caller (ownerId ignored)', (mod.json?.ownerId ?? mod.json?.owner?.userId) === u.manager.userId, JSON.stringify(mod.json ?? {}).slice(0, 120))
-  const inv = await http('POST', '/api/users', { token: s.manager, body: { email: `sec-inv-${STAMP}@tcms.test`, fullName: 'Invited', password: 'Invite123', role: 'vp' } })
+  const inv = await http('POST', '/api/users', { token: s.manager, body: { email: `sec-inv-${STAMP}@tcms.test`, fullName: 'Invited', password: 'Invite12345', role: 'vp' } })
   check('manager cannot create a VP account (403)', inv.status === 403, String(inv.status))
   const promote = await http('PUT', `/api/users?id=${u.viewer.userId}`, { token: s.manager, body: { role: 'manager' } })
   check('manager cannot change roles (403)', promote.status === 403, String(promote.status))

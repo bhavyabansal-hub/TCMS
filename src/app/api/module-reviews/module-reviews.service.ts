@@ -176,7 +176,7 @@ export async function bulkCaseReviewVerdict(
     throw ApiError.badRequest('Comment is required for this verdict — write what needs to change')
   }
 
-  const caseReviews = await listCaseReviewsByModuleReview(moduleReviewId, OPEN_CASE_REVIEW_STATUSES)
+  let caseReviews = await listCaseReviewsByModuleReview(moduleReviewId, OPEN_CASE_REVIEW_STATUSES)
   if (caseReviews.length === 0) {
     throw ApiError.badRequest('No open case reviews to record a verdict on.')
   }
@@ -194,6 +194,10 @@ export async function bulkCaseReviewVerdict(
   await db.$transaction(async (tx) => {
     const changed = await updateModuleReviewRequestStatusIfUnchanged(moduleReviewId, newModuleStatus, expected, tx)
     if (changed === 0) throw ApiError.staleEdit()
+    // Re-read the open case reviews under lock: one resubmitted or decided
+    // since the first read must not get this verdict (chaos test 2026-10-22).
+    caseReviews = await listCaseReviewsByModuleReview(moduleReviewId, OPEN_CASE_REVIEW_STATUSES, tx, { lock: true })
+    if (caseReviews.length === 0) throw ApiError.badRequest('No open case reviews to record a verdict on.')
     // Three statements for the whole module, not three per case (perf audit 2026-10-17).
     await insertReviewEventsMany(
       caseReviews.map((caseReview) => ({
