@@ -3,13 +3,15 @@
 // 400 ApiError so controllers stay thin and bad input never reaches services.
 
 import { z } from 'zod'
+import { idField, optionalIdField } from '@/lib/server/id-field'
 import { ApiError, flattenZodError } from '@/lib/api'
+import { expectedUpdatedAtField } from '@/lib/server/optimistic-lock'
 
 const createModuleSchema = z.object({
   // CAPS (audit 2026-10-09): consistent with test-cases/bugs.
   name: z.string().min(1).max(120),
   description: z.string().max(2_000).optional(),
-  parentId: z.string().max(64).optional().nullable(),
+  parentId: optionalIdField('Invalid parent module'),
   // ownerId is intentionally NOT accepted from the client — the creator is
   // always the owner (legacy rule, enforced by the service).
 })
@@ -19,11 +21,12 @@ const updateModuleSchema = z.object({
   // so no min(1) — behavior preservation over stricter validation.
   name: z.string().max(120).optional(),
   description: z.string().max(2_000).optional(),
-  ownerId: z.string().max(64).optional(),
+  ownerId: idField('Invalid owner').optional(),
+  expectedUpdatedAt: expectedUpdatedAtField,
 })
 
 const submitModuleReviewSchema = z.object({
-  reviewerId: z.string().optional(),
+  reviewerId: z.union([idField('Invalid reviewer'), z.literal('')]).optional(),
   dueDate: z
     .string()
     .optional()

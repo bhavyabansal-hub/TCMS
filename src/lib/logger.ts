@@ -31,10 +31,12 @@ import {
   IS_PRODUCTION,
   LOG_DIR as LOG_DIR_ENV,
   LOG_RETENTION_DAYS as RETENTION_DAYS_ENV,
+  TELEGRAM_API_URL,
   TELEGRAM_LOG_BOT_TOKEN,
   TELEGRAM_LOG_CHAT_ID,
   TELEGRAM_LOG_LEVEL,
   TELEGRAM_LOG_MIN_INTERVAL_MS,
+  TELEGRAM_TIMEOUT_MS,
 } from '@/lib/server/config'
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error'
@@ -94,11 +96,11 @@ async function flushTelegramQueue(): Promise<void> {
   if (batch.length === 0) return
 
   try {
-    const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_LOG_BOT_TOKEN}/sendMessage`, {
+    const res = await fetch(`${TELEGRAM_API_URL}/bot${TELEGRAM_LOG_BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: TELEGRAM_LOG_CHAT_ID, text: batch.join('\n') + dropNote }),
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(TELEGRAM_TIMEOUT_MS),
     })
     if (res.ok) {
       telegramState.failureNotified = false // recovered — re-arm the one-time note
@@ -148,7 +150,40 @@ function ensureDayFiles(day: string): void {
   }
 }
 
-function appendToFile(file: string, line: string): boolean {
+// LOAD: info/debug lines are buffered and written asynchronously (one
+// appendFile per file every FLUSH_MS), so a request never blocks the event loop
+// on disk I/O. Error lines are written synchronously — a crash right after an
+// error must never lose it. Pending lines are flushed on process exit.
+const FLUSH_MS = 100
+const pendingLines = new Map<string, string[]>()
+let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+function flushPendingLines(): void {
+  flushTimer = null
+  for (const [file, lines] of pendingLines) {
+    pendingLines.delete(file)
+    fs.appendFile(file, lines.join('\n') + '\n', (err) => {
+      if (err) fileState.disabledUntilDay = isoDay()
+    })
+  }
+}
+
+function flushPendingLinesSync(): void {
+  for (const [file, lines] of pendingLines) {
+    try {
+      fs.appendFileSync(file, lines.join('\n') + '\n')
+    } catch {
+      /* the console already has these lines */
+    }
+  }
+  pendingLines.clear()
+}
+
+if (typeof process !== 'undefined' && typeof process.on === 'function') {
+  process.on('exit', flushPendingLinesSync)
+}
+
+function appendToFile(file: string, line: string, sync = false): boolean {
   try {
     const day = isoDay()
     if (day !== fileState.day) {
@@ -158,7 +193,18 @@ function appendToFile(file: string, line: string): boolean {
       ensureDayFiles(day)
     }
     if (fileState.disabledUntilDay === day) return false
-    fs.appendFileSync(file, line + '\n')
+    if (sync) {
+      flushPendingLinesSync() // keep the file in order
+      fs.appendFileSync(file, line + '\n')
+      return true
+    }
+    const lines = pendingLines.get(file)
+    if (lines) lines.push(line)
+    else pendingLines.set(file, [line])
+    if (!flushTimer) {
+      flushTimer = setTimeout(flushPendingLines, FLUSH_MS)
+      flushTimer.unref?.()
+    }
     return true
   } catch {
     // Disk problem (permissions, full volume...) — console still has the line.
@@ -192,8 +238,9 @@ function write(level: LogLevel, message: string, meta?: Record<string, unknown>)
   else if (level === 'warn') console.warn(line)
   else console.log(line)
 
-  appendToFile(fileState.appFile || path.join(LOG_DIR, `app-${isoDay()}.log`), line)
-  if (level === 'error') appendToFile(path.join(LOG_DIR, `error-${isoDay()}.log`), line)
+  const sync = level === 'error'
+  appendToFile(fileState.appFile || path.join(LOG_DIR, `app-${isoDay()}.log`), line, sync)
+  if (sync) appendToFile(path.join(LOG_DIR, `error-${isoDay()}.log`), line, true)
 
   queueForTelegram(level, line)
 }

@@ -9,12 +9,13 @@ import {
 } from 'lucide-react'
 
 import { useAuthStore } from '@/store'
-import { REFERENCE_STALE_TIME_MS, bugsApi, modulesApi, taskReportsApi, testCasesApi, usersApi } from '@/lib/client/api'
+import { REFERENCE_STALE_TIME_MS, bugsApi, modulesApi, taskReportsApi, testCasesApi, usersApi, type BugOption, type TestCaseOption } from '@/lib/client/api'
 import { invalidateAfterMutation } from '@/lib/client/invalidate'
-import type { TaskItem, TaskReport, Module, TestCase, Bug } from '@/types'
+import type { TaskItem, TaskReport, Module } from '@/types'
 import { minutesToHuman, todayISO } from '@/lib/format'
 import { handleApiError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
+import { toCsv } from '@/lib/csv-export'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -56,6 +57,12 @@ const EMPTY_TASK: TaskRow = {
   linkUrl: '',
 }
 
+/** Read-only notices on /tasks (REQ-001 R1). At most one is shown. */
+const NOTICE_CANNOT_LOG =
+  'Your role can view work logs but cannot log work. A VP can enable "Create task reports" for your role under Permissions.'
+const NOTICE_OTHER_USER_CAN_LOG = "You are viewing another user's report. Switch back to yourself to make edits."
+const NOTICE_OTHER_USER = "You are viewing another user's report."
+
 function linkTypeForTask(t: TaskItem): LinkType {
   if (t.moduleId) return 'module'
   if (t.testCaseId) return 'test_case'
@@ -77,9 +84,7 @@ function toTaskItem(t: TaskRow): TaskItem {
 const URL_PATTERN = /^https?:\/\/\S+$/i
 
 function downloadCsv(fileName: string, rows: string[][]): void {
-  const csv = rows
-    .map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\n')
+  const csv = toCsv(rows) // quoted + formula-injection safe (src/lib/csv-export.ts)
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -142,24 +147,24 @@ export function TasksView() {
     staleTime: REFERENCE_STALE_TIME_MS,
     queryFn: () => modulesApi.tree(),
   })
+  // Light picker lists (id + title) — the full rows were never shown here.
   const testCasesQuery = useQuery({
-    queryKey: ['test-cases', 'list', 'all-light'],
-    queryFn: () => testCasesApi.list({ pageSize: 200 }),
+    queryKey: ['test-cases', 'options'],
+    queryFn: testCasesApi.options,
+    staleTime: REFERENCE_STALE_TIME_MS,
   })
   const bugsQuery = useQuery({
-    queryKey: ['bugs', 'list', 'all-light'],
-    queryFn: () => bugsApi.list({ pageSize: '200' }),
+    queryKey: ['bugs', 'options'],
+    queryFn: bugsApi.options,
+    staleTime: REFERENCE_STALE_TIME_MS,
   })
 
   const flatModules: Module[] = useMemo(
     () => (modulesQuery.data?.flat ?? []) as Module[],
     [modulesQuery.data]
   )
-  const testCases: TestCase[] = useMemo(
-    () => testCasesQuery.data?.data ?? [],
-    [testCasesQuery.data]
-  )
-  const bugs: Bug[] = useMemo(() => bugsQuery.data?.data ?? [], [bugsQuery.data])
+  const testCases: TestCaseOption[] = useMemo(() => testCasesQuery.data ?? [], [testCasesQuery.data])
+  const bugs: BugOption[] = useMemo(() => bugsQuery.data ?? [], [bugsQuery.data])
 
   // Pick the report for the chosen date
   const reportForDate: TaskReport | undefined = useMemo(() => {
@@ -179,7 +184,18 @@ export function TasksView() {
   const reportsError = !canViewAllReports ? myReportsQuery.isError : userReportsQuery.isError
   const reportsRefetch = () => (!canViewAllReports ? myReportsQuery.refetch() : userReportsQuery.refetch())
 
-  const isReadOnly = canViewAllReports && effectiveUserId !== user?.userId
+  // Read-only without create_task_report (the server enforces it too) or
+  // while viewing another user's log.
+  const canCreateReport = can('create_task_report')
+  const viewingOther = canViewAllReports && effectiveUserId !== user?.userId
+  const isReadOnly = !canCreateReport || viewingOther
+  const notice = viewingOther
+    ? canCreateReport
+      ? NOTICE_OTHER_USER_CAN_LOG
+      : NOTICE_OTHER_USER
+    : !canCreateReport
+      ? NOTICE_CANNOT_LOG
+      : null
 
   // ---- Monthly report export (per user, all tasks of the month) ----
   const exportMutation = useMutation({
@@ -187,7 +203,7 @@ export function TasksView() {
       taskReportsApi.exportMonth(exportMonth, canViewAllReports ? effectiveUserId : undefined),
     onSuccess: (data) => {
       // Human-readable linked names resolved from the reference lists
-      // (a raw UUID column is useless in a report someone will read).
+      // (a bare id column is useless in a report someone will read).
       const moduleById = new Map(flatModules.map((m) => [m.moduleId, m.name]))
       const tcById = new Map(testCases.map((t) => [t.testCaseId, t.title]))
       const bugById = new Map(bugs.map((b) => [b.bugId, b.title]))
@@ -306,11 +322,9 @@ export function TasksView() {
         }
       />
 
-      {isReadOnly && (
+      {notice && (
         <Alert>
-          <AlertDescription>
-            You are viewing another user&apos;s report. Switch back to yourself to make edits.
-          </AlertDescription>
+          <AlertDescription>{notice}</AlertDescription>
         </Alert>
       )}
 
@@ -359,8 +373,8 @@ interface TaskReportFormProps {
   initialNotes: string
   isReadOnly: boolean
   flatModules: Module[]
-  testCases: TestCase[]
-  bugs: Bug[]
+  testCases: TestCaseOption[]
+  bugs: BugOption[]
 }
 
 function TaskReportForm({
@@ -376,7 +390,7 @@ function TaskReportForm({
 
   // Initialize editable state once from props (lazy initializer).
   const [tasks, setTasks] = useState<TaskRow[]>(() =>
-    initialTasks.length ? initialTasks.map(withLinkType) : [{ ...EMPTY_TASK }]
+    initialTasks.length ? initialTasks.map(withLinkType) : isReadOnly ? [] : [{ ...EMPTY_TASK }]
   )
   const [notes, setNotes] = useState<string>(initialNotes)
 
@@ -553,16 +567,20 @@ function TaskReportForm({
               <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
                 <ListTodo className="h-6 w-6 text-muted-foreground" />
               </div>
-              <div>
-                <p className="text-sm font-medium">No tasks logged yet</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Add your first entry for {reportDate}.
-                </p>
-              </div>
-              {!isReadOnly && (
-                <Button size="sm" variant="outline" onClick={addTask}>
-                  <Plus className="h-4 w-4 mr-1" /> Add task
-                </Button>
+              {isReadOnly ? (
+                <p className="text-sm font-medium">No tasks logged for {reportDate}.</p>
+              ) : (
+                <>
+                  <div>
+                    <p className="text-sm font-medium">No tasks logged yet</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Add your first entry for {reportDate}.
+                    </p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={addTask}>
+                    <Plus className="h-4 w-4 mr-1" /> Add task
+                  </Button>
+                </>
               )}
             </div>
           ) : (
@@ -687,8 +705,8 @@ function TaskRowCard({
   task: TaskRow
   isReadOnly: boolean
   flatModules: Module[]
-  testCases: TestCase[]
-  bugs: Bug[]
+  testCases: TestCaseOption[]
+  bugs: BugOption[]
   onRemove: () => void
   onUpdate: (patch: Partial<TaskRow>) => void
 }) {

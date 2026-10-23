@@ -3,13 +3,16 @@
 // 400 ApiError so controllers stay thin and bad input never reaches services.
 
 import { z } from 'zod'
+import { idField } from '@/lib/server/id-field'
 import { ApiError, flattenZodError } from '@/lib/api'
+import { expectedUpdatedAtField } from '@/lib/server/optimistic-lock'
 
 // POST ?id=...&action=approve-all — body is an optional comment. Legacy used a
 // `typeof body.comment === 'string'` check with a default text; a missing or
 // null comment falls back to that default in the service.
 const approveAllSchema = z.object({
   comment: z.string().optional().nullable(),
+  expectedUpdatedAt: expectedUpdatedAtField,
 })
 
 // POST ?id=...&action=bulk-verdict — one verdict for every open case review.
@@ -18,11 +21,12 @@ const approveAllSchema = z.object({
 const bulkVerdictSchema = z.object({
   verdict: z.enum(['approved', 'failed', 'needs_revision']),
   comment: z.string().optional().nullable(),
+  expectedUpdatedAt: expectedUpdatedAtField,
 })
 
 // POST ?id=...&action=change-reviewer — the new reviewer's user id.
 const changeReviewerSchema = z.object({
-  reviewerId: z.string().min(1, 'Reviewer is required'),
+  reviewerId: idField('Reviewer is required'),
 })
 
 function parseOrThrow<T>(schema: z.ZodType<T>, body: unknown): T {

@@ -4,7 +4,7 @@
 
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
-import { newId } from '@/lib/server/id'
+import { insertReturningId } from '@/lib/server/insert'
 import type { TestCaseSqlRow, TestCaseHistorySqlRow } from '@/types/sql-rows'
 
 /** Anything that can run raw SQL: the singleton client OR one interactive
@@ -46,6 +46,12 @@ function buildWhere(filters: TestCaseFilters): Prisma.Sql {
   return parts.length ? Prisma.sql`WHERE ${Prisma.join(parts, ' AND ')}` : Prisma.empty
 }
 
+/** Light picker rows (id + title), newest first — no JSON columns, no joins. */
+export async function listTestCaseOptionRows(limit: number): Promise<{ test_case_id: string; title: string }[]> {
+  return db.$queryRaw<{ test_case_id: string; title: string }[]>`
+    SELECT test_case_id, title FROM test_cases ORDER BY updated_at DESC LIMIT ${limit}`
+}
+
 export async function countTestCases(filters: TestCaseFilters): Promise<number> {
   const rows = await db.$queryRaw<{ total: number | bigint }[]>`
     SELECT COUNT(*) AS total FROM test_cases tc ${buildWhere(filters)}`
@@ -83,17 +89,16 @@ export interface TestCaseInsert {
 }
 
 export async function insertTestCase(input: TestCaseInsert): Promise<TestCaseSqlRow> {
-  // MySQL has no RETURNING: generate the PK app-side, insert, then read back.
-  const testCaseId = newId()
-  await db.$executeRaw`
+  // MySQL has no RETURNING: insert, take the new key from LAST_INSERT_ID(), then read back.
+  const testCaseId = await insertReturningId(Prisma.sql`
     INSERT INTO test_cases
-      (test_case_id, module_id, title, description, preconditions, expected_result,
+      (module_id, title, description, preconditions, expected_result,
        priority, status, tags, author_id, last_edited_by_id, assignee_id, created_at, updated_at)
     VALUES
-      (${testCaseId}, ${input.moduleId}, ${input.title}, ${input.description}, ${input.preconditions},
+      (${input.moduleId}, ${input.title}, ${input.description}, ${input.preconditions},
        ${input.expectedResult},
        ${input.priority}, 'draft', CAST(${JSON.stringify(input.tags)} AS JSON),
-       ${input.authorId}, ${input.lastEditedById}, ${input.assigneeId}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+       ${input.authorId}, ${input.lastEditedById}, ${input.assigneeId}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
   const created = await findTestCaseById(testCaseId)
   if (!created) throw new Error('Inserted test case could not be read back')
   return created
@@ -171,6 +176,44 @@ export async function updateTestCaseIfVersion(
   return Number(changed) > 0
 }
 
+/** Ids of the cases in these modules with one of these statuses, row-locked
+ *  until the transaction ends (id order, so two submits never deadlock). */
+export async function lockCaseIdsInModules(moduleIds: string[], statuses: string[], tx: SqlExecutor): Promise<string[]> {
+  if (moduleIds.length === 0) return []
+  const rows = await tx.$queryRaw<{ test_case_id: string }[]>`
+    SELECT test_case_id FROM test_cases
+    WHERE module_id IN (${Prisma.join(moduleIds)}) AND status IN (${Prisma.join(statuses)})
+    ORDER BY test_case_id
+    FOR UPDATE`
+  return rows.map((row) => String(row.test_case_id))
+}
+
+/** Module delete: the module's reviews (and their case reviews) cascade away,
+ *  so a case still "in_review" through one of them goes back to "draft" —
+ *  otherwise it stays in review forever and can never be resubmitted. */
+export async function resetCasesReviewedInModules(moduleIds: string[], tx: SqlExecutor): Promise<number> {
+  if (moduleIds.length === 0) return 0
+  const changed = await tx.$executeRaw`
+    UPDATE test_cases tc
+    SET tc.status = 'draft', tc.updated_at = UTC_TIMESTAMP(3)
+    WHERE tc.status = 'in_review'
+      AND EXISTS (
+        SELECT 1 FROM review_requests r
+        JOIN module_review_requests m ON m.module_review_request_id = r.module_review_id
+        WHERE r.test_case_id = tc.test_case_id
+          AND r.status IN ('pending', 'in_progress')
+          AND m.module_id IN (${Prisma.join(moduleIds)}))`
+  return Number(changed)
+}
+
+/** Locks the case row until the transaction ends and returns its current
+ *  status (null = deleted). Serializes parallel submit-review calls. */
+export async function lockTestCaseStatus(testCaseId: string, tx: SqlExecutor): Promise<string | null> {
+  const rows = await tx.$queryRaw<{ status: string }[]>`
+    SELECT status FROM test_cases WHERE test_case_id = ${testCaseId} FOR UPDATE`
+  return rows[0]?.status ?? null
+}
+
 export async function updateTestCaseStatus(
   testCaseId: string,
   status: string,
@@ -179,6 +222,27 @@ export async function updateTestCaseStatus(
   await tx.$executeRaw`
     UPDATE test_cases SET status = ${status}, updated_at = UTC_TIMESTAMP(3)
     WHERE test_case_id = ${testCaseId}`
+}
+
+/** Batch form of updateTestCaseStatus — ONE statement for any number of cases
+ *  (module submit / bulk verdict; no per-row round trips). */
+export async function updateTestCaseStatusMany(
+  testCaseIds: string[],
+  status: string,
+  tx: SqlExecutor = db
+): Promise<void> {
+  if (testCaseIds.length === 0) return
+  await tx.$executeRaw`
+    UPDATE test_cases SET status = ${status}, updated_at = UTC_TIMESTAMP(3)
+    WHERE test_case_id IN (${Prisma.join(testCaseIds)})`
+}
+
+/** Batch form of hardDeleteTestCase — ONE DELETE (cascades as below). Returns rows removed. */
+export async function hardDeleteTestCases(testCaseIds: string[], tx: SqlExecutor = db): Promise<number> {
+  if (testCaseIds.length === 0) return 0
+  const affected = await tx.$executeRaw`
+    DELETE FROM test_cases WHERE test_case_id IN (${Prisma.join(testCaseIds)})`
+  return Number(affected)
 }
 
 /** PERMANENT delete: removes the test_cases row. The schema's ON DELETE
@@ -204,8 +268,8 @@ export interface TestCaseHistoryInsert {
 
 export async function insertTestCaseHistory(input: TestCaseHistoryInsert, tx: SqlExecutor = db): Promise<void> {
   await tx.$executeRaw`
-    INSERT INTO test_case_history (history_id, test_case_id, version, snapshot, changed_by_id, change_summary, created_at)
-    VALUES (${newId()}, ${input.testCaseId}, ${input.version}, CAST(${JSON.stringify(input.snapshot)} AS JSON),
+    INSERT INTO test_case_history (test_case_id, version, snapshot, changed_by_id, change_summary, created_at)
+    VALUES (${input.testCaseId}, ${input.version}, CAST(${JSON.stringify(input.snapshot)} AS JSON),
             ${input.changedById}, ${input.changeSummary}, UTC_TIMESTAMP(3))`
 }
 

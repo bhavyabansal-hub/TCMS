@@ -131,6 +131,15 @@ export function safeNextPath(raw: string | null | undefined): string {
   if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/login')) {
     return '/dashboard'
   }
+  // Browsers read "\" as "/" and drop tabs/newlines, so "/\evil.com" or "/\t/evil.com"
+  // would leave the site (security test 2026-10-17). Only plain same-origin paths pass.
+  if (/[\\\s\u0000-\u001f\u007f]/.test(raw)) return '/dashboard'
+  try {
+    const base = 'http://tcms.invalid'
+    if (new URL(raw, base).origin !== base) return '/dashboard'
+  } catch {
+    return '/dashboard'
+  }
   return raw.slice(0, 512)
 }
 

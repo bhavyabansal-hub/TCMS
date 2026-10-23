@@ -22,6 +22,7 @@ import { useAuthStore, useViewStore } from '@/store'
 import { statusColor, formatDateTime, truncate } from '@/lib/format'
 import { handleApiError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
+import { toCsv } from '@/lib/csv-export'
 import { Pagination } from '@/components/shared/pagination'
 import { StateLoading, EmptyState } from '@/components/shared/state'
 import { QueryErrorAlert } from '@/components/shared/query-error'
@@ -75,10 +76,14 @@ export function TestCasesView() {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  // Any filter/page change invalidates what the ticks point at — clear them.
-  useEffect(() => {
+  // Any filter/page change invalidates what the ticks point at — clear them (reset during
+  // render when the key changes, React's pattern instead of a setState-in-effect).
+  const selectionKey = `${search}|${statusFilter}|${priorityFilter}|${moduleFilter}|${page}`
+  const [selectionFor, setSelectionFor] = useState(selectionKey)
+  if (selectionFor !== selectionKey) {
+    setSelectionFor(selectionKey)
     setSelected(new Set())
-  }, [search, statusFilter, priorityFilter, moduleFilter, page])
+  }
   // Cross-account safety: an import tab state must never outlive its permission.
   const activeTab: 'all' | 'import' = tab === 'import' && canCreate ? 'import' : 'all'
 
@@ -109,27 +114,19 @@ export function TestCasesView() {
       toast.error('No data to export')
       return
     }
-    // AUDIT FIX (2026-10-09): the old exporter joined raw fields with commas —
-    // any comma/newline/quote inside a title corrupted the file, and fields
-    // beginning with = + - @ executed as spreadsheet formulas (CSV injection).
-    // Every cell is now RFC-4180 quoted, and formula-leading cells are
-    // neutralized with a leading apostrophe (standard Excel/Sheets defense).
-    const cell = (value: string): string => {
-      const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value
-      return `"${safe.replace(/"/g, '""')}"`
-    }
+    // Quoted + formula-injection safe (src/lib/csv-export.ts, shared by every export).
     const headers = ['ID', 'Title', 'Module', 'Priority', 'Status', 'Tags', 'Author', 'Updated']
     const rows = data.data.map((tc) => [
-      cell(tc.testCaseId),
-      cell(tc.title),
-      cell(tc.module?.name ?? ''),
-      cell(tc.priority),
-      cell(tc.status),
-      cell(tc.tags.join('; ')),
-      cell(tc.author?.fullName ?? ''),
-      cell(formatDateTime(tc.updatedAt)),
+      tc.testCaseId,
+      tc.title,
+      tc.module?.name ?? '',
+      tc.priority,
+      tc.status,
+      tc.tags.join('; '),
+      tc.author?.fullName ?? '',
+      formatDateTime(tc.updatedAt),
     ])
-    const csv = [headers, ...rows].map((r) => r.join(',')).join('\n')
+    const csv = toCsv([headers, ...rows])
     downloadTextFile(`test-cases-${new Date().toISOString().slice(0, 10)}.csv`, csv)
     toast.success('Exported CSV')
   }
@@ -397,7 +394,7 @@ export function TestCasesView() {
                       </TableCell>
                     )}
                     <TableCell className="font-mono text-xs text-muted-foreground">
-                      {tc.testCaseId.slice(-6)}
+                      {tc.testCaseId}
                     </TableCell>
                     <TableCell className="font-medium max-w-xs">
                       <TestCaseTitleHover tc={tc} />

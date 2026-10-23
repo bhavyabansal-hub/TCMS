@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { usersApi } from '@/lib/client/api'
+import { usersApi, REFERENCE_STALE_TIME_MS } from '@/lib/client/api'
 import { useAuthStore } from '@/store'
 
 export function ChangeReviewerDialog({
@@ -33,7 +33,7 @@ export function ChangeReviewerDialog({
   const optionsQuery = useQuery({
     queryKey: ['users', 'options'],
     queryFn: usersApi.options,
-    enabled: true,
+    staleTime: REFERENCE_STALE_TIME_MS,
   })
   const options = (optionsQuery.data ?? []).filter((u) => u.userId !== currentReviewerId)
 

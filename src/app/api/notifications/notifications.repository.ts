@@ -2,7 +2,7 @@
 // Contains ONLY data access: no ownership checks, no HTTP, no logging.
 //
 // NOTE: the notifications table has NO updated_at column (see the baseline
-// migration prisma/migrations/20261015034822_init_mysql) — updates therefore
+// migration prisma/migrations/20261017120000_baseline_numeric_ids) — updates therefore
 // only touch is_read, and the charter's "every UPDATE bumps updated_at" rule
 // does not apply to this table.
 

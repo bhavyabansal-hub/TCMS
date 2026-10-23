@@ -6,6 +6,7 @@
 // produced exclusively through the serializers.
 
 import type { RequestMeta } from '@/lib/activity'
+import { resolveExpectedUpdatedAt } from '@/lib/server/optimistic-lock'
 import { ApiError, paginate, type PaginatedResponse } from '@/lib/api'
 import { can, ensurePermission, type SessionUser } from '@/lib/auth'
 import { logActivity, parseJson } from '@/lib/activity'
@@ -21,24 +22,40 @@ import {
   countTestCases,
   findTestCaseById,
   hardDeleteTestCase,
+  hardDeleteTestCases,
   insertTestCase,
   insertTestCaseHistory,
   listTestCaseHistory,
+  listTestCaseOptionRows,
   listTestCases,
   listTestCasesByIds,
+  lockTestCaseStatus,
   updateTestCaseIfVersion,
   updateTestCaseStatus,
   type TestCaseFilters,
   type TestCaseUpdateFields,
 } from './test-cases.repository'
 import {
+  closeOpenReviewsForTestCases,
   findLatestCycleForTestCase,
   insertReviewRequest,
   listEventsByRequestIds,
   listReviewsByTestCase,
 } from '../reviews/reviews.repository'
+import {
+  completeModuleReviewsWithNothingOpen,
+  listOpenModuleReviewIdsForCases,
+  lockCaseReviewsOfCases,
+  lockModuleReviews,
+} from '../module-reviews/module-reviews.repository'
 
 // ---------- Queries ----------
+
+/** Light picker list (id + title) — e.g. linking a work-log line to a test case. */
+export async function listTestCaseOptions(input: { limit: number }): Promise<{ testCaseId: string; title: string }[]> {
+  const rows = await listTestCaseOptionRows(input.limit)
+  return rows.map((r) => ({ testCaseId: r.test_case_id, title: r.title }))
+}
 
 export async function listTestCasesPaginated(
   q: Record<string, string>
@@ -144,11 +161,16 @@ export async function updateTestCaseFields(
     priority?: string
     tags?: string[]
     assigneeId?: string | null
+    expectedUpdatedAt?: string
   }>,
   meta: RequestMeta
 ): Promise<SerializedTestCase> {
   const tc = await findTestCaseById(testCaseId)
   if (!tc) throw ApiError.notFound('Test case not found')
+  // Optimistic lock on what the CLIENT loaded (B2); the version guard below
+  // additionally covers the read -> write window inside this request.
+  const expected = resolveExpectedUpdatedAt(input.expectedUpdatedAt, tc.updated_at)
+  if (expected.getTime() !== tc.updated_at.getTime()) throw ApiError.staleEdit()
   const isAuthor = tc.author_id === me.userId
   if (!ensureCanEdit(me, isAuthor)) throw ApiError.forbidden('You can only edit your own test cases')
   // Same fail-fast contract as create: unknown FK targets 404, never a 500.
@@ -161,13 +183,30 @@ export async function updateTestCaseFields(
     if (!assignee) throw ApiError.notFound('Assignee not found')
   }
 
-  // Snapshot the current version before mutating (versioning guarantee), then
-  // apply the edit — BOTH inside ONE transaction with optimistic locking:
-  //   - crash between the two statements rolls back the whole edit (no orphan
-  //     history row, no half-applied version bump — i.e. no corruption);
-  //   - a concurrent editor who saved first loses the version race and gets a
-  //     clear 409 instead of having their change silently overwritten.
+  // Snapshot the current version and apply the edit in ONE transaction with
+  // optimistic locking:
+  //   - the guarded UPDATE runs FIRST, so it takes the row's exclusive lock before
+  //     the history insert takes the FK's shared lock: a parallel save waits, then
+  //     loses the version race with a clean 409 (the reverse order deadlocked, 1213);
+  //   - a crash between the two statements rolls back the whole edit (no orphan
+  //     history row, no half-applied version bump — i.e. no corruption).
   const updated = await db.$transaction(async (tx) => {
+    const fields: TestCaseUpdateFields = {
+      version: tc.version + 1,
+      lastEditedById: me.userId,
+    }
+    if (input.title !== undefined) fields.title = input.title
+    if (input.description !== undefined) fields.description = input.description
+    if (input.preconditions !== undefined) fields.preconditions = input.preconditions
+    if (input.expectedResult !== undefined) fields.expectedResult = input.expectedResult
+    if (input.priority !== undefined) fields.priority = input.priority
+    if (input.tags !== undefined) fields.tags = input.tags
+    if (input.moduleId !== undefined) fields.moduleId = input.moduleId ?? null
+    if (input.assigneeId !== undefined) fields.assigneeId = input.assigneeId ?? null
+
+    const applied = await updateTestCaseIfVersion(testCaseId, tc.version, fields, tx)
+    if (!applied) throw ApiError.staleEdit()
+
     await insertTestCaseHistory(
       {
         testCaseId,
@@ -187,26 +226,6 @@ export async function updateTestCaseFields(
       },
       tx
     )
-
-    const fields: TestCaseUpdateFields = {
-      version: tc.version + 1,
-      lastEditedById: me.userId,
-    }
-    if (input.title !== undefined) fields.title = input.title
-    if (input.description !== undefined) fields.description = input.description
-    if (input.preconditions !== undefined) fields.preconditions = input.preconditions
-    if (input.expectedResult !== undefined) fields.expectedResult = input.expectedResult
-    if (input.priority !== undefined) fields.priority = input.priority
-    if (input.tags !== undefined) fields.tags = input.tags
-    if (input.moduleId !== undefined) fields.moduleId = input.moduleId ?? null
-    if (input.assigneeId !== undefined) fields.assigneeId = input.assigneeId ?? null
-
-    const applied = await updateTestCaseIfVersion(testCaseId, tc.version, fields, tx)
-    if (!applied) {
-      throw ApiError.conflict(
-        'This test case was just changed by someone else. Reload it, re-apply your edit, and save again.'
-      )
-    }
     return findTestCaseById(testCaseId, tx)
   })
   if (!updated) throw new Error('Updated test case could not be read back')
@@ -237,6 +256,9 @@ export async function updateTestCaseFields(
   return serializeTestCase(updated)
 }
 
+/** Case statuses that refuse a new review submission. */
+const NOT_SUBMITTABLE_STATUSES = new Set(['in_review', 'approved'])
+
 export async function submitTestCaseForReview(
   me: SessionUser,
   testCaseId: string,
@@ -246,6 +268,11 @@ export async function submitTestCaseForReview(
   const tc = await findTestCaseById(testCaseId)
   if (!tc) throw ApiError.notFound('Test case not found')
   ensurePermission(me, 'submit_review')
+  // State machine (deep-test R2-4): a case already in review or approved cannot be
+  // submitted again — the UI only offers Submit for draft / needs_revision.
+  if (NOT_SUBMITTABLE_STATUSES.has(tc.status)) {
+    throw ApiError.badRequest(`This test case is ${tc.status.replace('_', ' ')} — it cannot be submitted for review again`)
+  }
 
   // Resolve the reviewer: explicit choice -> assignee -> first active lead/admin.
   let reviewerId = input.reviewerId
@@ -260,10 +287,25 @@ export async function submitTestCaseForReview(
   }
   if (!reviewerId) throw ApiError.badRequest('No reviewer available. Assign a reviewer first.')
 
-  const cycle = (await findLatestCycleForTestCase(testCaseId)) + 1
   // Review request + status flip commit together: a crash can never leave a
   // pending review whose test case still reads "draft" (or vice versa).
-  const review = await db.$transaction(async (tx) => {
+  // The old open cycle (e.g. after needs_revision) is closed in the same unit, so a
+  // late verdict on it is refused and the queue holds one open review (R2-1).
+  // The case row is locked and its status re-checked first: two parallel
+  // submits used to both pass the check above and open two reviews (chaos 2026-10-22).
+  const { review, cycle } = await db.$transaction(async (tx) => {
+    // Lock order: module reviews -> case reviews -> case (see lockModuleReviews).
+    const supersededModuleReviews = await listOpenModuleReviewIdsForCases([testCaseId], tx)
+    await lockModuleReviews(supersededModuleReviews, tx)
+    await lockCaseReviewsOfCases([testCaseId], tx)
+    const status = await lockTestCaseStatus(testCaseId, tx)
+    if (status === null) throw ApiError.notFound('Test case not found')
+    if (NOT_SUBMITTABLE_STATUSES.has(status)) {
+      throw ApiError.badRequest(`This test case is ${status.replace('_', ' ')} — it cannot be submitted for review again`)
+    }
+    const cycle = (await findLatestCycleForTestCase(testCaseId, tx)) + 1
+    await closeOpenReviewsForTestCases([testCaseId], tx)
+    await completeModuleReviewsWithNothingOpen(supersededModuleReviews, tx)
     const created = await insertReviewRequest(
       {
         testCaseId,
@@ -275,7 +317,7 @@ export async function submitTestCaseForReview(
       tx
     )
     await updateTestCaseStatus(testCaseId, 'in_review', tx)
-    return created
+    return { review: created, cycle }
   })
 
   await logActivity({
@@ -320,7 +362,16 @@ export async function deleteTestCasePermanently(
     throw ApiError.forbidden('Only the author of this test case or a role with delete rights can delete it.')
   }
 
-  const removed = await hardDeleteTestCase(testCaseId)
+  // The case's reviews cascade away with it; a module review left with nothing
+  // to review is completed in the same transaction (chaos test 2026-10-22).
+  const removed = await db.$transaction(async (tx) => {
+    const moduleReviewIds = await listOpenModuleReviewIdsForCases([testCaseId], tx)
+    await lockModuleReviews(moduleReviewIds, tx) // lock order: module reviews -> case reviews -> case
+    await lockCaseReviewsOfCases([testCaseId], tx)
+    const count = await hardDeleteTestCase(testCaseId, tx)
+    await completeModuleReviewsWithNothingOpen(moduleReviewIds, tx)
+    return count
+  })
   if (removed === 0) throw ApiError.notFound('Test case not found')
 
   await logActivity({
@@ -370,11 +421,15 @@ export async function deleteTestCasesPermanently(
     )
   }
 
+  // One DELETE for the whole selection (cascades history, reviews, bug links);
+  // module reviews left with nothing to review are completed with it.
+  const deletableIds = deletable.map((tc) => tc.test_case_id)
   const deleted = await db.$transaction(async (tx) => {
-    let count = 0
-    for (const tc of deletable) {
-      count += await hardDeleteTestCase(tc.test_case_id, tx)
-    }
+    const moduleReviewIds = await listOpenModuleReviewIdsForCases(deletableIds, tx)
+    await lockModuleReviews(moduleReviewIds, tx) // lock order: module reviews -> case reviews -> cases
+    await lockCaseReviewsOfCases(deletableIds, tx)
+    const count = await hardDeleteTestCases(deletableIds, tx)
+    await completeModuleReviewsWithNothingOpen(moduleReviewIds, tx)
     return count
   })
 

@@ -3,7 +3,12 @@
 //   withheld -> the user CANNOT see it (UI) nor call it (API 403)
 // Covers every fix from the permission-correctness pass.
 // Sandbox-only. Usage: node scripts/verify-permissions.mjs
-const BASE = 'http://localhost:3000'
+import { cleanupRunEntities } from './lib/suite-cleanup.mjs'
+
+// A well-formed id that no row has (keys are INT UNSIGNED AUTO_INCREMENT, max 4294967295).
+const MISSING_ID = '999999999'
+
+const BASE = process.env.TCMS_BASE_URL || 'http://localhost:3000'
 let pass = 0
 let fail = 0
 
@@ -39,6 +44,9 @@ async function api(token, method, path, body) {
   return { status: res.status, data }
 }
 
+// B16: every row this run creates is recorded here and removed at the end.
+const created = { cases: [], bugs: [], moduleReviews: [] }
+
 async function main() {
   const vp = await login('admin@tcms.com', 'Admin@123')
   const manager = await login('teamlead@tcms.com', 'Lead@123')
@@ -60,8 +68,11 @@ async function main() {
     steps: [{ stepNumber: 1, action: 'Run', expected: 'Pass' }],
   })
   check('fixture: qa created a draft case', !!tcCreate.data?.testCaseId, JSON.stringify(tcCreate.data).slice(0, 100))
+  if (tcCreate.data?.testCaseId) created.cases.push(tcCreate.data.testCaseId)
   const modSubmit = await api(qa, 'PUT', `/api/modules?id=${target?.moduleId}&action=submit-review`, { includeSubmodules: false })
   check('fixture: module review raised (manager auto-picked)', modSubmit.status === 200, JSON.stringify(modSubmit.data).slice(0, 140))
+  const raisedId = modSubmit.data?.moduleReview?.moduleReviewRequestId
+  if (raisedId) created.moduleReviews.push(raisedId)
 
   // ---- 1. GRANTED -> Manager SEES the raised reviews ----
   const mQueue = await api(manager, 'GET', '/api/reviews?action=queue')
@@ -104,20 +115,30 @@ async function main() {
   check('manager GET module-review detail -> 200', mMod.status === 200, `got ${mMod.status}`)
 
   // ---- 5. Bug triage: viewer read-only; developer (create_bug) can triage ----
+  // Runs on a bug this suite creates (B16: never touch seed bugs).
   const bugs = await api(developer, 'GET', '/api/bugs?pageSize=5')
   check('developer can list bugs', bugs.status === 200)
-  let bugId = bugs.data?.data?.[0]?.bugId
-  if (!bugId) {
-    const created = await api(developer, 'POST', '/api/bugs', { title: 'Permission battery temp bug', severity: 'low' })
-    bugId = created.data?.bugId
-    check('developer created a bug (create_bug granted)', !!bugId)
-  }
+  const tempBug = await api(developer, 'POST', '/api/bugs', {
+    title: `Permission battery temp bug ${Date.now()}`,
+    description: 'Fixture for the permissions suite',
+    severity: 'low',
+    moduleId: target?.moduleId,
+  })
+  const bugId = tempBug.data?.bugId
+  if (bugId) created.bugs.push(bugId)
+  check('developer created a bug (create_bug granted)', !!bugId, `got ${tempBug.status} ${JSON.stringify(tempBug.data).slice(0, 120)}`)
   const vBug = await api(viewer, 'PUT', `/api/bugs?id=${bugId}`, { status: 'in_progress' })
   check('viewer PUT bug status -> 403 (no bug rights)', vBug.status === 403, `got ${vBug.status}`)
   const dBug = await api(developer, 'PUT', `/api/bugs?id=${bugId}`, { status: 'in_progress' })
   check('developer PUT bug status -> 200 (create_bug participant)', dBug.status === 200, `got ${dBug.status} ${JSON.stringify(dBug.data).slice(0, 80)}`)
-  const dBugAssign = await api(developer, 'PUT', `/api/bugs?id=${bugId}`, { assignedToId: null })
-  check('developer reassign bug -> 403 (assign_bug withheld)', dBugAssign.status === 403, `got ${dBugAssign.status}`)
+  // T1-2: re-sending the current assignee is a no-op, so the check must
+  // request a real change (unassigned -> a real user) to hit assign_bug.
+  const devOpts = await api(developer, 'GET', '/api/users?action=options')
+  const assigneeId = (devOpts.data ?? []).find((u) => u.userId)?.userId
+  const dBugAssign = await api(developer, 'PUT', `/api/bugs?id=${bugId}`, { assignedToId: assigneeId })
+  check('developer reassign bug -> 403 (assign_bug withheld)', !!assigneeId && dBugAssign.status === 403, `got ${dBugAssign.status}`)
+  const dBugSame = await api(developer, 'PUT', `/api/bugs?id=${bugId}`, { assignedToId: null })
+  check('developer re-sends current assignee -> 200 (no-op, T1-2)', dBugSame.status === 200, `got ${dBugSame.status}`)
   const mBugAssign = await api(manager, 'PUT', `/api/bugs?id=${bugId}`, { assignedToId: null })
   check('manager reassign bug -> 200 (assign_bug granted)', mBugAssign.status === 200, `got ${mBugAssign.status}`)
 
@@ -159,6 +180,15 @@ async function main() {
   const dReviews3 = await api(developer, 'GET', '/api/reviews?pageSize=10')
   check('developer GET /reviews -> 403 again after revert', dReviews3.status === 403, `got ${dReviews3.status}`)
 
+  // ---- 7b. R11 (REQ-001): PUT /task-reports?id= requires create_task_report,
+  //      checked before the lookup. A missing id + valid body {} -> writes nothing.
+  const vPut = await api(viewer, 'PUT', `/api/task-reports?id=${MISSING_ID}`, {})
+  check('viewer PUT /task-reports?id=<missing id> body {} -> 403 Insufficient role',
+    vPut.status === 403 && vPut.data?.error === 'Insufficient role', `got ${vPut.status} ${JSON.stringify(vPut.data)}`)
+  const qPut = await api(qa, 'PUT', `/api/task-reports?id=${MISSING_ID}`, {})
+  check('qa PUT /task-reports?id=<missing id> body {} -> 404 Report not found (holder passes the gate)',
+    qPut.status === 404, `got ${qPut.status} ${JSON.stringify(qPut.data)}`)
+
   // ---- 8. override hygiene: every remaining row must be a KNOWN grant ----
   // The deployment intentionally seeds {developer, qa_engineer}:perform_review
   // (QA marathon). Anything outside that set means a probe leaked state.
@@ -168,10 +198,16 @@ async function main() {
   const unknownRows = nonDefault.filter((t) => !KNOWN_GRANTS.has(`${t.role}:${t.action}`))
   check('only known seed overrides remain (or pristine defaults)', unknownRows.length === 0, `got ${JSON.stringify(nonDefault)}`)
 
+  await cleanupRunEntities(check, created)
+
   console.log('======================================')
   console.log(`PERMISSION-BEHAVIOR RESULT: ${pass} passed, ${fail} failed`)
   console.log('======================================')
   if (fail > 0) process.exit(1)
 }
 
-main().catch((e) => { console.error(e); process.exit(1) })
+main().catch(async (e) => {
+  console.error(e)
+  await cleanupRunEntities(check, created)
+  process.exit(1)
+})

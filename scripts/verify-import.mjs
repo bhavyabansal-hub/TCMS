@@ -8,7 +8,10 @@
  *   4. Imported cases REALLY live in the target module (list by moduleId)
  *   5. Developer (no create_test_case): import -> 403
  *   6. Bad requests: missing module / missing title column / no data rows -> 400
+ *   7. Cleanup (B16): the imported cases are deleted by id at the end, residue 0
  */
+import { cleanupRunEntities } from './lib/suite-cleanup.mjs'
+
 const BASE = 'http://localhost:3000'
 let pass = 0
 let fail = 0
@@ -32,6 +35,8 @@ async function login(email, password) {
 }
 // First-party CSRF marker on every call (GETs tolerate it, mutations require it).
 const H = (token) => ({ 'Content-Type': 'application/json', 'X-Requested-With': 'tcms', Cookie: `tcms-access=${token}` })
+
+const created = { cases: [] }
 
 async function main() {
   // ---------- logins ----------
@@ -96,6 +101,7 @@ async function main() {
     body: JSON.stringify({ moduleId: target.moduleId, fileName: 'e2e-import.csv', csv }),
   })
   const imp = await impRes.json()
+  for (const r of imp.results ?? []) if (r.status === 'created' && r.testCaseId) created.cases.push(r.testCaseId)
   check('POST import -> 200 (QA)', impRes.status === 200, JSON.stringify(imp).slice(0, 200))
   check('summary counts 3 imported / 3 failed', imp.imported === 3 && imp.failed === 3, `imported=${imp.imported} failed=${imp.failed}`)
   check('summary names the target module', imp.moduleName === target.name)
@@ -141,9 +147,14 @@ async function main() {
   // ---------- 7. bad requests ----------
   const noModule = await fetch(`${BASE}/api/test-cases?action=import`, {
     method: 'POST', headers: H(qa.token),
-    body: JSON.stringify({ moduleId: 'not-a-real-module', fileName: 'x.csv', csv: 'title\nabc' }),
+    body: JSON.stringify({ moduleId: '999999999', fileName: 'x.csv', csv: 'title\nabc' }),
   })
   check('import into missing module -> 404', noModule.status === 404)
+  const badModuleId = await fetch(`${BASE}/api/test-cases?action=import`, {
+    method: 'POST', headers: H(qa.token),
+    body: JSON.stringify({ moduleId: 'not-a-real-module', fileName: 'x.csv', csv: 'title\nabc' }),
+  })
+  check('import with a malformed module id -> 400', badModuleId.status === 400)
   const noTitleCol = await fetch(`${BASE}/api/test-cases?action=import`, {
     method: 'POST', headers: H(qa.token),
     body: JSON.stringify({ moduleId: target.moduleId, fileName: 'x.csv', csv: 'name,desc\nabc,def' }),
@@ -160,8 +171,13 @@ async function main() {
   })
   check('non-csv file name -> 400', wrongExt.status === 400)
 
+  await cleanupRunEntities(check, created)
   console.log(`\n${pass} passed, ${fail} failed`)
   process.exit(fail ? 1 : 0)
 }
 
-main().catch((e) => { console.error(e); process.exit(1) })
+main().catch(async (e) => {
+  console.error(e)
+  await cleanupRunEntities(check, created)
+  process.exit(1)
+})

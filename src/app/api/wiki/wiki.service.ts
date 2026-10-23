@@ -20,6 +20,7 @@ import { logActivity } from '@/lib/activity'
 import { logger } from '@/lib/logger'
 import { serializeWikiDocument, type SerializedWikiDocument } from '@/lib/serializers'
 import sanitizeHtml from 'sanitize-html'
+import { MAX_UPLOAD_MB } from '@/lib/server/config'
 import {
   countWikiDocuments,
   deleteWikiDocumentById,
@@ -35,7 +36,7 @@ import type { CreateWikiDocInput, UpdateWikiDocInput } from './wiki.validation'
 
 // ---------- Constraints ----------
 
-export const WIKI_MAX_FILE_BYTES = 10 * 1024 * 1024 // 10 MB
+export const WIKI_MAX_FILE_BYTES = MAX_UPLOAD_MB * 1024 * 1024 // TCMS_MAX_UPLOAD_MB (default 10)
 
 /** Upload allowlist — office docs, PDFs, text formats and images. Checked by
  *  extension; the browser-provided MIME type is stored for serving. */

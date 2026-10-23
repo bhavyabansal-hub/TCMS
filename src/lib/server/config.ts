@@ -34,6 +34,9 @@ function int(key: string, fallback: number): number {
 export const NODE_ENV = str('NODE_ENV', 'development')
 export const IS_PRODUCTION = NODE_ENV === 'production'
 
+/** TCMS_DEPLOY_ENV=production on the real server (guards, Secure cookies, required app URL). */
+export const IS_PRODUCTION_DEPLOYMENT = str('TCMS_DEPLOY_ENV') === 'production'
+
 /** Extra hosts trusted for Origin checking (CSRF), comma-separated. */
 export const EXTRA_ALLOWED_HOSTS = str('TCMS_EXTRA_ALLOWED_HOSTS')
 
@@ -61,6 +64,26 @@ export const JWT_SECRET = JWT_SECRET_VALUE
  *  on the loopback/gateway can no longer inject fake notifications. */
 export const WS_NOTIFY_SECRET = str('WS_NOTIFY_SECRET')
 
+// ---------- Sessions + sign-in ----------
+
+/** Access JWT lifetime (minutes) and refresh-token lifetime (days). */
+export const ACCESS_TOKEN_MINUTES = int('TCMS_ACCESS_TOKEN_MINUTES', 15)
+export const REFRESH_TOKEN_DAYS = int('TCMS_REFRESH_TOKEN_DAYS', 7)
+
+/** Per-email sign-in lock: this many failed attempts lock the email for LOCK_SECONDS. */
+export const LOGIN_MAX_FAILURES = int('TCMS_LOGIN_MAX_FAILURES', 5)
+export const LOGIN_LOCK_SECONDS = int('TCMS_LOGIN_LOCK_SECONDS', 60)
+
+/** Self-signup server gate (fail-closed: only the exact value 'true' opens register). */
+export const ALLOW_SIGNUP = str('TCMS_ALLOW_SIGNUP') === 'true'
+
+// ---------- Request limits ----------
+
+/** Largest accepted JSON request body; bigger bodies answer 413 before parsing. */
+export const MAX_JSON_BODY_BYTES = int('TCMS_MAX_JSON_BODY_KB', 2_048) * 1024
+/** Largest wiki file upload (MB); the multipart body limit is this plus 1 MB. */
+export const MAX_UPLOAD_MB = int('TCMS_MAX_UPLOAD_MB', 10)
+
 // ---------- First-run seeding ----------
 
 /**
@@ -70,13 +93,49 @@ export const WS_NOTIFY_SECRET = str('WS_NOTIFY_SECRET')
  */
 export const ENABLE_SEED = str('TCMS_ENABLE_SEED').toLowerCase() === 'true'
 
+// ---------- Maintenance + abuse protection (backlog B5/B6) ----------
+
+/**
+ * Maintenance switch: TCMS_READ_ONLY=true answers every write (POST/PUT/PATCH/DELETE)
+ * with 503 except sign-in, token refresh and sign-out (src/lib/server/read-only.ts).
+ * Read at boot — restart the app to change it.
+ */
+export const READ_ONLY = str('TCMS_READ_ONLY').toLowerCase() === 'true'
+
+/** Per-IP login limit (in memory, single instance): failed sign-ins per window → 429. */
+export const LOGIN_IP_MAX_FAILURES = int('TCMS_LOGIN_IP_MAX_FAILURES', 30)
+export const LOGIN_IP_WINDOW_SECONDS = int('TCMS_LOGIN_IP_WINDOW_SECONDS', 900)
+
 // ---------- Logging ----------
+
+/** Folder with the nightly *.sql.gz backups the in-app staleness check watches
+ *  (empty = <working dir>/backups). */
+export const BACKUP_DIR = str('TCMS_BACKUP_DIR')
 
 /** Directory for rotating log files (logs/app-*.log, logs/error-*.log). */
 export const LOG_DIR = str('LOG_DIR', 'logs')
 
 /** Days to keep log files; older files are purged once per day. */
 export const LOG_RETENTION_DAYS = int('LOG_RETENTION_DAYS', 14)
+
+// ---------- Database pool ----------
+
+/** The app's MySQL URL (app user, DML only). Never logged. */
+export const DATABASE_URL = str('DATABASE_URL')
+
+/** Pool size per process. Applied when DATABASE_URL has no connection_limit; an explicitly
+ *  set TCMS_DB_CONNECTION_LIMIT always wins. 40 serves 1000+ users on one instance (HLD §7). */
+export const DB_CONNECTION_LIMIT = int('TCMS_DB_CONNECTION_LIMIT', 40)
+export const DB_CONNECTION_LIMIT_SET = Boolean(str('TCMS_DB_CONNECTION_LIMIT'))
+
+/** Seconds a request waits for a free pooled connection before 503 "server busy". */
+export const DB_POOL_TIMEOUT_SECONDS = int('TCMS_DB_POOL_TIMEOUT', 10)
+
+/** A request slower than this is logged as a warning; faster successful reads are debug lines. */
+export const SLOW_REQUEST_MS = int('TCMS_SLOW_REQUEST_MS', 1_000)
+
+/** Prisma prints every SQL statement (`prisma:query`) only when this is true. Off by default. */
+export const LOG_SQL = str('TCMS_LOG_SQL').toLowerCase() === 'true'
 
 /**
  * Dedicated LOGS BOT (separate from the user-notification bot): when both
@@ -101,19 +160,26 @@ export const SMTP_PORT = int('SMTP_PORT', 587)
 export const SMTP_SECURE = str('SMTP_SECURE').toLowerCase() === 'true' || str('SMTP_PORT') === '465'
 export const SMTP_USER = str('SMTP_USER')
 export const SMTP_PASS = str('SMTP_PASS')
-export const SMTP_FROM = str('SMTP_FROM', 'tcms@localhost')
+/** Sender address; required when SMTP_HOST is set (checked at boot). */
+export const SMTP_FROM = str('SMTP_FROM')
+export const SMTP_TIMEOUT_MS = int('SMTP_TIMEOUT_MS', 8_000)
+
+/** Telegram Bot API base (both bots) and its per-request timeout. */
+export const TELEGRAM_API_URL = str('TELEGRAM_API_URL', 'https://api.telegram.org').replace(/\/+$/, '')
+export const TELEGRAM_TIMEOUT_MS = int('TELEGRAM_TIMEOUT_MS', 5_000)
 
 /** Loopback broadcast endpoint of the notifications WS mini-service. */
 export const WS_NOTIFY_URL = str('WS_NOTIFY_URL', 'http://127.0.0.1:3004/notify')
+export const WS_NOTIFY_TIMEOUT_MS = int('WS_NOTIFY_TIMEOUT_MS', 3_000)
 
 // ---------- Crew Desk integration ----------
 
 /**
- * Base URL of the Crew Desk API. When unset the start script boots the local
- * MOCK on 127.0.0.1:3010 and points this at it — real addresses are only
- * ever configured deliberately via .env.
+ * Base URL of the Crew Desk API — from .env only, no built-in address. Unset =
+ * the integration is off (no Crew Desk call is ever made). Outgoing requests go
+ * ONLY to this host (no user input can change it — SSRF guard).
  */
-export const CREWDESK_BASE_URL = str('CREWDESK_BASE_URL', 'https://api.crewdesk.shipgl.in').replace(/\/+$/, '')
+export const CREWDESK_BASE_URL = str('CREWDESK_BASE_URL').trim().replace(/\/+$/, '')
 /** Whether the deployment explicitly set CREWDESK_BASE_URL (mock vs real backend display). */
 export const CREWDESK_BASE_URL_SET = Boolean(str('CREWDESK_BASE_URL'))
 

@@ -15,7 +15,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { PageHeader } from '@/components/shared/page-header'
-import { crewdeskApi, modulesApi } from '@/lib/client/api'
+import { crewdeskApi, modulesApi, REFERENCE_STALE_TIME_MS } from '@/lib/client/api'
 import { invalidateAfterMutation } from '@/lib/client/invalidate'
 import type { Module } from '@/types'
 import { formatDateTime } from '@/lib/format'
@@ -64,16 +64,35 @@ export function IntegrationsView() {
   const [preview, setPreview] = useState<{ title: string; status: string; canLink: boolean } | null>(null)
   const [manualCopy, setManualCopy] = useState<{ comment: string; moduleUrl: string } | null>(null)
 
-  const modulesQuery = useQuery({ queryKey: ['modules', 'flat'], queryFn: () => modulesApi.tree() })
-  const configQuery = useQuery({ queryKey: ['crewdesk', 'config'], queryFn: crewdeskApi.config })
+  // Crew Desk calls only run for manage_integrations holders (the server
+  // gates them too); without it the page renders PermissionDenied below.
+  const canManageIntegrations = !!user && can('manage_integrations')
+  // Same key + staleTime as every other module-tree consumer (one shared cache
+  // entry, no duplicate call), and only when the page is actually shown.
+  const modulesQuery = useQuery({
+    queryKey: ['modules', 'tree'],
+    queryFn: modulesApi.tree,
+    staleTime: REFERENCE_STALE_TIME_MS,
+    enabled: canManageIntegrations,
+  })
+  const configQuery = useQuery({
+    queryKey: ['crewdesk', 'config'],
+    queryFn: crewdeskApi.config,
+    enabled: canManageIntegrations,
+  })
   const linksQuery = useQuery({
     queryKey: ['crewdesk', 'links'],
     queryFn: () => crewdeskApi.list({ pageSize: '50' }),
+    enabled: canManageIntegrations,
   })
+  // Only when Crew Desk credentials are set: without them the check is certain to
+  // answer 502 (page-API audit 2026-10-17) — the status strip says "not configured".
+  const crewdeskConfigured = configQuery.data?.authConfigured === true
   const emailCheckQuery = useQuery({
     queryKey: ['crewdesk', 'email-check'],
     queryFn: crewdeskApi.emailCheck,
     retry: 0,
+    enabled: canManageIntegrations && crewdeskConfigured,
   })
 
   const invalidate = () => {
@@ -207,7 +226,7 @@ export function IntegrationsView() {
   const refreshAll = () => {
     void configQuery.refetch()
     void linksQuery.refetch()
-    if (!manual) void emailCheckQuery.refetch()
+    if (!manual && crewdeskConfigured) void emailCheckQuery.refetch()
   }
 
   // STRICT in-view guard (second layer; the sidebar already hides the tab):
@@ -308,7 +327,9 @@ export function IntegrationsView() {
           label={
             manual
               ? 'Verification not required'
-              : emailCheckQuery.isLoading
+              : !crewdeskConfigured
+                ? 'Crew Desk not configured'
+                : emailCheckQuery.isLoading
                 ? 'Checking your email…'
                 : emailStatus === 'verified'
                   ? 'Email verified'

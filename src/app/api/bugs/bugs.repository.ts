@@ -4,7 +4,7 @@
 
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
-import { newId } from '@/lib/server/id'
+import { insertReturningId } from '@/lib/server/insert'
 import type { BugSqlRow } from '@/types/sql-rows'
 
 /** Standard JOIN select — bug plus module/reportedBy/assignedTo refs
@@ -39,6 +39,12 @@ function buildWhere(filters: BugFilters): Prisma.Sql {
   // over the legacy case-sensitive `contains` filter).
   if (filters.search) parts.push(Prisma.sql`b.title LIKE ${`%${filters.search}%`}`)
   return parts.length ? Prisma.sql`WHERE ${Prisma.join(parts, ' AND ')}` : Prisma.empty
+}
+
+/** Light picker rows (id + title), newest first — no JSON columns, no joins. */
+export async function listBugOptionRows(limit: number): Promise<{ bug_id: string; title: string }[]> {
+  return db.$queryRaw<{ bug_id: string; title: string }[]>`
+    SELECT bug_id, title FROM bugs ORDER BY created_at DESC LIMIT ${limit}`
 }
 
 export async function countBugs(filters: BugFilters): Promise<number> {
@@ -78,18 +84,17 @@ export interface BugInsert {
 }
 
 export async function insertBug(input: BugInsert): Promise<BugSqlRow> {
-  // MySQL has no RETURNING: generate the PK app-side, insert, then read back.
-  const bugId = newId()
-  await db.$executeRaw`
+  // MySQL has no RETURNING: insert, take the new key from LAST_INSERT_ID(), then read back.
+  const bugId = await insertReturningId(Prisma.sql`
     INSERT INTO bugs
-      (bug_id, title, description, severity, status, environment, steps_to_reproduce,
+      (title, description, severity, status, environment, steps_to_reproduce,
        expected_behaviour, actual_behaviour, reported_by_id, assigned_to_id,
        module_id, attachments, created_at, updated_at)
     VALUES
-      (${bugId}, ${input.title}, ${input.description}, ${input.severity}, 'open',
+      (${input.title}, ${input.description}, ${input.severity}, 'open',
        ${input.environment}, ${input.stepsToReproduce}, ${input.expectedBehaviour},
        ${input.actualBehaviour}, ${input.reportedById}, ${input.assignedToId},
-       ${input.moduleId}, CAST(${JSON.stringify([])} AS JSON), UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+       ${input.moduleId}, CAST(${JSON.stringify([])} AS JSON), UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
   const created = await findBugById(bugId)
   if (!created) throw new Error('Inserted bug could not be read back')
   return created
@@ -109,8 +114,14 @@ export interface BugUpdateFields {
   resolvedAt?: Date | null
 }
 
-/** Partial UPDATE — every write also bumps updated_at (raw SQL skips @updatedAt). */
-export async function updateBug(bugId: string, fields: BugUpdateFields): Promise<BugSqlRow> {
+/** Guarded partial UPDATE — applies only while updated_at still equals
+ *  `expectedUpdatedAt` (optimistic lock); returns null when another write landed
+ *  first. Every write also bumps updated_at (raw SQL skips @updatedAt). */
+export async function updateBugIfUnchanged(
+  bugId: string,
+  fields: BugUpdateFields,
+  expectedUpdatedAt: Date
+): Promise<BugSqlRow | null> {
   const sets: Prisma.Sql[] = []
   if (fields.title !== undefined) sets.push(Prisma.sql`title = ${fields.title}`)
   if (fields.description !== undefined) sets.push(Prisma.sql`description = ${fields.description}`)
@@ -125,8 +136,10 @@ export async function updateBug(bugId: string, fields: BugUpdateFields): Promise
   if (fields.resolvedAt !== undefined) sets.push(Prisma.sql`resolved_at = ${fields.resolvedAt}`)
   sets.push(Prisma.sql`updated_at = UTC_TIMESTAMP(3)`)
 
-  await db.$executeRaw`
-    UPDATE bugs SET ${Prisma.join(sets)} WHERE bug_id = ${bugId}`
+  const changed = await db.$executeRaw`
+    UPDATE bugs SET ${Prisma.join(sets)}
+    WHERE bug_id = ${bugId} AND updated_at = ${expectedUpdatedAt}`
+  if (Number(changed) === 0) return null
   const updated = await findBugById(bugId)
   if (!updated) throw new Error('Updated bug could not be read back')
   return updated

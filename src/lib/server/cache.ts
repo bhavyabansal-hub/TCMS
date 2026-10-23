@@ -20,6 +20,11 @@
 
 const MAX_ENTRIES = 500
 
+/** Shared reference data (module tree, user picker rows): cleared by logActivity
+ *  after every write; the TTL is only a safety net for unlogged paths (seed). */
+export const REFERENCE_CACHE_PREFIX = 'ref:'
+export const REFERENCE_CACHE_TTL_MS = 30_000
+
 interface CacheEntry {
   value: unknown
   expiresAt: number
@@ -63,8 +68,13 @@ export function cacheSet(key: string, value: unknown, ttlMs: number): void {
   store.set(key, { value, expiresAt: Date.now() + ttlMs })
 }
 
+// Bumped by every invalidation: a load that started before an invalidation of
+// its key must not store its (possibly stale) result afterwards.
+let generation = 0
+
 /** Drops every key starting with the prefix; returns how many were removed. */
 export function invalidateCache(prefix: string): number {
+  generation++
   let removed = 0
   for (const key of store.keys()) {
     if (key.startsWith(prefix)) {
@@ -72,6 +82,8 @@ export function invalidateCache(prefix: string): number {
       removed++
     }
   }
+  // Later callers start a fresh load instead of joining one that may be stale.
+  for (const key of inflight.keys()) if (key.startsWith(prefix)) inflight.delete(key)
   return removed
 }
 
@@ -87,12 +99,13 @@ export async function withCache<T>(key: string, ttlMs: number, loader: () => Pro
   const pending = inflight.get(key) as Promise<T> | undefined
   if (pending) return pending
 
+  const startedAt = generation
   const promise = (async () => {
     const value = await loader()
-    cacheSet(key, value, ttlMs)
+    if (generation === startedAt) cacheSet(key, value, ttlMs)
     return value
   })().finally(() => {
-    inflight.delete(key)
+    if (inflight.get(key) === promise) inflight.delete(key)
   })
 
   inflight.set(key, promise)

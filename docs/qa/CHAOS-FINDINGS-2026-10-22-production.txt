@@ -1,0 +1,189 @@
+TCMS CHAOS TEST — 6 live users in parallel
+Date: 2026-10-22T18:29:56.940Z  ->  2026-10-22T18:36:31.888Z
+Server: http://localhost:3999   Duration: 6.5 min   Requests: 6375   Stamp: 1792693796940
+Users: vp, manager, product, developer, qa_engineer, viewer (temporary, removed after the run)
+
+RESULT: NOTHING BROKE
+
+=== FINDINGS (where the app broke / a test failed) ===
+none
+
+=== PLANNED RACE SCENARIOS (what happened) ===
+- approve while the author deletes the case: no case
+- verdict while the VP revokes perform_review: no case
+- two verdicts + a forward on one review at once: 409,409,200
+- double submit-review of one case: no case
+- edit while someone deletes the case: edit 409, delete 200, after 404
+- link bug to a case being deleted: link 200, delete 200
+- module review while the VP deletes the module: submit 404, delete 200, new case none
+- reviewer deactivated while approving: no case
+- manager demoted to viewer while deleting: delete 200, demote 200, next delete 403
+- 5 parallel work-log saves for one day: 200,200,200,200,200 rows=1
+- permission toggle storm while QA creates cases: matrix after storm: enabled=false
+- approve-all twice at once on one module review: 200,409
+- approve while the author deletes the case: verdict 409, delete 200
+- verdict while the VP revokes perform_review: verdict 200, revoke 200
+- two verdicts + a forward on one review at once: 200,409,409
+- double submit-review of one case: 200,409,409
+- edit while someone deletes the case: no case
+- link bug to a case being deleted: no fixtures
+- module review while the VP deletes the module: submit 404, delete 200, new case none
+- reviewer deactivated while approving: verdict 200, deactivate 200, next request 401
+- manager demoted to viewer while deleting: no case
+- 5 parallel work-log saves for one day: 200,200,200,200,200 rows=1
+- permission toggle storm while QA creates cases: matrix after storm: enabled=false
+- approve-all twice at once on one module review: 200,409
+- approve while the author deletes the case: verdict 409, delete 200
+- verdict while the VP revokes perform_review: verdict 403, revoke 200
+- two verdicts + a forward on one review at once: 200,409,409
+- double submit-review of one case: no case
+- edit while someone deletes the case: no case
+- link bug to a case being deleted: no fixtures
+- module review while the VP deletes the module: submit 404, delete 200, new case none
+- reviewer deactivated while approving: no case
+- manager demoted to viewer while deleting: no case
+- 5 parallel work-log saves for one day: 200,200,200,200,200 rows=1
+- permission toggle storm while QA creates cases: matrix after storm: enabled=1
+- approve-all twice at once on one module review: 200,409
+- approve while the author deletes the case: no case
+- verdict while the VP revokes perform_review: no case
+- two verdicts + a forward on one review at once: 200,409,409
+- double submit-review of one case: no case
+- edit while someone deletes the case: no case
+- link bug to a case being deleted: no fixtures
+- module review while the VP deletes the module: submit 404, delete 200, new case none
+- reviewer deactivated while approving: verdict 200, deactivate 200, next request 401
+- manager demoted to viewer while deleting: no case
+- 5 parallel work-log saves for one day: 200,200,200,200,200 rows=1
+- permission toggle storm while QA creates cases: matrix after storm: enabled=false
+- approve-all twice at once on one module review: 200,409
+- approve while the author deletes the case: verdict 409, delete 200
+- verdict while the VP revokes perform_review: no case
+- two verdicts + a forward on one review at once: 409,409,200
+- double submit-review of one case: 200,409,409
+- edit while someone deletes the case: edit 200, delete 200, after 404
+- link bug to a case being deleted: no fixtures
+- module review while the VP deletes the module: submit 404, delete 200, new case none
+- reviewer deactivated while approving: no case
+- manager demoted to viewer while deleting: no case
+- 5 parallel work-log saves for one day: 200,200,200,200,200 rows=1
+- permission toggle storm while QA creates cases: matrix after storm: enabled=1
+- approve-all twice at once on one module review: 200,409
+- approve while the author deletes the case: no case
+- verdict while the VP revokes perform_review: no case
+- two verdicts + a forward on one review at once: 409,409,200
+- double submit-review of one case: 200,409,409
+- edit while someone deletes the case: no case
+- link bug to a case being deleted: no fixtures
+- module review while the VP deletes the module: submit 404, delete 200, new case none
+
+=== END-OF-RUN DATA CHECKS ===
+- cases with >1 open review: 0
+- cases "in_review" without an open review: 0
+- open reviews on cases not "in_review": 0
+- open module reviews with nothing left to review: 0
+- open reviews assigned to an inactive user (end of run): 0
+- duplicate work-log days: 0
+- cases with duplicate history versions: 0
+
+=== REQUESTS BY ACTION (status counts, slowest, first error text) ===
+- activity logs: n=272 [200x140 401x28 403x104] max 533 ms  — 401: Unauthorized | 403: Only roles with view-activity-log rights (VP / Manager)
+- case history: n=127 [200x77 401x50] max 44 ms  — 401: Unauthorized
+- case reviews: n=127 [200x77 401x50] max 104 ms  — 401: Unauthorized
+- change role: n=14 [200x14] max 49 ms
+- create bug: n=435 [200x291 400x1 401x28 403x105 404x10] max 643 ms  — 400: A referenced item does not exist — check the selected module, user or test case. | 401: Unauthorized | 403: Insufficient role | 404: Module not found
+- create module: n=154 [200x151 404x3] max 509 ms  — 404: Parent module not found
+- create test case: n=695 [200x439 400x66 401x28 403x150 404x12] max 670 ms  — 400: Invalid input | 401: Unauthorized | 403: Insufficient role | 404: Module not found
+- create wiki doc: n=29 [200x14 403x15] max 839 ms  — 403: Only roles with create-wiki rights can create documents
+- dashboard: n=49 [200x36 401x13] max 226 ms  — 401: Unauthorized
+- deactivate user: n=6 [200x6] max 36 ms
+- delete module: n=40 [200x38 404x2] max 78 ms  — 404: Module not found
+- delete own test case: n=33 [200x33] max 206 ms
+- delete test case: n=59 [200x59] max 632 ms
+- edit module: n=67 [200x66 404x1] max 136 ms  — 404: Module not found
+- edit test case: n=312 [200x258 409x54] max 1018 ms  — 409: This item was changed by someone else — reload
+- edit wiki doc: n=29 [200x29] max 49 ms
+- forward review: n=26 [200x10 400x11 404x5] max 94 ms  — 400: This review has already been completed — nothing to forward | 404: Review not found
+- get bug: n=198 [200x198] max 525 ms
+- get module review: n=85 [200x76 404x9] max 56 ms  — 404: Module review not found
+- get module: n=67 [200x66 404x1] max 128 ms  — 404: Module not found
+- get review: n=285 [200x205 403x35 404x45] max 167 ms  — 403: Only roles with perform-review rights can view reviews | 404: Review not found
+- get test case: n=261 [200x259 404x2] max 391 ms  — 404: Test case not found
+- get wiki doc: n=14 [200x14] max 141 ms
+- health /api/ready: n=78 [200x78] max 98 ms
+- hostile: 10k title: n=9 [400x9] max 16 ms  — 400: Invalid input
+- hostile: 3 MB body: n=8 [413x8] max 32 ms  — 413: Request body too large — the limit is 2048 KB
+- hostile: 5000-char search: n=8 [400x8] max 41 ms  — 400: Invalid search query
+- hostile: 600 linked ids: n=8 [400x8] max 18 ms  — 400: Invalid input
+- hostile: broken JSON: n=8 [400x8] max 42 ms  — 400: Invalid input
+- hostile: case into deleted module: n=8 [400x8] max 21 ms  — 400: Invalid input
+- hostile: edit deleted case: n=8 [404x8] max 18 ms  — 404: Test case not found
+- hostile: history of deleted case: n=8 [200x8] max 18 ms
+- hostile: huge module id: n=9 [400x9] max 15 ms  — 400: Invalid input
+- hostile: id=0: n=8 [404x8] max 20 ms  — 404: Test case not found
+- hostile: id=1e3: n=8 [404x8] max 17 ms  — 404: Bug not found
+- hostile: id=abc: n=8 [404x8] max 47 ms  — 404: Test case not found
+- hostile: make self vp: n=8 [403x8] max 9 ms  — 403: Admin only
+- hostile: negative module id: n=8 [400x8] max 316 ms  — 400: Invalid input
+- hostile: null body verdict: n=8 [400x8] max 9 ms  — 400: Invalid input
+- hostile: page=-1 size=100000: n=8 [200x8] max 34 ms
+- hostile: permission self-grant: n=8 [403x8] max 12 ms  — 403: Only the VP (or a role granted manage_permissions) can change permissions
+- hostile: priority P9: n=9 [400x9] max 66 ms  — 400: Invalid input
+- hostile: reportDate garbage: n=8 [400x8] max 19 ms  — 400: Invalid input
+- hostile: review self as reviewer of deleted case: n=8 [404x8] max 15 ms  — 404: Test case not found
+- hostile: steps not array: n=9 [400x9] max 20 ms  — 400: Invalid input
+- hostile: task minutes 99999: n=8 [400x8] max 18 ms  — 400: Invalid input
+- hostile: unicode/emoji title: n=8 [400x8] max 11 ms  — 400: Invalid input
+- link bug to case: n=71 [200x36 403x26 404x9] max 76 ms  — 403: Only roles with bug-authoring rights can link test cases | 404: Test case not found
+- list bugs: n=203 [200x144 401x59] max 69 ms  — 401: Unauthorized
+- list test cases: n=203 [200x144 401x59] max 478 ms  — 401: Unauthorized
+- list users: n=101 [200x65 401x10 403x26] max 244 ms  — 401: Unauthorized | 403: Admin only
+- module review approve-all: n=31 [200x12 400x12 403x4 404x3] max 113 ms  — 400: This module review has already been completed | 403: Only the assigned reviewer can record verdicts for this module review | 404: Module review not found
+- module review bulk-verdict: n=28 [200x11 400x12 403x2 404x3] max 158 ms  — 400: This module review has already been completed | 403: Only the assigned reviewer can record verdicts for this module review | 404: Module review not found
+- module review change reviewer: n=21 [200x4 400x14 404x3] max 110 ms  — 400: This module review is already assigned to that reviewer | 404: Module review not found
+- modules tree: n=203 [200x144 401x59] max 88 ms  — 401: Unauthorized
+- my notifications: n=114 [200x98 401x16] max 345 ms  — 401: Unauthorized
+- my task reports: n=5 [200x5] max 14 ms
+- open test case: n=127 [200x64 401x50 404x13] max 71 ms  — 401: Unauthorized | 404: Test case not found
+- race: approve-all twice: n=10 [200x5 409x5] max 131 ms  — 409: This item was changed by someone else — reload
+- race: deactivate reviewer: n=2 [200x2] max 32 ms
+- race: deactivated reviewer acts again: n=2 [401x2] max 9 ms  — 401: Unauthorized
+- race: delete case under review: n=3 [200x3] max 38 ms
+- race: delete during edit: n=2 [200x2] max 61 ms
+- race: delete module: n=6 [200x6] max 66 ms
+- race: delete while demoted: n=1 [200x1] max 80 ms
+- race: delete while link: n=1 [200x1] max 41 ms
+- race: demote manager: n=1 [200x1] max 76 ms
+- race: demoted manager deletes again: n=1 [403x1] max 4 ms  — 403: Only the author of this test case or a role with delete rights can delete it.
+- race: double submit: n=9 [200x3 409x6] max 259 ms  — 409: Someone else is saving the same item right now — try again.
+- race: forward: n=6 [200x3 409x3] max 184 ms  — 409: This item was changed by someone else — reload
+- race: link while delete: n=1 [200x1] max 23 ms
+- race: module review submit: n=6 [404x6] max 69 ms  — 404: Module not found
+- race: reactivate reviewer: n=2 [200x2] max 23 ms
+- race: restore manager: n=1 [200x1] max 18 ms
+- race: restore perform_review: n=2 [200x2] max 21 ms
+- race: revoke perform_review: n=2 [200x2] max 29 ms
+- race: storm reset: n=5 [200x5] max 26 ms
+- race: task report same day: n=25 [200x25] max 273 ms
+- race: toggle storm: n=60 [200x60] max 322 ms
+- race: verdict A: n=6 [200x3 409x3] max 62 ms  — 409: This item was changed by someone else — reload
+- race: verdict B: n=6 [409x6] max 81 ms  — 409: This item was changed by someone else — reload
+- reactivate user: n=6 [200x6] max 90 ms
+- read all notifications: n=56 [200x56] max 229 ms
+- read permission matrix: n=107 [200x71 401x10 403x26] max 241 ms  — 401: Unauthorized | 403: Only the VP (or a role granted manage_permissions) can view permissions
+- reports: n=83 [200x83] max 391 ms
+- restore permission: n=3 [200x3] max 38 ms
+- review list: n=1 [200x1] max 12 ms
+- review verdict: n=253 [200x68 400x87 403x55 404x40 409x3] max 734 ms  — 400: This review has already been completed | 403: Only roles with perform-review rights can review | 404: Review not found | 409: This item was changed by someone else — reload
+- search: n=127 [200x83 400x31 401x13] max 295 ms  — 400: Invalid search query | 401: Unauthorized
+- submit case review: n=167 [200x97 400x70] max 940 ms  — 400: This test case is in review — it cannot be submitted for review again
+- submit module review: n=66 [200x51 400x12 404x3] max 102 ms  — 400: No eligible test cases (draft or needs_revision) found in this module. | 404: Module not found
+- task report upsert: n=86 [200x86] max 740 ms
+- task summary: n=83 [200x83] max 159 ms
+- toggle permission: n=128 [200x128] max 139 ms
+- update bug: n=198 [200x147 403x51] max 399 ms  — 403: Only roles with bug rights (create / assign) can edit bugs
+- viewer deletes a case: n=36 [401x10 403x23 404x3] max 26 ms  — 401: Unauthorized | 403: Only the author of this test case or a role with delete rights can delete it. | 404: Test case not found
+- who am i: n=58 [200x42 401x16] max 110 ms  — 401: Unauthorized
+
+=== CLEANUP ===
+{"found":{"modules":99,"cases":340,"bugs":292,"reviews":155,"moduleReviews":34,"wiki":14,"taskReports":4},"notifications":1029,"crew_desk_links":0,"bugs":292,"review_requests":155,"module_review_requests":34,"test_cases":340,"history_by_fixtures":0,"modules":53,"wiki":14,"task_reports":4,"refresh_tokens":6,"login_attempts":0,"activity_logs":2154,"users":6,"role_permissions":0,"residue":{"users":0,"cases":0,"bugs":0,"modules":0,"role_permissions":0}}

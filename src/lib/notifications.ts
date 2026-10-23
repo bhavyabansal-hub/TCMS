@@ -7,7 +7,7 @@
 // outcome and never fail the caller.
 
 import { logger } from './logger'
-import { WS_NOTIFY_SECRET, WS_NOTIFY_URL } from '@/lib/server/config'
+import { WS_NOTIFY_SECRET, WS_NOTIFY_TIMEOUT_MS, WS_NOTIFY_URL } from '@/lib/server/config'
 import { findUserById } from './server/user.repository'
 import { insertNotification } from './server/notification.repository'
 import { deliverNotification } from './server/delivery'
@@ -40,7 +40,7 @@ export interface CreateNotificationInput {
 // When the service is absent the app degrades to REFRESH-VISIBLE delivery:
 // the DB row below is the guaranteed channel and the client sees it on its
 // next list fetch (page load, socket reconnect, tab re-visible) — there are
-// NO polling timers anywhere in this app (docs/12 §1).
+// NO polling timers anywhere in this app (`docs/architecture/realtime-and-notifications.md` §1).
 // URL comes from the central config (WS_NOTIFY_URL, default 127.0.0.1:3004).
 
 async function broadcastToWs(payload: {
@@ -61,7 +61,7 @@ async function broadcastToWs(payload: {
         ...(WS_NOTIFY_SECRET ? { 'x-notify-secret': WS_NOTIFY_SECRET } : {}),
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(3_000),
+      signal: AbortSignal.timeout(WS_NOTIFY_TIMEOUT_MS),
     })
   } catch {
     // Don't fail (or spam logs for) the main operation if the WS service is unavailable.
@@ -82,7 +82,9 @@ export async function createNotification(input: CreateNotificationInput) {
       entityId: input.entityId ?? null,
     })
 
-    await broadcastToWs({
+    // Not awaited: a slow or hung WS service must never delay the request
+    // (broadcastToWs has its own timeout and never throws).
+    void broadcastToWs({
       userId: input.userId,
       type: input.type,
       title: input.title,
@@ -95,11 +97,9 @@ export async function createNotification(input: CreateNotificationInput) {
     // deliverNotification never throws; the catch is belt-and-suspenders so
     // delivery can never break the business operation that notified.
     //
-    // SERVERLESS NOTE: on Vercel the function is frozen as soon as the HTTP
-    // response is sent, so a bare fire-and-forget (`void deliver...`) can be
-    // cut off mid-send and the message silently never arrives. Schedule the
-    // send with after() so it runs (and completes) after the response, and
-    // fall back to fire-and-forget when no request scope exists (scripts).
+    // Scheduled with after() so the send runs after the response is sent (the
+    // request never waits for SMTP / Telegram); fire-and-forget when no request
+    // scope exists (scripts).
     const deliveryTarget = {
       email: user.email,
       telegramChatId: user.telegram_chat_id,

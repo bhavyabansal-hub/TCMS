@@ -43,7 +43,6 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
   useEffect(() => {
     const el = editorRef.current
     if (el && el.innerHTML !== value) el.innerHTML = value
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value])
 
   function exec(action: Cmd) {

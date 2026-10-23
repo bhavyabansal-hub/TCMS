@@ -1,8 +1,9 @@
+import { Prisma } from '@prisma/client'
 // Crew Desk link repository — the ONLY place Crew Desk link SQL lives.
 // Raw SQL through Prisma tagged templates (parameterized, pooler-safe).
 
 import { db } from '@/lib/db'
-import { newId } from '@/lib/server/id'
+import { insertReturningId } from '@/lib/server/insert'
 
 export interface CrewDeskLinkSqlRow {
   link_id: string
@@ -59,14 +60,13 @@ export async function insertLink(input: {
   lastError?: string | null
   note?: string | null
 }): Promise<CrewDeskLinkSqlRow> {
-  // MySQL has no RETURNING: generate the PK app-side, insert, then read back.
-  const linkId = newId()
-  await db.$executeRaw`
+  // MySQL has no RETURNING: insert, take the new key from LAST_INSERT_ID(), then read back.
+  const linkId = await insertReturningId(Prisma.sql`
     INSERT INTO crew_desk_links
-      (link_id, module_id, ticket_id, linked_by_id, status, ticket_title, ticket_status, crewdesk_comment_id, last_error, note, created_at, updated_at)
-    VALUES (${linkId}, ${input.moduleId}, ${input.ticketId}, ${input.linkedById}, ${input.status},
+      (module_id, ticket_id, linked_by_id, status, ticket_title, ticket_status, crewdesk_comment_id, last_error, note, created_at, updated_at)
+    VALUES (${input.moduleId}, ${input.ticketId}, ${input.linkedById}, ${input.status},
             ${input.ticketTitle ?? null}, ${input.ticketStatus ?? null},
-            ${input.crewdeskCommentId ?? null}, ${input.lastError ?? null}, ${input.note ?? null}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+            ${input.crewdeskCommentId ?? null}, ${input.lastError ?? null}, ${input.note ?? null}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
   const created = await findLinkById(linkId)
   if (!created) throw new Error('Inserted Crew Desk link could not be read back')
   return created

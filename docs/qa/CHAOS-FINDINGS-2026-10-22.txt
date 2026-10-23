@@ -1,0 +1,354 @@
+TCMS CHAOS TEST — 6 live users in parallel
+Date: 2026-10-22T16:48:26.315Z  ->  2026-10-22T16:55:05.347Z
+Server: http://localhost:3000   Duration: 6.5 min   Requests: 4889   Stamp: 1792687706315
+Users: vp, manager, product, developer, qa_engineer, viewer (temporary, removed after the run)
+
+RESULT: 25 distinct problem(s) found
+
+=== STATUS (2026-10-23): ALL FIXED ===
+BUG 1-4 fixed in code; CHECK 5 was a cache race too (fixed) plus a timing gap in the test.
+Extra bug found on a re-run and fixed: a module review stayed open with no case review
+left inside (after a resubmit or a case delete). One lock order for every review write.
+Regression suite: scripts/verify-chaos-fixes.mjs (37/0).
+Final re-run on the production build: docs/qa/CHAOS-FINDINGS-2026-10-22-production.txt -> NOTHING BROKE.
+
+=== SUMMARY — root causes (triaged after the run; raw findings below) ===
+
+BUG 1 [CRITICAL] Deactivated / demoted user keeps working for up to 30 seconds
+  Where : src/lib/auth.ts revalidateUser() — userRevalidationCache, DB_REVALIDATION_TTL_MS = 30_000.
+          Nothing clears the cache when PUT /api/users changes isActive or role.
+  Seen  : findings 1-11, 14, 15 (deactivated viewer read lists, opened cases, CREATED BUGS;
+          deactivated reviewer still served; manager demoted to viewer still DELETED a test case).
+          Also explains 13, 18, 19, 20: the developer's role was changed to qa_engineer and back,
+          and the server kept using the old role for up to 30 s (wrong 403s and wrong 200s).
+  Repro : manager deactivates a user -> that user's next requests within 30 s still return 200.
+
+BUG 2 [HIGH] PUT /api/permissions returns 500 when two toggles of one cell overlap
+  Where : src/app/api/permissions/permissions.service.ts togglePermission() ->
+          upsertRolePermission(): "Upserted role permission could not be read back".
+          Toggle A upserts the row, toggle B (back to default) deletes it, A's read-back finds nothing.
+  Seen  : finding 17 (9 x 500 out of 60 toggles in the storm scenario; logs/error-2026-10-22.log).
+
+BUG 3 [HIGH] Same test case can be sent for review twice at the same moment
+  Where : PUT /api/test-cases?action=submit-review — no lock / unique open-review guard.
+  Seen  : finding 21 (3 parallel submits -> 200, 200, 409 = two open reviews for one case).
+
+BUG 4 [MEDIUM] Test case status and its review get out of step
+  Seen  : findings 24, 25 — end of run: 4 cases "in_review" with no open review, 11 open reviews
+          on cases that are no longer "in_review". Likely paths (not yet confirmed): deleting a
+          module (its module review + case reviews cascade away, case stays in_review); editing
+          a case while it is in review. Needs investigation.
+
+CHECK 5 [LOW / likely by design] Permission toggle seen late or early for ~3 s
+  Seen  : findings 12, 16, 22, 23 — a request 1.5-3 s after a VP toggle still saw the old value.
+          The permission cache has a documented 3 s TTL per route copy (src/lib/permissions.ts);
+          the test allowed only 1.5 s. Re-test with a 3.5 s window before treating as a bug.
+
+HELD UP (no failure): no crash or 5xx except BUG 2; server stayed ready all run; every hostile
+input (10k title, broken JSON, 3 MB body, huge / negative / text ids, SQL and XSS strings,
+self-grant, self-promote to VP) answered 400/403/404/413; <script> in wiki not served back;
+verdict-vs-verdict and approve-all races had exactly one winner; 5 parallel work-log saves made
+one row; edit/link/submit on a case deleted at the same moment answered 404/400, never 500;
+no duplicate history versions; cleanup residue 0.
+
+=== FINDINGS (where the app broke / a test failed) ===
+
+1. [CRITICAL] list test cases: deactivated user still served   (seen 23x, first 2026-10-22T16:50:09.599Z)
+     - 2026-10-22T16:50:09.599Z  viewer(as viewer) GET /api/test-cases?page=1&pageSize=20&search=Chaos -> 200
+     - 2026-10-22T16:50:10.906Z  viewer(as viewer) GET /api/test-cases?page=1&pageSize=20&search=Chaos -> 200
+     - 2026-10-22T16:50:14.628Z  viewer(as viewer) GET /api/test-cases?page=1&pageSize=20&search=Chaos -> 200
+     - 2026-10-22T16:50:17.159Z  viewer(as viewer) GET /api/test-cases?page=1&pageSize=20&search=Chaos -> 200
+
+2. [CRITICAL] list bugs: deactivated user still served   (seen 23x, first 2026-10-22T16:50:09.664Z)
+     - 2026-10-22T16:50:09.664Z  viewer(as viewer) GET /api/bugs?pageSize=50 -> 200
+     - 2026-10-22T16:50:10.953Z  viewer(as viewer) GET /api/bugs?pageSize=50 -> 200
+     - 2026-10-22T16:50:14.759Z  viewer(as viewer) GET /api/bugs?pageSize=50 -> 200
+     - 2026-10-22T16:50:17.220Z  viewer(as viewer) GET /api/bugs?pageSize=50 -> 200
+
+3. [CRITICAL] modules tree: deactivated user still served   (seen 21x, first 2026-10-22T16:50:09.868Z)
+     - 2026-10-22T16:50:09.868Z  viewer(as viewer) GET /api/modules -> 200
+     - 2026-10-22T16:50:11.071Z  viewer(as viewer) GET /api/modules -> 200
+     - 2026-10-22T16:50:14.883Z  viewer(as viewer) GET /api/modules -> 200
+     - 2026-10-22T16:50:17.333Z  viewer(as viewer) GET /api/modules -> 200
+
+4. [CRITICAL] my notifications: deactivated user still served   (seen 13x, first 2026-10-22T16:50:09.154Z)
+     - 2026-10-22T16:50:09.154Z  viewer(as viewer) GET /api/notifications -> 200
+     - 2026-10-22T16:50:15.819Z  viewer(as viewer) GET /api/notifications -> 200
+     - 2026-10-22T16:50:20.519Z  viewer(as viewer) GET /api/notifications -> 200
+     - 2026-10-22T16:51:18.915Z  viewer(as viewer) GET /api/notifications -> 200
+
+5. [CRITICAL] who am i: deactivated user still served   (seen 13x, first 2026-10-22T16:50:09.205Z)
+     - 2026-10-22T16:50:09.205Z  viewer(as viewer) GET /api/auth -> 200
+     - 2026-10-22T16:50:15.971Z  viewer(as viewer) GET /api/auth -> 200
+     - 2026-10-22T16:50:20.630Z  viewer(as viewer) GET /api/auth -> 200
+     - 2026-10-22T16:51:19.024Z  viewer(as viewer) GET /api/auth -> 200
+
+6. [CRITICAL] open test case: deactivated user still served   (seen 13x, first 2026-10-22T16:50:11.714Z)
+     - 2026-10-22T16:50:11.714Z  viewer(as viewer) GET /api/test-cases?id=707 -> 200
+     - 2026-10-22T16:50:12.731Z  viewer(as viewer) GET /api/test-cases?id=709 -> 200
+     - 2026-10-22T16:50:18.230Z  viewer(as viewer) GET /api/test-cases?id=773 -> 200
+     - 2026-10-22T16:50:18.906Z  viewer(as viewer) GET /api/test-cases?id=723 -> 200
+
+7. [CRITICAL] case history: deactivated user still served   (seen 13x, first 2026-10-22T16:50:11.809Z)
+     - 2026-10-22T16:50:11.809Z  viewer(as viewer) GET /api/test-cases?id=707&action=history -> 200
+     - 2026-10-22T16:50:12.770Z  viewer(as viewer) GET /api/test-cases?id=709&action=history -> 200
+     - 2026-10-22T16:50:18.297Z  viewer(as viewer) GET /api/test-cases?id=773&action=history -> 200
+     - 2026-10-22T16:50:19.010Z  viewer(as viewer) GET /api/test-cases?id=723&action=history -> 200
+
+8. [CRITICAL] case reviews: deactivated user still served   (seen 13x, first 2026-10-22T16:50:12.172Z)
+     - 2026-10-22T16:50:12.172Z  viewer(as viewer) GET /api/test-cases?id=707&action=reviews -> 200
+     - 2026-10-22T16:50:12.868Z  viewer(as viewer) GET /api/test-cases?id=709&action=reviews -> 200
+     - 2026-10-22T16:50:18.394Z  viewer(as viewer) GET /api/test-cases?id=773&action=reviews -> 200
+     - 2026-10-22T16:50:19.136Z  viewer(as viewer) GET /api/test-cases?id=723&action=reviews -> 200
+
+9. [CRITICAL] dashboard: deactivated user still served   (seen 8x, first 2026-10-22T16:50:08.387Z)
+     - 2026-10-22T16:50:08.387Z  viewer(as viewer) GET /api/stats?action=dashboard -> 200
+     - 2026-10-22T16:50:13.572Z  viewer(as viewer) GET /api/stats?action=dashboard -> 200
+     - 2026-10-22T16:50:16.665Z  viewer(as viewer) GET /api/stats?action=dashboard -> 200
+     - 2026-10-22T16:51:20.004Z  viewer(as viewer) GET /api/stats?action=dashboard -> 200
+
+10. [CRITICAL] search: deactivated user still served   (seen 8x, first 2026-10-22T16:50:08.479Z)
+     - 2026-10-22T16:50:08.479Z  viewer(as viewer) GET /api/search?q=Chaos -> 200
+     - 2026-10-22T16:50:13.672Z  viewer(as viewer) GET /api/search?q=Chaos -> 200
+     - 2026-10-22T16:50:16.714Z  viewer(as viewer) GET /api/search?q=Chaos -> 200
+     - 2026-10-22T16:51:20.198Z  viewer(as viewer) GET /api/search?q=Chaos -> 200
+
+11. [CRITICAL] create bug: deactivated user still served   (seen 3x, first 2026-10-22T16:51:25.806Z)
+     - 2026-10-22T16:51:25.806Z  viewer(as viewer) POST /api/bugs -> 200
+     - 2026-10-22T16:52:24.098Z  viewer(as viewer) POST /api/bugs -> 200
+     - 2026-10-22T16:52:24.758Z  viewer(as viewer) POST /api/bugs -> 200
+
+12. [CRITICAL] create bug: allowed although "create_bug" is OFF for developer   (seen 3x, first 2026-10-22T16:52:24.346Z)
+     - 2026-10-22T16:52:24.346Z  developer(as developer) POST /api/bugs
+     - 2026-10-22T16:52:25.836Z  developer(as developer) POST /api/bugs
+     - 2026-10-22T16:54:25.324Z  developer(as developer) POST /api/bugs
+
+13. [CRITICAL] create test case: allowed although "create_test_case" is OFF for qa_engineer   (seen 2x, first 2026-10-22T16:49:22.950Z)
+     - 2026-10-22T16:49:22.950Z  developer(as qa_engineer) POST /api/test-cases
+     - 2026-10-22T16:49:24.598Z  developer(as qa_engineer) POST /api/test-cases
+
+14. [CRITICAL] deactivated reviewer still served after deactivation   (seen 2x, first 2026-10-22T16:50:30.384Z)
+     - 2026-10-22T16:50:30.384Z  status 200
+     - 2026-10-22T16:52:58.965Z  status 200
+
+15. [CRITICAL] demoted manager could still delete   (seen 1x, first 2026-10-22T16:50:36.859Z)
+     - 2026-10-22T16:50:36.859Z  case delete 200
+
+16. [CRITICAL] create test case: allowed although "create_test_case" is OFF for developer   (seen 1x, first 2026-10-22T16:50:40.684Z)
+     - 2026-10-22T16:50:40.684Z  developer(as developer) POST /api/test-cases
+
+17. [HIGH] race: toggle storm: server error 500   (seen 9x, first 2026-10-22T16:49:36.988Z)
+     - 2026-10-22T16:49:36.988Z  vp(as vp) PUT /api/permissions -> 500 {"error":"Internal server error"}
+     - 2026-10-22T16:49:37.342Z  vp(as vp) PUT /api/permissions -> 500 {"error":"Internal server error"}
+     - 2026-10-22T16:50:51.324Z  vp(as vp) PUT /api/permissions -> 500 {"error":"Internal server error"}
+     - 2026-10-22T16:52:07.212Z  vp(as vp) PUT /api/permissions -> 500 {"error":"Internal server error"}
+
+18. [HIGH] create bug: 403 although "create_bug" is ON for qa_engineer   (seen 8x, first 2026-10-22T16:50:18.961Z)
+     - 2026-10-22T16:50:18.961Z  developer(as qa_engineer) POST /api/bugs Insufficient role
+     - 2026-10-22T16:50:19.840Z  developer(as qa_engineer) POST /api/bugs Insufficient role
+     - 2026-10-22T16:51:06.925Z  developer(as qa_engineer) POST /api/bugs Insufficient role
+     - 2026-10-22T16:51:11.902Z  developer(as qa_engineer) POST /api/bugs Insufficient role
+
+19. [HIGH] create test case: 403 although "create_test_case" is ON for qa_engineer   (seen 6x, first 2026-10-22T16:51:09.451Z)
+     - 2026-10-22T16:51:09.451Z  developer(as qa_engineer) POST /api/test-cases Insufficient role
+     - 2026-10-22T16:51:10.451Z  developer(as qa_engineer) POST /api/test-cases Insufficient role
+     - 2026-10-22T16:51:16.225Z  developer(as qa_engineer) POST /api/test-cases Insufficient role
+     - 2026-10-22T16:51:17.112Z  developer(as qa_engineer) POST /api/test-cases Insufficient role
+
+20. [HIGH] create test case: 403 although "create_test_case" is ON for developer   (seen 4x, first 2026-10-22T16:53:20.153Z)
+     - 2026-10-22T16:53:20.153Z  developer(as developer) POST /api/test-cases Insufficient role
+     - 2026-10-22T16:53:21.621Z  developer(as developer) POST /api/test-cases Insufficient role
+     - 2026-10-22T16:53:22.403Z  developer(as developer) POST /api/test-cases Insufficient role
+     - 2026-10-22T16:53:26.142Z  developer(as developer) POST /api/test-cases Insufficient role
+
+21. [HIGH] same case sent for review twice at once -> several open reviews   (seen 1x, first 2026-10-22T16:50:06.243Z)
+     - 2026-10-22T16:50:06.243Z  case 774: 200,200,409
+
+22. [HIGH] create bug: 403 although "create_bug" is ON for viewer   (seen 1x, first 2026-10-22T16:50:59.092Z)
+     - 2026-10-22T16:50:59.092Z  viewer(as viewer) POST /api/bugs Insufficient role
+
+23. [HIGH] activity logs: 403 although "view_activity_logs" is ON for product   (seen 1x, first 2026-10-22T16:52:31.416Z)
+     - 2026-10-22T16:52:31.416Z  product(as product) GET /api/activity-logs?pageSize=20 Only roles with view-activity-log rights (VP / Manager)
+
+24. [MEDIUM] data: case stuck "in_review" with no open review   (seen 1x, first 2026-10-22T16:55:05.107Z)
+     - 2026-10-22T16:55:05.107Z  4 case(s)
+
+25. [MEDIUM] data: open review on a case that is not "in_review"   (seen 1x, first 2026-10-22T16:55:05.111Z)
+     - 2026-10-22T16:55:05.111Z  11 review(s)
+
+=== PLANNED RACE SCENARIOS (what happened) ===
+- approve while the author deletes the case: verdict 404, delete 200
+- verdict while the VP revokes perform_review: verdict 403, revoke 200
+- two verdicts + a forward on one review at once: 200,409,409
+- double submit-review of one case: 200,409,409
+- edit while someone deletes the case: edit 404, delete 200, after 404
+- link bug to a case being deleted: link 404, delete 200
+- module review while the VP deletes the module: submit 404, delete 200, new case none
+- reviewer deactivated while approving: no case
+- manager demoted to viewer while deleting: no case
+- 5 parallel work-log saves for one day: 200,200,200,200,200 rows=1
+- permission toggle storm while QA creates cases: matrix after storm: enabled=false
+- approve-all twice at once on one module review: 200,409
+- approve while the author deletes the case: verdict 404, delete 200
+- verdict while the VP revokes perform_review: verdict 403, revoke 200
+- two verdicts + a forward on one review at once: no case
+- double submit-review of one case: 200,200,409
+- edit while someone deletes the case: edit 404, delete 200, after 404
+- link bug to a case being deleted: no fixtures
+- module review while the VP deletes the module: submit 400, delete 200, new case none
+- reviewer deactivated while approving: verdict 200, deactivate 200, next request 200
+- manager demoted to viewer while deleting: delete 200, demote 200, next delete 200
+- 5 parallel work-log saves for one day: 200,200,200,200,200 rows=1
+- permission toggle storm while QA creates cases: matrix after storm: enabled=false
+- approve-all twice at once on one module review: 409,200
+- approve while the author deletes the case: verdict 404, delete 200
+- verdict while the VP revokes perform_review: verdict 403, revoke 200
+- two verdicts + a forward on one review at once: 200,409,409
+- double submit-review of one case: 200,409,409
+- edit while someone deletes the case: edit 404, delete 200, after 404
+- link bug to a case being deleted: link 400, delete 200
+- module review while the VP deletes the module: submit 404, delete 200, new case none
+- reviewer deactivated while approving: no case
+- manager demoted to viewer while deleting: no case
+- 5 parallel work-log saves for one day: 200,200,200,200,200 rows=1
+- permission toggle storm while QA creates cases: matrix after storm: enabled=false
+- approve-all twice at once on one module review: 200,400
+- approve while the author deletes the case: no case
+- verdict while the VP revokes perform_review: verdict 403, revoke 200
+- two verdicts + a forward on one review at once: 200,409,400
+- double submit-review of one case: 200,400,400
+- edit while someone deletes the case: edit 404, delete 200, after 404
+- link bug to a case being deleted: no fixtures
+- module review while the VP deletes the module: submit 400, delete 200, new case none
+- reviewer deactivated while approving: verdict 403, deactivate 200, next request 200
+- manager demoted to viewer while deleting: no case
+- 5 parallel work-log saves for one day: 200,200,200,200,200 rows=1
+- permission toggle storm while QA creates cases: matrix after storm: enabled=false
+- approve-all twice at once on one module review: 200,409
+- approve while the author deletes the case: verdict 404, delete 200
+- verdict while the VP revokes perform_review: verdict 403, revoke 200
+- two verdicts + a forward on one review at once: 200,400,400
+- double submit-review of one case: 409,200,409
+- edit while someone deletes the case: edit 404, delete 200, after 404
+- link bug to a case being deleted: link 404, delete 200
+- module review while the VP deletes the module: submit 400, delete 200, new case none
+- reviewer deactivated while approving: no case
+- manager demoted to viewer while deleting: no case
+- 5 parallel work-log saves for one day: 200,200,200,200,200 rows=1
+- permission toggle storm while QA creates cases: matrix after storm: enabled=false
+- approve-all twice at once on one module review: 200,409
+- approve while the author deletes the case: no case
+- verdict while the VP revokes perform_review: no case
+- two verdicts + a forward on one review at once: 200,409,409
+
+=== END-OF-RUN DATA CHECKS ===
+- cases with >1 open review: 0
+- cases "in_review" without an open review: 4
+- open reviews on cases not "in_review": 11
+- open module reviews with nothing left to review: 0
+- open reviews assigned to an inactive user (end of run): 0
+- duplicate work-log days: 0
+- cases with duplicate history versions: 0
+
+=== REQUESTS BY ACTION (status counts, slowest, first error text) ===
+- activity logs: n=215 [200x132 401x12 403x71] max 2107 ms  — 401: Unauthorized | 403: Only roles with view-activity-log rights (VP / Manager)
+- case history: n=76 [200x66 401x10] max 2909 ms  — 401: Unauthorized
+- case reviews: n=76 [200x66 401x10] max 1026 ms  — 401: Unauthorized
+- change role: n=13 [200x13] max 1398 ms
+- create bug: n=263 [200x166 401x12 403x71 404x14] max 1559 ms  — 401: Unauthorized | 403: Insufficient role | 404: Module not found
+- create module: n=99 [200x95 404x4] max 1245 ms  — 404: Parent module not found
+- create test case: n=558 [200x360 400x54 401x12 403x95 404x37] max 1735 ms  — 400: Invalid input | 401: Unauthorized | 403: Insufficient role | 404: Module not found
+- create wiki doc: n=19 [200x16 403x3] max 1046 ms  — 403: Only roles with create-wiki rights can create documents
+- dashboard: n=39 [200x35 401x4] max 383 ms  — 401: Unauthorized
+- deactivate user: n=6 [200x6] max 318 ms
+- delete module: n=29 [200x28 404x1] max 570 ms  — 404: Module not found
+- delete own test case: n=28 [200x28] max 1626 ms
+- delete test case: n=28 [200x28] max 1103 ms
+- edit module: n=53 [200x48 404x5] max 484 ms  — 404: Module not found
+- edit test case: n=271 [200x226 404x6 409x39] max 2990 ms  — 404: Test case not found | 409: This item was changed by someone else — reload
+- edit wiki doc: n=29 [200x29] max 451 ms
+- forward review: n=16 [200x4 400x7 404x5] max 420 ms  — 400: This review has already been completed — nothing to forward | 404: Review not found
+- get bug: n=148 [200x148] max 3147 ms
+- get module review: n=65 [200x56 404x9] max 404 ms  — 404: Module review not found
+- get module: n=53 [200x48 404x5] max 1553 ms  — 404: Module not found
+- get review: n=221 [200x162 403x41 404x18] max 1638 ms  — 403: Only roles with perform-review rights can view reviews | 404: Review not found
+- get test case: n=237 [200x231 404x6] max 1646 ms  — 404: Test case not found
+- get wiki doc: n=16 [200x16] max 263 ms
+- health /api/ready: n=76 [200x76] max 1794 ms
+- hostile: 10k title: n=7 [400x7] max 123 ms  — 400: Invalid input
+- hostile: 3 MB body: n=6 [413x6] max 212 ms  — 413: Request body too large — the limit is 2048 KB
+- hostile: 5000-char search: n=6 [400x6] max 3089 ms  — 400: Invalid search query
+- hostile: 600 linked ids: n=6 [400x6] max 202 ms  — 400: Invalid input
+- hostile: broken JSON: n=6 [400x6] max 268 ms  — 400: Invalid input
+- hostile: case into deleted module: n=7 [400x7] max 251 ms  — 400: Invalid input
+- hostile: edit deleted case: n=6 [404x6] max 206 ms  — 404: Test case not found
+- hostile: history of deleted case: n=6 [200x6] max 284 ms
+- hostile: huge module id: n=7 [400x7] max 130 ms  — 400: Invalid input
+- hostile: id=0: n=6 [404x6] max 400 ms  — 404: Test case not found
+- hostile: id=1e3: n=6 [404x6] max 139 ms  — 404: Bug not found
+- hostile: id=abc: n=6 [404x6] max 671 ms  — 404: Test case not found
+- hostile: make self vp: n=6 [403x6] max 491 ms  — 403: Admin only
+- hostile: negative module id: n=7 [400x7] max 449 ms  — 400: Invalid input
+- hostile: null body verdict: n=6 [400x6] max 108 ms  — 400: Invalid input
+- hostile: page=-1 size=100000: n=6 [200x6] max 226 ms
+- hostile: permission self-grant: n=6 [403x6] max 436 ms  — 403: Only the VP (or a role granted manage_permissions) can change permissions
+- hostile: priority P9: n=7 [400x7] max 240 ms  — 400: Invalid input
+- hostile: reportDate garbage: n=6 [400x6] max 165 ms  — 400: Invalid input
+- hostile: review self as reviewer of deleted case: n=6 [404x6] max 323 ms  — 404: Test case not found
+- hostile: steps not array: n=7 [400x7] max 136 ms  — 400: Invalid input
+- hostile: task minutes 99999: n=6 [400x6] max 236 ms  — 400: Invalid input
+- hostile: unicode/emoji title: n=6 [400x6] max 227 ms  — 400: Invalid input
+- link bug to case: n=50 [200x28 403x17 404x5] max 635 ms  — 403: Only roles with bug-authoring rights can link test cases | 404: Test case not found
+- list bugs: n=132 [200x115 401x17] max 546 ms  — 401: Unauthorized
+- list test cases: n=132 [200x114 401x18] max 1619 ms  — 401: Unauthorized
+- list users: n=71 [200x41 401x2 403x28] max 510 ms  — 401: Unauthorized | 403: Admin only
+- module review approve-all: n=17 [200x6 400x8 404x3] max 1660 ms  — 400: This module review has already been completed | 404: Module review not found
+- module review bulk-verdict: n=27 [200x11 400x13 404x3] max 405 ms  — 400: This module review has already been completed | 404: Module review not found
+- module review change reviewer: n=16 [200x1 400x12 404x3] max 385 ms  — 400: This module review has already been completed — nothing to reassign | 404: Module review not found
+- modules tree: n=132 [200x113 401x19] max 539 ms  — 401: Unauthorized
+- my notifications: n=91 [200x88 401x3] max 783 ms  — 401: Unauthorized
+- my task reports: n=5 [200x5] max 682 ms
+- open test case: n=76 [200x53 401x11 404x12] max 1178 ms  — 401: Unauthorized | 404: Test case not found
+- race: approve-all twice: n=10 [200x5 400x1 409x4] max 542 ms  — 400: This module review has already been completed | 409: This item was changed by someone else — reload
+- race: deactivate reviewer: n=2 [200x2] max 317 ms
+- race: deactivated reviewer acts again: n=2 [200x2] max 232 ms
+- race: delete case under review: n=4 [200x4] max 208 ms
+- race: delete during edit: n=5 [200x5] max 228 ms
+- race: delete module: n=5 [200x5] max 269 ms
+- race: delete while demoted: n=1 [200x1] max 56 ms
+- race: delete while link: n=3 [200x3] max 292 ms
+- race: demote manager: n=1 [200x1] max 69 ms
+- race: demoted manager deletes again: n=1 [200x1] max 107 ms
+- race: double submit: n=15 [200x6 400x2 409x7] max 506 ms  — 400: This test case is in review — it cannot be submitted for review again | 409: Someone else is saving the same item right now — try again.
+- race: forward: n=5 [400x2 409x3] max 328 ms  — 400: This review has already been completed — nothing to forward | 409: This item was changed by someone else — reload
+- race: link while delete: n=3 [400x1 404x2] max 440 ms  — 400: A referenced item does not exist — check the selected module, user or test case. | 404: Test case not found
+- race: module review submit: n=5 [400x3 404x2] max 303 ms  — 400: A referenced item does not exist — check the selected module, user or test case. | 404: Module not found
+- race: reactivate reviewer: n=2 [200x2] max 127 ms
+- race: restore manager: n=1 [200x1] max 48 ms
+- race: restore perform_review: n=5 [200x5] max 366 ms
+- race: revoke perform_review: n=5 [200x5] max 187 ms
+- race: storm reset: n=5 [200x5] max 345 ms
+- race: task report same day: n=25 [200x25] max 3408 ms
+- race: toggle storm: n=60 [200x51 500x9] max 1950 ms  — 500: Internal server error
+- race: verdict A: n=5 [200x5] max 421 ms
+- race: verdict B: n=5 [400x1 409x4] max 328 ms  — 400: This review has already been completed | 409: This item was changed by someone else — reload
+- reactivate user: n=6 [200x6] max 364 ms
+- read all notifications: n=46 [200x46] max 465 ms
+- read permission matrix: n=77 [200x47 401x2 403x28] max 523 ms  — 401: Unauthorized | 403: Only the VP (or a role granted manage_permissions) can view permissions
+- reports: n=59 [200x59] max 596 ms
+- restore permission: n=3 [200x3] max 257 ms
+- restore role: n=1 [200x1] max 72 ms
+- review list: n=1 [200x1] max 416 ms
+- review verdict: n=200 [200x72 400x56 403x55 404x17] max 794 ms  — 400: This review has already been completed | 403: Only roles with perform-review rights can review | 404: Review not found
+- search: n=97 [200x67 400x26 401x4] max 1485 ms  — 400: Invalid search query | 401: Unauthorized
+- submit case review: n=154 [200x94 400x59 404x1] max 731 ms  — 400: This test case is in review — it cannot be submitted for review again | 404: Test case not found
+- submit module review: n=49 [200x29 400x14 404x6] max 1559 ms  — 400: No eligible test cases (draft or needs_revision) found in this module. | 404: Module not found
+- task report upsert: n=85 [200x85] max 1757 ms
+- task summary: n=59 [200x59] max 366 ms
+- toggle permission: n=127 [200x127] max 1755 ms
+- update bug: n=148 [200x125 403x23] max 2638 ms  — 403: Only roles with bug rights (create / assign) can edit bugs
+- viewer deletes a case: n=30 [401x2 403x23 404x5] max 1691 ms  — 401: Unauthorized | 403: Only the author of this test case or a role with delete rights can delete it. | 404: Test case not found
+- who am i: n=45 [200x42 401x3] max 948 ms  — 401: Unauthorized
+
+=== CLEANUP ===
+{"found":{"modules":55,"cases":290,"bugs":166,"reviews":136,"moduleReviews":22,"wiki":16,"taskReports":4},"notifications":959,"crew_desk_links":0,"bugs":166,"review_requests":136,"module_review_requests":22,"test_cases":290,"history_by_fixtures":0,"modules":33,"wiki":16,"task_reports":4,"refresh_tokens":6,"login_attempts":0,"activity_logs":1745,"users":6,"role_permissions":0,"residue":{"users":0,"cases":0,"bugs":0,"modules":0,"role_permissions":0}}

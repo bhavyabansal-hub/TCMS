@@ -89,6 +89,7 @@ export function ActivityLogView() {
     queryKey: ['activity-logs', params],
     queryFn: () => activityLogsApi.list(params),
     placeholderData: keepPreviousData,
+    enabled: !!user && can('view_activity_logs'),
   })
 
   // In-view guard, consistent with reports / settings views: the matrix

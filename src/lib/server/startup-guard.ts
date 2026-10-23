@@ -225,3 +225,43 @@ export function assertAppStartup(scope = 'tcms-app'): void {
 export function assertWsServiceStartup(scope = 'tcms-ws'): void {
   runGuard(scope, isProductionDeployment() ? wsServiceProblems() : [])
 }
+
+// ---------- Required settings (every mode, also dev) ----------
+//
+// A missing .env key must never surface as a confusing stack trace on the first
+// request. Before anything else boots, every REQUIRED key is checked and each
+// missing one is named (never its value), then the process exits 1.
+
+function envValue(name: string): string {
+  return (process.env[name] ?? '').trim()
+}
+
+/** Names + reasons of required settings that are missing (empty = all present). */
+export function missingRequiredSettings(): string[] {
+  const missing: string[] = []
+  if (!envValue('DATABASE_URL')) missing.push('DATABASE_URL (the app database URL, mysql://...)')
+  const jwt = envValue('JWT_SECRET')
+  if (!jwt) missing.push('JWT_SECRET (random 32+ character secret)')
+  else if (jwt.length < GENERATED_SECRET_MIN_LENGTH) missing.push(`JWT_SECRET (too short: needs ${GENERATED_SECRET_MIN_LENGTH}+ characters)`)
+  if (envValue('SMTP_HOST') && !envValue('SMTP_FROM')) missing.push('SMTP_FROM (required when SMTP_HOST is set)')
+  if (envValue('CREWDESK_AUTH').toLowerCase() === 'login' && (!envValue('CREWDESK_LOGIN_EMAIL') || !envValue('CREWDESK_LOGIN_PASSWORD'))) {
+    missing.push('CREWDESK_LOGIN_EMAIL / CREWDESK_LOGIN_PASSWORD (required when CREWDESK_AUTH=login)')
+  }
+  if (envValue('CREWDESK_AUTH').toLowerCase() === 'token' && !envValue('CREWDESK_TOKEN')) {
+    missing.push('CREWDESK_TOKEN (required when CREWDESK_AUTH=token)')
+  }
+  if (isProductionDeployment() && !envValue('TCMS_PUBLIC_ORIGIN')) {
+    missing.push('TCMS_PUBLIC_ORIGIN (the app URL, e.g. https://tcms.company.com — required in production)')
+  }
+  return missing
+}
+
+/** Exits 1 with one clear line per missing key. Runs FIRST at boot, in every mode. */
+export function assertRequiredSettings(scope = 'tcms-app'): void {
+  const missing = missingRequiredSettings()
+  if (missing.length === 0) return
+  console.error(`[TCMS] FATAL (${scope}): missing required setting(s) in .env:`)
+  for (const item of missing) console.error(`[TCMS]   - ${item}`)
+  console.error('[TCMS] Add them to .env (see .env.example for every key), then restart the app.')
+  process.exit(1)
+}

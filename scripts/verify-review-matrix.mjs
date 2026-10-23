@@ -49,7 +49,10 @@ async function main() {
     const { accessToken, permissions, user } = session
     const hasPerform = permissions.includes('perform_review')
     const hasSubmit = permissions.includes('submit_review')
-    const expectsAllModuleReviews = hasPerform || hasSubmit
+    // Only perform_review grants the cross-user review lists (reviews.service.ts,
+    // module-reviews.service.ts); submit_review alone does not. hasSubmit stays
+    // in the log line for diagnosis only (REQ-001 R5).
+    const expectsAllModuleReviews = hasPerform
     console.log(`--- ${acc.role} (${acc.email}) perms=${permissions.length} perform=${hasPerform} submit=${hasSubmit}`)
 
     // 1. Session must carry the role's effective permissions.
@@ -69,9 +72,9 @@ async function main() {
       check(`${acc.role}: GET ${p} -> 200`, r.status === 200, `got ${r.status}`)
     }
 
-    // 4. The paginated reviews list is participation-gated (perform OR submit)
+    // 4. The paginated reviews list needs perform_review only
     //    — same rule as module-reviews?action=all (see reviews.service.ts).
-    const expectsReviewList = hasPerform || hasSubmit
+    const expectsReviewList = hasPerform
     const list = await probe(accessToken, '/reviews?pageSize=5')
     check(
       `${acc.role}: GET /reviews ${expectsReviewList ? '200' : '403'}`,

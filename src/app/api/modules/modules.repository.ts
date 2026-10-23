@@ -4,8 +4,9 @@
 
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
-import { newId } from '@/lib/server/id'
+import { insertReturningId } from '@/lib/server/insert'
 import type { ModuleSqlRow } from '@/types/sql-rows'
+import type { SqlExecutor } from '../test-cases/test-cases.repository'
 
 /** All modules ordered by name, each with its owner reference
  *  (userId/fullName/email) and its SUBTREE test-case count (module + descendants). */
@@ -64,8 +65,8 @@ export async function listSubmodules(parentId: string): Promise<ModuleSqlRow[]> 
 }
 
 /** All strict descendants (children, grandchildren, ...) of a module. */
-export async function listDescendantModuleIds(moduleId: string): Promise<string[]> {
-  const rows = await db.$queryRaw<{ module_id: string }[]>`
+export async function listDescendantModuleIds(moduleId: string, tx: SqlExecutor = db): Promise<string[]> {
+  const rows = await tx.$queryRaw<{ module_id: string }[]>`
     WITH RECURSIVE descendants AS (
       SELECT module_id FROM modules WHERE parent_id = ${moduleId}
       UNION ALL
@@ -88,18 +89,17 @@ export interface ModuleInsert {
   updatedById: string
 }
 
-/** Creates a module. The PK is generated app-side (MySQL: no RETURNING).
+/** Creates a module. The key comes from LAST_INSERT_ID() (MySQL: no RETURNING).
  *  created_at/updated_at are set explicitly: updated_at has no DB default
  *  and raw SQL bypasses @updatedAt. */
 export async function insertModule(input: ModuleInsert): Promise<string> {
-  const moduleId = newId()
-  await db.$executeRaw`
+  const moduleId = await insertReturningId(Prisma.sql`
     INSERT INTO modules
-      (module_id, name, description, parent_id, path, depth, owner_id, created_by_id, updated_by_id,
+      (name, description, parent_id, path, depth, owner_id, created_by_id, updated_by_id,
        created_at, updated_at)
     VALUES
-      (${moduleId}, ${input.name}, ${input.description}, ${input.parentId}, ${input.path}, ${input.depth},
-       ${input.ownerId}, ${input.createdById}, ${input.updatedById}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+      (${input.name}, ${input.description}, ${input.parentId}, ${input.path}, ${input.depth},
+       ${input.ownerId}, ${input.createdById}, ${input.updatedById}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
   return moduleId
 }
 
@@ -112,12 +112,15 @@ export interface ModuleUpdateFields {
   updatedById?: string
 }
 
-/** Partial UPDATE — every write also bumps updated_at (raw SQL skips @updatedAt).
+/** Guarded partial UPDATE — applies only while updated_at still equals
+ *  `expectedUpdatedAt` (optimistic lock); returns null when another write landed
+ *  first. Every write also bumps updated_at (raw SQL skips @updatedAt).
  *  MySQL: UPDATE has no RETURNING — write, then read the row back. */
-export async function updateModule(
+export async function updateModuleIfUnchanged(
   moduleId: string,
-  fields: ModuleUpdateFields
-): Promise<ModuleSqlRow> {
+  fields: ModuleUpdateFields,
+  expectedUpdatedAt: Date
+): Promise<ModuleSqlRow | null> {
   const sets: Prisma.Sql[] = []
   if (fields.name !== undefined) sets.push(Prisma.sql`name = ${fields.name}`)
   if (fields.description !== undefined) sets.push(Prisma.sql`description = ${fields.description}`)
@@ -125,8 +128,10 @@ export async function updateModule(
   if (fields.updatedById !== undefined) sets.push(Prisma.sql`updated_by_id = ${fields.updatedById}`)
   sets.push(Prisma.sql`updated_at = UTC_TIMESTAMP(3)`)
 
-  await db.$executeRaw`
-    UPDATE modules SET ${Prisma.join(sets)} WHERE module_id = ${moduleId}`
+  const changed = await db.$executeRaw`
+    UPDATE modules SET ${Prisma.join(sets)}
+    WHERE module_id = ${moduleId} AND updated_at = ${expectedUpdatedAt}`
+  if (Number(changed) === 0) return null
   const rows = await db.$queryRaw<ModuleSqlRow[]>`
     SELECT * FROM modules WHERE module_id = ${moduleId} LIMIT 1`
   if (!rows[0]) throw new Error('Updated module could not be read back')
@@ -141,9 +146,17 @@ export async function updateModule(
  *  crew_desk_links has NO FK by design (raw-SQL repository is its only
  *  writer) — remove its rows explicitly in the same transaction so no
  *  orphaned integration history survives the module. */
-export async function deleteModule(moduleId: string): Promise<void> {
-  await db.$transaction([
-    db.$executeRaw`DELETE FROM crew_desk_links WHERE module_id = ${moduleId}`,
-    db.$executeRaw`DELETE FROM modules WHERE module_id = ${moduleId}`,
-  ])
+/** Locks the module row until the transaction ends; false when it is gone.
+ *  Serializes a module submit-review against a parallel module delete. */
+export async function lockModule(moduleId: string, tx: SqlExecutor): Promise<boolean> {
+  const rows = await tx.$queryRaw<{ module_id: string }[]>`
+    SELECT module_id FROM modules WHERE module_id = ${moduleId} FOR UPDATE`
+  return rows.length > 0
+}
+
+/** Deletes the module (children, module reviews and their case reviews cascade).
+ *  Runs on the caller's transaction. */
+export async function deleteModule(moduleId: string, tx: SqlExecutor): Promise<void> {
+  await tx.$executeRaw`DELETE FROM crew_desk_links WHERE module_id = ${moduleId}`
+  await tx.$executeRaw`DELETE FROM modules WHERE module_id = ${moduleId}`
 }

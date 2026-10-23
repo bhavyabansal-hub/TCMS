@@ -17,6 +17,14 @@ function gitShortSha(): string {
   }
 }
 
+/**
+ * React needs eval() in DEVELOPMENT only (debug stack reconstruction; Next 16.4 dev shows a
+ * console error without it). `next dev` sets NODE_ENV=development; `next build` / `next start`
+ * set production, so the production CSP never contains 'unsafe-eval' (checked by
+ * scripts/verify-security.mjs).
+ */
+const DEV_SCRIPT_EVAL = process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "";
+
 const nextConfig: NextConfig = {
   // Required by the deployment pipeline (.zscripts/build.sh): `next build`
   // must emit .next/standalone/server.js, which start.sh runs in production.
@@ -61,7 +69,7 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value:
               "default-src 'self'; " +
-              "script-src 'self' 'unsafe-inline'; " +
+              `script-src 'self' 'unsafe-inline'${DEV_SCRIPT_EVAL}; ` +
               "style-src 'self' 'unsafe-inline'; " +
               "img-src 'self' data: blob: https: http:; " +
               "font-src 'self' data:; " +

@@ -1,13 +1,12 @@
 // Sandbox/dev boot wrapper for TCMS (MySQL-only).
-// Replaces the old dev-with-pg.mjs: TCMS runs on MySQL 8.4 exclusively —
-// this wrapper NEVER boots any PostgreSQL process.
+// TCMS runs on MySQL 8.4 exclusively.
 //
 // What it does:
 //   1. ENV SANITIZATION — some shells inject a stale non-mysql DATABASE_URL
 //      (e.g. a sqlite file: URL) which would override .env and crash Prisma.
 //      If DATABASE_URL/DIRECT_URL are not mysql:// URLs, they are replaced
 //      from .env. If .env has no mysql URL either, this fails fast with a
-//      clear message (no silent PostgreSQL fallback — MySQL-only by rule).
+//      clear message (no fallback — MySQL-only by rule).
 //   2. If DATABASE_URL points at the local sandbox MySQL (127.0.0.1:5500 or
 //      localhost:5500) and the port is down, boot it via
 //      scripts/migration/mysql84-boot.sh (idempotent, TEST schema only,
@@ -20,8 +19,9 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import net from 'node:net'
+import { fileURLToPath } from 'node:url'
 
-const ROOT = new URL('..', import.meta.url).pathname
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const MYSQL_PORT = 5500
 const MYSQL_BOOT = `${ROOT}scripts/migration/mysql84-boot.sh`
 

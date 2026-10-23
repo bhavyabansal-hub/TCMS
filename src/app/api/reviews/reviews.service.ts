@@ -14,6 +14,7 @@ import { createNotification, type NotificationType } from '@/lib/notifications'
 import { logger } from '@/lib/logger'
 import { db } from '@/lib/db'
 import { findUserById } from '@/lib/server/user.repository'
+import { resolveExpectedUpdatedAt } from '@/lib/server/optimistic-lock'
 import {
   serializeReviewEvent,
   serializeReviewRequest,
@@ -129,7 +130,7 @@ export async function listReviewsPaginated(
 export async function forwardReview(
   me: SessionUser,
   reviewId: string,
-  input: { reviewerId: string },
+  input: { reviewerId: string; expectedUpdatedAt?: string },
   meta: RequestMeta
 ): Promise<SerializedReviewRequest> {
   ensurePermission(me, 'perform_review', 'Only roles with perform-review rights can forward a review')
@@ -154,10 +155,9 @@ export async function forwardReview(
 
   // Guarded re-assign: a verdict landing at the same moment wins and the
   // forward reports a conflict instead of overwriting a finished review.
-  const changed = await updateReviewRequestReviewerIfOpen(reviewId, input.reviewerId)
-  if (changed === 0) {
-    throw ApiError.conflict('This review was just completed — it can no longer be forwarded.')
-  }
+  const expected = resolveExpectedUpdatedAt(input.expectedUpdatedAt, review.updated_at)
+  const changed = await updateReviewRequestReviewerIfOpen(reviewId, input.reviewerId, undefined, expected)
+  if (changed === 0) throw ApiError.staleEdit()
 
   const testCase = await findTestCaseById(review.test_case_id)
   await logActivity({
@@ -197,7 +197,7 @@ export async function forwardReview(
 export async function submitVerdict(
   me: SessionUser,
   reviewId: string,
-  input: { verdict: string; comment?: string; flaggedFields: string[] },
+  input: { verdict: string; comment?: string; flaggedFields: string[]; expectedUpdatedAt?: string },
   meta: RequestMeta
 ): Promise<{
   event: SerializedReviewEvent
@@ -236,11 +236,16 @@ export async function submitVerdict(
   }
   const { testCaseStatus: newTcStatus, notificationType } = VERDICT_OUTCOMES[input.verdict]
 
-  // The whole verdict — event row, review closure, test-case status — commits
-  // as ONE unit, and the closure is GUARDED (status <> 'completed'): a double
-  // click or two reviewers hitting Enter together can only ever record ONE
-  // verdict; the loser gets a clear 409 instead of corrupting the history.
+  // The whole verdict — review closure, event row, test-case status — commits
+  // as ONE unit, and the closure is GUARDED (status <> 'completed' + the loaded
+  // updated_at): a double click or two reviewers hitting Enter together can only
+  // ever record ONE verdict; the loser gets a clear 409. The guarded UPDATE runs
+  // FIRST so it holds the row's exclusive lock before the event insert takes the
+  // FK's shared lock (the reverse order deadlocked under parallel verdicts, 1213).
+  const expectedReviewUpdatedAt = resolveExpectedUpdatedAt(input.expectedUpdatedAt, review.updated_at)
   const event = await db.$transaction(async (tx) => {
+    const closed = await updateReviewRequestStatusIfOpen(reviewId, newReviewStatus, tx, expectedReviewUpdatedAt)
+    if (closed === 0) throw ApiError.staleEdit()
     const recorded = await insertReviewEvent(
       {
         reviewRequestId: reviewId,
@@ -251,10 +256,6 @@ export async function submitVerdict(
       },
       tx
     )
-    const closed = await updateReviewRequestStatusIfOpen(reviewId, newReviewStatus, tx)
-    if (closed === 0) {
-      throw ApiError.conflict('This review was already completed by someone else just now.')
-    }
     await updateTestCaseStatus(review.test_case_id, newTcStatus, tx)
     return recorded
   })

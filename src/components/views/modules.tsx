@@ -173,13 +173,13 @@ export function ModulesView() {
               <div className="space-y-2">
                 {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-8" />)}
               </div>
-            ) : !treeData?.tree.length ? (
+            ) : !treeData?.tree?.length ? (
               <div className="py-8 text-center text-sm text-muted-foreground">
                 No modules yet. {canCreateModule && 'Create one to get started.'}
               </div>
             ) : (
               <div className="space-y-0.5 max-h-[60vh] overflow-y-auto">
-                {renderTree(treeData.tree)}
+                {renderTree(treeData?.tree ?? [])}
               </div>
             )}
           </CardContent>
@@ -474,6 +474,7 @@ function EditModuleDialog({
       await modulesApi.update(module.moduleId, {
         name: name.trim(),
         description: description.trim() || undefined,
+        expectedUpdatedAt: module.updatedAt,
       })
       toast.success('Module updated')
       invalidateAfterMutation(qc, 'modules')

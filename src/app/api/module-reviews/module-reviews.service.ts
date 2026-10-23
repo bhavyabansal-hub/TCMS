@@ -9,6 +9,7 @@
 
 import type { RequestMeta } from '@/lib/activity'
 import { ApiError } from '@/lib/api'
+import { resolveExpectedUpdatedAt } from '@/lib/server/optimistic-lock'
 import { can, ensurePermission, type SessionUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activity'
 import { createNotification, type NotificationType } from '@/lib/notifications'
@@ -26,16 +27,16 @@ import {
   listModuleReviewRequests,
   listModuleReviewRequestsByReviewer,
   updateModuleReviewRequestReviewerIfOpen,
-  updateModuleReviewRequestStatus,
+  updateModuleReviewRequestStatusIfUnchanged,
   type ModuleReviewRequestWithCountSqlRow,
 } from './module-reviews.repository'
 import {
-  insertReviewEvent,
+  insertReviewEventsMany,
   listEventsByRequestIds,
-  updateReviewRequestReviewerIfOpen,
-  updateReviewRequestStatus,
+  updateReviewRequestsReviewerIfOpen,
+  updateReviewRequestStatusMany,
 } from '../reviews/reviews.repository'
-import { listTestCasesByIds, updateTestCaseStatus } from '../test-cases/test-cases.repository'
+import { listTestCasesByIds, updateTestCaseStatusMany } from '../test-cases/test-cases.repository'
 
 // Legacy constants preserved verbatim.
 const DEFAULT_BULK_COMMENT = 'Bulk approved with module review.'
@@ -149,7 +150,7 @@ const BULK_VERDICT_OUTCOMES: Record<
 export async function bulkCaseReviewVerdict(
   me: SessionUser,
   moduleReviewId: string,
-  input: { verdict: 'approved' | 'failed' | 'needs_revision'; comment?: string | null },
+  input: { verdict: 'approved' | 'failed' | 'needs_revision'; comment?: string | null; expectedUpdatedAt?: string },
   meta: RequestMeta
 ): Promise<{ verdict: string; affectedCount: number; moduleReviewStatus: string }> {
   ensurePermission(me, 'perform_review', 'Only roles with perform-review rights can review')
@@ -175,7 +176,7 @@ export async function bulkCaseReviewVerdict(
     throw ApiError.badRequest('Comment is required for this verdict — write what needs to change')
   }
 
-  const caseReviews = await listCaseReviewsByModuleReview(moduleReviewId, OPEN_CASE_REVIEW_STATUSES)
+  let caseReviews = await listCaseReviewsByModuleReview(moduleReviewId, OPEN_CASE_REVIEW_STATUSES)
   if (caseReviews.length === 0) {
     throw ApiError.badRequest('No open case reviews to record a verdict on.')
   }
@@ -184,25 +185,32 @@ export async function bulkCaseReviewVerdict(
   const newCaseStatus = outcome.closes ? 'completed' : 'in_progress'
   const newModuleStatus = outcome.closes ? 'completed' : 'in_progress'
 
-  // ATOMIC bulk verdict: every event, every case-review status, every test
-  // case flip and the module-review status commit together or not at all —
-  // a crash halfway can never leave the module half-decided.
+  // ATOMIC bulk verdict: the module-review status, every event, every case-review
+  // status and every test case flip commit together or not at all — a crash
+  // halfway can never leave the module half-decided. The guarded module-review
+  // UPDATE runs FIRST (B2): a second bulk verdict waits on its row lock, then
+  // finds the row changed and gets 409 instead of recording verdicts twice.
+  const expected = resolveExpectedUpdatedAt(input.expectedUpdatedAt, moduleReview.updated_at)
   await db.$transaction(async (tx) => {
-    for (const caseReview of caseReviews) {
-      await insertReviewEvent(
-        {
-          reviewRequestId: caseReview.review_request_id,
-          reviewerId: me.userId,
-          verdict: input.verdict,
-          comment,
-          flaggedFields: [],
-        },
-        tx
-      )
-      await updateReviewRequestStatus(caseReview.review_request_id, newCaseStatus, tx)
-      await updateTestCaseStatus(caseReview.test_case_id, outcome.testCaseStatus, tx)
-    }
-    await updateModuleReviewRequestStatus(moduleReviewId, newModuleStatus, tx)
+    const changed = await updateModuleReviewRequestStatusIfUnchanged(moduleReviewId, newModuleStatus, expected, tx)
+    if (changed === 0) throw ApiError.staleEdit()
+    // Re-read the open case reviews under lock: one resubmitted or decided
+    // since the first read must not get this verdict (chaos test 2026-10-22).
+    caseReviews = await listCaseReviewsByModuleReview(moduleReviewId, OPEN_CASE_REVIEW_STATUSES, tx, { lock: true })
+    if (caseReviews.length === 0) throw ApiError.badRequest('No open case reviews to record a verdict on.')
+    // Three statements for the whole module, not three per case (perf audit 2026-10-17).
+    await insertReviewEventsMany(
+      caseReviews.map((caseReview) => ({
+        reviewRequestId: caseReview.review_request_id,
+        reviewerId: me.userId,
+        verdict: input.verdict,
+        comment,
+        flaggedFields: [],
+      })),
+      tx
+    )
+    await updateReviewRequestStatusMany(caseReviews.map((c) => c.review_request_id), newCaseStatus, tx)
+    await updateTestCaseStatusMany(caseReviews.map((c) => c.test_case_id), outcome.testCaseStatus, tx)
   })
 
   await logActivity({
@@ -236,7 +244,9 @@ export async function bulkCaseReviewVerdict(
       entityId: moduleReviewId,
     })
   }
-  if (moduleReview.requester_id !== me.userId) {
+  // One notification per person (R2-6): a requester who is also an author was
+  // already told above.
+  if (moduleReview.requester_id !== me.userId && !byAuthor.has(moduleReview.requester_id)) {
     await createNotification({
       userId: moduleReview.requester_id,
       type: outcome.notificationType,
@@ -263,10 +273,15 @@ export async function bulkCaseReviewVerdict(
 export async function approveAllCaseReviews(
   me: SessionUser,
   moduleReviewId: string,
-  input: { comment?: string | null },
+  input: { comment?: string | null; expectedUpdatedAt?: string },
   meta: RequestMeta
 ): Promise<{ approvedCount: number; moduleReviewStatus: string }> {
-  const res = await bulkCaseReviewVerdict(me, moduleReviewId, { verdict: 'approved', comment: input.comment }, meta)
+  const res = await bulkCaseReviewVerdict(
+    me,
+    moduleReviewId,
+    { verdict: 'approved', comment: input.comment, expectedUpdatedAt: input.expectedUpdatedAt },
+    meta
+  )
   return { approvedCount: res.affectedCount, moduleReviewStatus: res.moduleReviewStatus }
 }
 
@@ -307,10 +322,8 @@ export async function changeModuleReviewer(
     if (changed === 0) {
       throw ApiError.conflict('This module review was just completed — it can no longer be reassigned.')
     }
-    for (const caseReview of openCaseReviews) {
-      // Guarded per case: a verdict landing mid-flight wins over the swap.
-      await updateReviewRequestReviewerIfOpen(caseReview.review_request_id, input.reviewerId, tx)
-    }
+    // One guarded statement: a verdict landing mid-flight (completed) wins over the swap.
+    await updateReviewRequestsReviewerIfOpen(openCaseReviews.map((c) => c.review_request_id), input.reviewerId, tx)
   })
 
   await logActivity({

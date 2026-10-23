@@ -4,7 +4,7 @@
 # gate is never blocked). Idempotent: safe when the stack is already running.
 #
 # Flow:
-#   1. scripts/start-tcms.sh  -> Postgres :5499 + WS :3003 + Next prod :3000
+#   1. scripts/start-tcms.sh  -> WS :3003 + Next prod :3000 (MySQL 8.4 via mysql-env.sh)
 #      (builds .next first if missing, gates on GET /api health)
 #   2. Login probe with the seeded admin account.
 #      If login fails (fresh DB after a sandbox reset) -> prisma db push + seed.
@@ -25,10 +25,6 @@ echo "[autostart] $(date -u +%FT%TZ) boot autostart beginning..."
 if [ ! -d node_modules/next ]; then
   echo "[autostart] root node_modules missing - running bun install..."
   bun install || echo "[autostart] WARNING: root bun install failed"
-fi
-if [ ! -d scripts/pg-sandbox/node_modules/@embedded-postgres ]; then
-  echo "[autostart] pg-sandbox deps missing - installing..."
-  ( cd scripts/pg-sandbox && bun install ) || echo "[autostart] WARNING: pg-sandbox bun install failed"
 fi
 
 # 1. Stack (idempotent: every step no-ops when its port is already listening)

@@ -58,6 +58,20 @@ export async function listRecentActivityLogs(limit: number, filters: ActivityLog
     LIMIT ${limit}`)
 }
 
+/** Newest logs WITHOUT the heavy JSON snapshots / diff and request metadata — the
+ *  dashboard feed shows only action, entity, actor and time (perf audit 2026-10-17). */
+export async function listRecentActivitySummaries(limit: number, filters: ActivityLogFilters = {}): Promise<ActivityLogSqlRow[]> {
+  return db.$queryRaw<ActivityLogSqlRow[]>(Prisma.sql`
+    SELECT l.activity_log_id, l.user_id, l.action, l.entity_type, l.entity_id, l.entity_name, l.created_at,
+      NULL AS before_snapshot, NULL AS after_snapshot, NULL AS diff, NULL AS ip_address, NULL AS user_agent,
+      u.user_id AS user_user_id, u.full_name AS user_full_name, u.avatar_url AS user_avatar_url
+    FROM activity_logs l
+    LEFT JOIN users u ON u.user_id = l.user_id
+    ${buildWhere(filters)}
+    ORDER BY l.created_at DESC
+    LIMIT ${limit}`)
+}
+
 export async function findUserExists(userId: string): Promise<boolean> {
   // MySQL EXISTS returns 1/0 (bigint) — normalized to a JS boolean here.
   const rows = await db.$queryRaw<{ exists: number | bigint }[]>`

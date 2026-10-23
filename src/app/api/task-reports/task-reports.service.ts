@@ -12,6 +12,8 @@ import { logActivity, parseJson } from '@/lib/activity'
 import { logger } from '@/lib/logger'
 import { createNotification } from '@/lib/notifications'
 import { listActiveUsersHoldingPermission } from '@/lib/server/user.repository'
+import { isDuplicateKeyError } from '@/lib/server/db-errors'
+import type { TaskReportSqlRow } from '@/types/sql-rows'
 import {
   serializeTaskReport,
   type SerializedTaskReport,
@@ -183,6 +185,35 @@ async function notifyReportHolders(
   )
 }
 
+/** The UPDATE half of the upsert (existing row, or the winner of an insert race). */
+async function applyUpsertUpdate(
+  me: SessionUser,
+  existing: TaskReportSqlRow,
+  reportDate: Date,
+  fields: { tasks: UpsertTaskReportInput['tasks']; notes: string | null; totalMinutes: number },
+  meta: RequestMeta
+): Promise<SerializedTaskReport> {
+  const updated = await updateTaskReport(existing.task_report_id, fields)
+  await logActivity({
+    userId: me.userId,
+    action: 'UPDATE',
+    entityType: 'task_report',
+    entityId: updated.task_report_id,
+    entityName: reportDate.toISOString().slice(0, 10),
+    before: { totalMinutes: existing.total_minutes },
+    after: { totalMinutes: fields.totalMinutes },
+    meta,
+  })
+  logger.info('Task report updated via upsert', {
+    taskReportId: updated.task_report_id,
+    reportDate,
+    totalMinutes: fields.totalMinutes,
+    by: me.userId,
+  })
+  await notifyReportHolders(me, updated.task_report_id, reportDate, fields.tasks.length, fields.totalMinutes, 'updated')
+  return serializeTaskReport(updated)
+}
+
 /** POST — upsert the current user's report for reportDate (legacy upsert policy:
  *  one report per user per date; UPDATE when it exists, INSERT otherwise). */
 export async function upsertTaskReport(
@@ -197,35 +228,25 @@ export async function upsertTaskReport(
   const notes = input.notes ?? null
 
   const existing = await findTaskReportByUserAndDate(me.userId, reportDate)
-  if (existing) {
-    const updated = await updateTaskReport(existing.task_report_id, { tasks, notes, totalMinutes })
-    await logActivity({
-      userId: me.userId,
-      action: 'UPDATE',
-      entityType: 'task_report',
-      entityId: updated.task_report_id,
-      entityName: reportDate.toISOString().slice(0, 10),
-      before: { totalMinutes: existing.total_minutes },
-      after: { totalMinutes },
-      meta,
-    })
-    logger.info('Task report updated via upsert', {
-      taskReportId: updated.task_report_id,
-      reportDate,
-      totalMinutes,
-      by: me.userId,
-    })
-    await notifyReportHolders(me, updated.task_report_id, reportDate, tasks.length, totalMinutes, 'updated')
-    return serializeTaskReport(updated)
-  }
+  if (existing) return applyUpsertUpdate(me, existing, reportDate, { tasks, notes, totalMinutes }, meta)
 
-  const created = await insertTaskReport({
-    reportedById: me.userId,
-    reportDate,
-    tasks,
-    notes,
-    totalMinutes,
-  })
+  let created: TaskReportSqlRow
+  try {
+    created = await insertTaskReport({
+      reportedById: me.userId,
+      reportDate,
+      tasks,
+      notes,
+      totalMinutes,
+    })
+  } catch (err) {
+    // Two saves for the same day raced on the unique (user, date) key (MySQL 1062):
+    // the loser becomes an update of the row the winner just inserted, so the
+    // upsert contract holds instead of answering 409/500.
+    const winner = isDuplicateKeyError(err) ? await findTaskReportByUserAndDate(me.userId, reportDate) : null
+    if (!winner) throw err
+    return applyUpsertUpdate(me, winner, reportDate, { tasks, notes, totalMinutes }, meta)
+  }
   await logActivity({
     userId: me.userId,
     action: 'CREATE',
@@ -248,13 +269,15 @@ export async function upsertTaskReport(
 /** PUT ?id=... — update an OWN report (legacy has no admin override here).
  *  Omitted tasks keep the stored ones; notes fall back to the stored value;
  *  a reportDate in the body is accepted but ignored (legacy behavior).
- *  totalMinutes is always recalculated from the resulting task list. */
+ *  totalMinutes is always recalculated from the resulting task list.
+ *  Requires create_task_report (same gate as POST), checked before the lookup so a missing id does not reveal existence. */
 export async function updateTaskReportFields(
   me: SessionUser,
   taskReportId: string,
   input: UpdateTaskReportInput,
   meta: RequestMeta
 ): Promise<SerializedTaskReport> {
+  ensurePermission(me, 'create_task_report', 'Insufficient role')
   const existing = await findTaskReportById(taskReportId)
   if (!existing) throw ApiError.notFound('Report not found')
   if (existing.reported_by_id !== me.userId) {

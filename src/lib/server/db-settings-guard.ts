@@ -6,7 +6,7 @@
 // WHY: the app is only correct on a MySQL server that enforces strict mode
 // (silent truncation / zero dates would corrupt data) and ONLY_FULL_GROUP_BY
 // (deterministic aggregates — the codebase is verified clean under it, see
-// docs/migration/02), stores UTC (every raw-SQL write uses UTC_TIMESTAMP(3)
+// docs/deploy/PRODUCTION-CHECKLIST.md §2), stores UTC (every raw-SQL write uses UTC_TIMESTAMP(3)
 // and Prisma writes UTC — a non-UTC server would silently skew timestamps),
 // and speaks utf8mb4 end to end (server AND schema default — otherwise
 // multi-byte text silently mangles on implicit charset coercion).
@@ -52,10 +52,11 @@
 
 import { db } from '@/lib/db'
 import { isProductionDeployment } from '@/lib/server/startup-guard'
+import { DATABASE_URL } from '@/lib/server/config'
 
 /** sql_mode flags the app is verified correct under (full default sql_mode
  *  audit, task db-settings-guard-1: zero GROUP BY/DISTINCT/aggregate
- *  violations, zero zero-dates — see docs/migration/02). */
+ *  violations, zero zero-dates — see docs/deploy/PRODUCTION-CHECKLIST.md §2). */
 const REQUIRED_SQL_MODE_FLAGS = ['STRICT_TRANS_TABLES', 'ONLY_FULL_GROUP_BY'] as const
 
 /** Session time_zone values the app accepts: explicit UTC only. A server on
@@ -81,7 +82,7 @@ interface SchemaCharsetRow {
 /** host:port of DATABASE_URL for error messages — credentials NEVER. */
 function dbEndpoint(): string {
   try {
-    const url = new URL((process.env.DATABASE_URL ?? '').trim())
+    const url = new URL(DATABASE_URL.trim())
     return `${url.hostname}:${url.port || '3306'}`
   } catch {
     return '(DATABASE_URL not parseable)'
@@ -91,7 +92,7 @@ function dbEndpoint(): string {
 /** The schema name from the DATABASE_URL path (Prisma connects into it). */
 function schemaNameFromUrl(): string {
   try {
-    const url = new URL((process.env.DATABASE_URL ?? '').trim())
+    const url = new URL(DATABASE_URL.trim())
     return decodeURIComponent(url.pathname.replace(/^\//, '').split('/')[0] ?? '')
   } catch {
     return ''
@@ -255,7 +256,7 @@ export async function runDbSettingsGuard(): Promise<void> {
     console.error(
       '[TCMS] Fix the server settings named above (persistently — my.cnf or the deployment ' +
         'config, not just SET GLOBAL), then restart. Full contract: ' +
-        'src/lib/server/db-settings-guard.ts + docs/migration/02 + 04.'
+        'src/lib/server/db-settings-guard.ts + docs/deploy/PRODUCTION-CHECKLIST.md §2.'
     )
     process.exit(1)
   }

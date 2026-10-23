@@ -50,7 +50,7 @@ export function ModuleReviewDetailView() {
   // bulk verdicts (approve all / fail all / needs-revision all) and single
   // case verdicts both open a real dialog with a comment box.
   const [bulkVerdict, setBulkVerdict] = useState<Verdict | null>(null)
-  const [caseVerdict, setCaseVerdict] = useState<{ caseId: string; caseTitle: string; verdict: Verdict } | null>(null)
+  const [caseVerdict, setCaseVerdict] = useState<{ caseId: string; caseTitle: string; verdict: Verdict; updatedAt: string } | null>(null)
   const [changeReviewerOpen, setChangeReviewerOpen] = useState(false)
   const [expandedCases, setExpandedCases] = useState<Set<string>>(new Set())
 
@@ -69,8 +69,10 @@ export function ModuleReviewDetailView() {
   } = useQuery({
     queryKey: ['module-reviews', 'detail', id],
     queryFn: () => moduleReviewsApi.get(id),
-    enabled: !!id,
-    retry: 1,
+    // The detail API needs perform_review — without it the page shows PermissionDenied
+    // and must not call an API that is certain to answer 403 (page-API audit 2026-10-17).
+    // Retries follow the global policy (4xx are never retried).
+    enabled: !!id && !!user && can('perform_review'),
   })
 
   // Participation gate — mirrors the backend detail gate EXACTLY now
@@ -306,9 +308,9 @@ export function ModuleReviewDetailView() {
                             all three open a proper dialog with a comment box */}
                         {canAct && cr.status !== 'completed' && (
                           <div className="flex flex-wrap gap-2 pt-1">
-                            <VerdictButton verdict="approved" onClick={() => setCaseVerdict({ caseId: cr.reviewRequestId, caseTitle: tc.title, verdict: 'approved' })} />
-                            <VerdictButton verdict="failed" onClick={() => setCaseVerdict({ caseId: cr.reviewRequestId, caseTitle: tc.title, verdict: 'failed' })} />
-                            <VerdictButton verdict="needs_revision" onClick={() => setCaseVerdict({ caseId: cr.reviewRequestId, caseTitle: tc.title, verdict: 'needs_revision' })} />
+                            <VerdictButton verdict="approved" onClick={() => setCaseVerdict({ caseId: cr.reviewRequestId, caseTitle: tc.title, verdict: 'approved', updatedAt: cr.updatedAt })} />
+                            <VerdictButton verdict="failed" onClick={() => setCaseVerdict({ caseId: cr.reviewRequestId, caseTitle: tc.title, verdict: 'failed', updatedAt: cr.updatedAt })} />
+                            <VerdictButton verdict="needs_revision" onClick={() => setCaseVerdict({ caseId: cr.reviewRequestId, caseTitle: tc.title, verdict: 'needs_revision', updatedAt: cr.updatedAt })} />
                           </div>
                         )}
                       </div>
@@ -328,7 +330,7 @@ export function ModuleReviewDetailView() {
           onOpenChange={(v) => !v && setBulkVerdict(null)}
           onConfirm={async (comment) => {
             try {
-              const res = await moduleReviewsApi.bulkVerdict(id, { verdict: bulkVerdict, comment })
+              const res = await moduleReviewsApi.bulkVerdict(id, { verdict: bulkVerdict, comment, expectedUpdatedAt: review?.updatedAt })
               toast.success(
                 res.verdict === 'approved'
                   ? `Approved ${res.affectedCount} test case(s)`
@@ -352,7 +354,7 @@ export function ModuleReviewDetailView() {
           onOpenChange={(v) => !v && setCaseVerdict(null)}
           onSubmit={async (comment, flaggedFields) => {
             try {
-              await reviewsApi.verdict(caseVerdict.caseId, { verdict: caseVerdict.verdict, comment, flaggedFields })
+              await reviewsApi.verdict(caseVerdict.caseId, { verdict: caseVerdict.verdict, comment, flaggedFields, expectedUpdatedAt: caseVerdict.updatedAt })
               toast.success(
                 caseVerdict.verdict === 'approved'
                   ? 'Test case approved'

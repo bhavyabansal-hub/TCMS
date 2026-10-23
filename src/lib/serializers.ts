@@ -88,7 +88,7 @@ export function serializeUser(u: UserSqlRow): SerializedUser {
     fullName: u.full_name,
     role: u.role,
     // MySQL raw rows return TINYINT(1) as 1/0 — normalize to real booleans
-    // so the API JSON is identical to the PostgreSQL behavior.
+    // so the API JSON always carries true/false.
     isActive: Boolean(u.is_active),
     avatarUrl: u.avatar_url,
     telegramChatId: u.telegram_chat_id,

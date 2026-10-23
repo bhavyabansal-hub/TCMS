@@ -3,13 +3,14 @@
 
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
-import { newId } from '@/lib/server/id'
+import { insertReturningId } from '@/lib/server/insert'
+import { LOGIN_LOCK_SECONDS, LOGIN_MAX_FAILURES } from '@/lib/server/config'
 import type { UserSqlRow, RefreshTokenSqlRow, LoginAttemptSqlRow } from '@/types/sql-rows'
 
-// ---------- Login attempts (brute-force guard: 5 fails -> 1 min lock) ----------
+// ---------- Login attempts (brute-force guard: TCMS_LOGIN_MAX_FAILURES fails -> TCMS_LOGIN_LOCK_SECONDS lock) ----------
 
-export const MAX_LOGIN_ATTEMPTS = 5
-export const LOGIN_LOCK_SECONDS = 60
+export const MAX_LOGIN_ATTEMPTS = LOGIN_MAX_FAILURES
+export { LOGIN_LOCK_SECONDS }
 
 export async function findLoginAttempt(email: string): Promise<LoginAttemptSqlRow | null> {
   const rows = await db.$queryRaw<LoginAttemptSqlRow[]>`
@@ -54,11 +55,10 @@ export async function createUser(input: {
   passwordHash: string
   role: string
 }): Promise<UserSqlRow> {
-  // MySQL has no RETURNING: generate the PK app-side, insert, then read back.
-  const userId = newId()
-  await db.$executeRaw`
-    INSERT INTO users (user_id, email, full_name, password_hash, role, created_at, updated_at)
-    VALUES (${userId}, ${input.email}, ${input.fullName}, ${input.passwordHash}, ${input.role}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`
+  // MySQL has no RETURNING: insert, take the new key from LAST_INSERT_ID(), then read back.
+  const userId = await insertReturningId(Prisma.sql`
+    INSERT INTO users (email, full_name, password_hash, role, created_at, updated_at)
+    VALUES (${input.email}, ${input.fullName}, ${input.passwordHash}, ${input.role}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`)
   const rows = await db.$queryRaw<UserSqlRow[]>`
     SELECT * FROM users WHERE user_id = ${userId} LIMIT 1`
   return rows[0]

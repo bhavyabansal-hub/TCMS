@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Plus, Trash2, Pencil, Save, X, Send, History, ClipboardCheck,
-  MessageSquare, User as UserIcon, GitBranch, Activity,
+  MessageSquare, User as UserIcon, GitBranch, Activity, Flag,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -51,7 +51,7 @@ export function TestCaseDetailView() {
     queryKey: ['test-cases', 'detail', id],
     queryFn: () => testCasesApi.get(id),
     enabled: !!id,
-    retry: 1,
+    // retries: global policy (a 403/404 is never retried — no duplicate call)
   })
 
   const { data: history } = useQuery({
@@ -69,7 +69,7 @@ export function TestCaseDetailView() {
   const { data: activity } = useQuery({
     queryKey: ['activity', 'test_case', id],
     queryFn: () => activityLogsApi.entity('test_case', id),
-    enabled: !!id,
+    enabled: !!id && can('view_activity_logs'),
   })
 
   const { data: treeData } = useQuery({
@@ -301,11 +301,23 @@ export function TestCaseDetailView() {
                       {r.events && r.events.length > 0 && (
                         <ul className="ml-3 space-y-0.5 border-l pl-2">
                           {r.events.map((e) => (
-                            <li key={e.reviewEventId} className="flex items-start gap-1.5">
-                              <Badge variant="outline" className={`text-[9px] ${verdictColor(e.verdict)}`}>
-                                {e.verdict.replace('_', ' ')}
-                              </Badge>
-                              <span className="text-muted-foreground line-clamp-2">{e.comment}</span>
+                            <li key={e.reviewEventId} className="space-y-1">
+                              <div className="flex items-start gap-1.5">
+                                <Badge variant="outline" className={`text-[9px] ${verdictColor(e.verdict)}`}>
+                                  {e.verdict.replace('_', ' ')}
+                                </Badge>
+                                <span className="text-muted-foreground line-clamp-2">{e.comment}</span>
+                              </div>
+                              {/* Flagged fields — the author needs them to fix the case (R2-5). */}
+                              {Array.isArray(e.flaggedFields) && e.flaggedFields.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                  {e.flaggedFields.map((f) => (
+                                    <Badge key={f} variant="secondary" className="text-[9px]">
+                                      <Flag className="h-2.5 w-2.5 mr-1" /> {f}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
                             </li>
                           ))}
                         </ul>
@@ -317,33 +329,35 @@ export function TestCaseDetailView() {
             </CardContent>
           </Card>
 
-          {/* Activity */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Activity className="h-4 w-4" /> Activity
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {!activity || activity.length === 0 ? (
-                <div className="text-sm text-muted-foreground italic">No activity yet</div>
-              ) : (
-                <ul className="space-y-1.5 max-h-48 overflow-y-auto">
-                  {activity.slice(0, 8).map((log) => (
-                    <li key={log.activityLogId} className="text-xs">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={`text-[9px] ${actionColor(log.action)}`}>
-                          {log.action}
-                        </Badge>
-                        <span className="text-muted-foreground">{timeAgo(log.createdAt)}</span>
-                      </div>
-                      <div className="text-muted-foreground mt-0.5">{log.user?.fullName ?? 'System'}</div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+          {/* Activity (only with view_activity_logs; no request without it) */}
+          {can('view_activity_logs') && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Activity className="h-4 w-4" /> Activity
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!activity || activity.length === 0 ? (
+                  <div className="text-sm text-muted-foreground italic">No activity yet</div>
+                ) : (
+                  <ul className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {activity.slice(0, 8).map((log) => (
+                      <li key={log.activityLogId} className="text-xs">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className={`text-[9px] ${actionColor(log.action)}`}>
+                            {log.action}
+                          </Badge>
+                          <span className="text-muted-foreground">{timeAgo(log.createdAt)}</span>
+                        </div>
+                        <div className="text-muted-foreground mt-0.5">{log.user?.fullName ?? 'System'}</div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 

@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store'
 import type { User } from '@/types'
 import { formatDate, roleColor, initials } from '@/lib/format'
 import { handleApiError } from '@/lib/errors'
+import { PASSWORD_MIN_LENGTH, PASSWORD_RULE_TEXT, passwordProblem } from '@/lib/password-policy'
 
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
@@ -235,8 +236,9 @@ function PasswordForm() {
 
   function handleChangePassword(e: React.FormEvent) {
     e.preventDefault()
-    if (newPassword.length < 8) {
-      toast.error('New password must be at least 6 characters')
+    const problem = passwordProblem(newPassword)
+    if (problem) {
+      toast.error(problem)
       return
     }
     if (newPassword !== confirmPassword) {
@@ -254,7 +256,7 @@ function PasswordForm() {
         <CardTitle className="text-base flex items-center gap-2">
           <KeyRound className="h-4 w-4" /> Change password
         </CardTitle>
-        <CardDescription>Use at least 6 characters with a mix of letters and numbers.</CardDescription>
+        <CardDescription>{PASSWORD_RULE_TEXT}.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleChangePassword} className="space-y-4">
@@ -276,10 +278,10 @@ function PasswordForm() {
                 id="new"
                 type="password"
                 required
-                minLength={6}
+                minLength={PASSWORD_MIN_LENGTH}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Min. 6 characters"
+                placeholder={`Min. ${PASSWORD_MIN_LENGTH} characters`}
               />
             </div>
             <div className="space-y-2">
@@ -288,7 +290,7 @@ function PasswordForm() {
                 id="confirm"
                 type="password"
                 required
-                minLength={6}
+                minLength={PASSWORD_MIN_LENGTH}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Repeat new password"

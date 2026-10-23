@@ -17,12 +17,13 @@ import {
   SMTP_PASS,
   SMTP_PORT,
   SMTP_SECURE,
+  SMTP_TIMEOUT_MS,
   SMTP_USER,
+  TELEGRAM_API_URL,
   TELEGRAM_BOT_TOKEN,
+  TELEGRAM_TIMEOUT_MS,
 } from '@/lib/server/config'
 
-const EMAIL_TIMEOUT_MS = 8_000
-const TELEGRAM_TIMEOUT_MS = 5_000
 
 export interface DeliveryTarget {
   email?: string | null
@@ -84,7 +85,11 @@ async function getTransporter(config: SmtpConfig) {
         port: config.port,
         secure: config.secure,
         auth: config.user ? { user: config.user, pass: config.pass } : undefined,
-        connectionTimeout: EMAIL_TIMEOUT_MS,
+        connectionTimeout: SMTP_TIMEOUT_MS,
+        // Cap the whole SMTP exchange too, so a stalled server cannot hold
+        // background work open (nodemailer defaults are minutes long).
+        greetingTimeout: SMTP_TIMEOUT_MS,
+        socketTimeout: SMTP_TIMEOUT_MS,
       })
     )
   }
@@ -120,7 +125,7 @@ async function sendTelegram(chatId: string, payload: DeliveryPayload): Promise<D
   }
   try {
     const text = payload.body ? `${payload.subject}\n\n${payload.body}` : payload.subject
-    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    const response = await fetch(`${TELEGRAM_API_URL}/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text }),

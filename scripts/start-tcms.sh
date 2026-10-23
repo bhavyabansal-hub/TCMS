@@ -1,14 +1,12 @@
 #!/bin/bash
 # Idempotent TCMS stack starter for the sandbox.
 # Boots MySQL TEST schema wiring + notifications WS mini-service (3003)
-# + Next.js (3000, production build by default — TCMS_DEV=1 for dev mode)
-# + the PostgreSQL sandbox on 5499 (READ-ONLY migration/drill source only).
+# + Next.js (3000, production build by default — TCMS_DEV=1 for dev mode).
 # Safe to call repeatedly: every step is a no-op when the port is already listening.
 cd /home/z/my-project || exit 1
-export LD_LIBRARY_PATH="/home/z/my-project/scripts/pg-sandbox/icu60/extracted/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 # DB wiring has ONE source of truth (shared with boot-tcms-autostart.sh):
 # tolerates quoted .env values and never lets a stale non-mysql shell
-# DATABASE_URL win. PG_SOURCE_URL is the read-only drill source ONLY.
+# DATABASE_URL win.
 . scripts/mysql-env.sh
 
 # ---- 0b. Sandbox TWO-USER schema model (task mysql-baseline-1): migrations
@@ -46,7 +44,6 @@ if [ ! -f .env ]; then
     # URLs is handled ONLY by scripts/mysql-env.sh, which greps the full line.
     echo "DATABASE_URL=${DATABASE_URL}"
     echo "DIRECT_URL=${DIRECT_URL}"
-    echo "PG_SOURCE_URL=${PG_SOURCE_URL}"
     echo "TCMS_EXTRA_ALLOWED_HOSTS=${TCMS_PREVIEW_HOST}"
     echo "JWT_SECRET=${_jwt}"
     echo "WS_NOTIFY_SECRET=${_ws}"
@@ -89,19 +86,7 @@ fi
 
 port_up() { ss -tln 2>/dev/null | grep -q ":$1 "; }
 
-# ---- 1. PostgreSQL sandbox — READ-ONLY SOURCE ONLY (data migration +
-#         backup/restore drills). The app NEVER connects to it after the
-#         MySQL migration; it stays bootable so drills keep working. ----
-if port_up 5499; then
-  echo "[start-tcms] PostgreSQL source already up on 5499 (read-only source)"
-else
-  echo "[start-tcms] booting sandbox PostgreSQL on 5499..."
-  nohup setsid node scripts/pg-sandbox/start-pg.mjs >/tmp/pg-sandbox.log 2>&1 &
-  for i in $(seq 1 40); do port_up 5499 && break; sleep 1; done
-  port_up 5499 && echo "[start-tcms] PostgreSQL source ready on 5499" || { echo "[start-tcms] WARN: PostgreSQL source failed to boot (migration/drills unavailable; app unaffected)"; }
-fi
-
-# ---- 2. Notifications WS mini-service (optional realtime; without it the app degrades to refresh-visible delivery — next list fetch, no polling) ----
+# ---- 1. Notifications WS mini-service (optional realtime; without it the app degrades to refresh-visible delivery — next list fetch, no polling) ----
 # ZOMBIE GUARD (owner-approved 2026-10-14): a busy :3003 is acceptable ONLY
 # when the holder is the CURRENT notifications service running from THIS
 # project directory. History: a pre-fix `bun --hot` process whose directory
@@ -186,7 +171,7 @@ fi
 #         "No pending migrations" on every boot after the first. The old
 #         db-push + mysql-json-defaults.sh + collation-fixups dance is GONE:
 #         utf8mb4_bin and the JSON expression defaults live in the baseline
-#         migration (20261015034822_init_mysql) itself.
+#         migration (20261017120000_baseline_numeric_ids) itself.
 if port_up 5500; then
   echo "[start-tcms] applying schema (prisma migrate deploy, migrate user)..."
   npx prisma migrate deploy || { echo "[start-tcms] FATAL: migrate deploy failed"; exit 1; }
